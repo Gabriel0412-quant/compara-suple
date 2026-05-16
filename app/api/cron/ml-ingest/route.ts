@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
 
-  let payload: { keyword?: string; category?: string } = {}
+  let payload: { keyword?: string } = {}
   try {
     if (req.headers.get('content-type')?.includes('application/json')) {
       payload = await req.json()
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
 
   try {
     if (payload.keyword) {
-      const result = await ingestKeyword(payload.keyword, payload.category)
+      const result = await ingestKeyword(payload.keyword)
       return NextResponse.json({ ok: true, mode: 'single', result })
     }
     const result = await runDefaultIngest()

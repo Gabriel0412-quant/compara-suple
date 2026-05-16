@@ -1,11 +1,12 @@
-import { searchItems, getItems } from './client'
+import { searchProducts, getProduct } from './client'
 import { buildMlLink } from '../affiliate'
 import { supabaseAdmin } from '../db-admin'
-import type { MlItem, MlAttribute } from './types'
+import type { MlAttribute, MlCatalogProduct } from './types'
 
 const ML_STORE_SLUG = 'mercado-livre'
+const SUPPLEMENTS_DOMAIN = 'MLB-SUPPLEMENTS'
 
-// Keywords padrão do cron diário — categorias-âncora do MVP
+// Keywords padrão do cron diário
 export const DEFAULT_KEYWORDS = [
   'whey protein isolado',
   'creatina monohidratada',
@@ -14,20 +15,13 @@ export const DEFAULT_KEYWORDS = [
   'pre treino',
 ] as const
 
-// Atributos pedidos no multi-get para reduzir o payload
-const ITEM_ATTRIBUTES =
-  'id,title,category_id,price,base_price,original_price,currency_id,' +
-  'available_quantity,sold_quantity,condition,permalink,thumbnail,pictures,' +
-  'attributes,shipping,catalog_product_id,domain_id,date_created,last_updated'
-
 // ---------- helpers ----------
 
 function getAttr(attrs: MlAttribute[], id: string): string | null {
-  const a = attrs.find(x => x.id === id)
-  return a?.value_name ?? null
+  return attrs.find(a => a.id === id)?.value_name ?? null
 }
 
-/** Converte "900 g" / "1 kg" / "1.5 KG" para gramas. Retorna null se não casar. */
+/** Converte "900 g" / "1 kg" / "1.5 KG" para gramas. */
 function parseGrams(value: string | null): number | null {
   if (!value) return null
   const m = value.match(/([\d.,]+)\s*(g|kg)\b/i)
@@ -57,7 +51,7 @@ async function getStoreId(): Promise<number> {
     .single()
   if (error || !data) {
     throw new Error(
-      `Store '${ML_STORE_SLUG}' não encontrada. Rode a migration 0001_initial_schema.sql no Supabase.`,
+      `Store '${ML_STORE_SLUG}' não encontrada. Rode a migration 0001_initial_schema.sql.`,
     )
   }
   return data.id as number
@@ -74,10 +68,7 @@ async function upsertBrand(name: string): Promise<number> {
   return data!.id as number
 }
 
-async function upsertProduct(opts: {
-  name: string
-  brandId: number
-}): Promise<number> {
+async function upsertProduct(opts: { name: string; brandId: number }): Promise<number> {
   const slug = slugify(`${opts.name}-${opts.brandId}`)
   const { data, error } = await supabaseAdmin
     .from('product')
@@ -97,7 +88,6 @@ async function upsertVariant(opts: {
   flavor: string | null
   sizeGrams: number | null
 }): Promise<number> {
-  // EAN é a chave forte quando presente
   if (opts.ean) {
     const { data: existing } = await supabaseAdmin
       .from('variant')
@@ -107,13 +97,11 @@ async function upsertVariant(opts: {
       .maybeSingle()
     if (existing) return existing.id as number
   }
-
-  // Sem EAN: tenta casar por (flavor, sizeGrams)
   let q = supabaseAdmin
     .from('variant')
     .select('id')
     .eq('product_id', opts.productId)
-  q = opts.flavor ? q.eq('flavor', opts.flavor) : q.is('flavor', null)
+  q = opts.flavor    ? q.eq('flavor', opts.flavor)    : q.is('flavor', null)
   q = opts.sizeGrams ? q.eq('size_grams', opts.sizeGrams) : q.is('size_grams', null)
   const { data: existingByAttr } = await q.maybeSingle()
   if (existingByAttr) return existingByAttr.id as number
@@ -135,22 +123,23 @@ async function upsertVariant(opts: {
 async function upsertOfferAndHistory(opts: {
   variantId: number
   storeId: number
-  item: MlItem
+  externalId: string
+  url: string
+  price: number
+  available: boolean
+  raw: unknown
 }): Promise<void> {
-  const url = buildMlLink(opts.item.permalink)
-  const available = opts.item.available_quantity > 0
-
   const { data: offer, error: offerErr } = await supabaseAdmin
     .from('offer')
     .upsert(
       {
         variant_id: opts.variantId,
         store_id: opts.storeId,
-        external_id: opts.item.id,
-        url,
-        price: opts.item.price,
-        available,
-        raw: opts.item,
+        external_id: opts.externalId,
+        url: opts.url,
+        price: opts.price,
+        available: opts.available,
+        raw: opts.raw,
         fetched_at: new Date().toISOString(),
       },
       { onConflict: 'store_id,external_id' },
@@ -166,8 +155,8 @@ async function upsertOfferAndHistory(opts: {
     .upsert(
       {
         offer_id: offerId,
-        price: opts.item.price,
-        available,
+        price: opts.price,
+        available: opts.available,
         observed_at: today,
       },
       { onConflict: 'offer_id,observed_at' },
@@ -175,58 +164,91 @@ async function upsertOfferAndHistory(opts: {
   if (histErr) throw histErr
 }
 
-// ---------- processamento de um item ----------
+// ---------- core: ingest de um catalog product ----------
 
-async function ingestItem(item: MlItem, storeId: number): Promise<void> {
-  const brandName = getAttr(item.attributes, 'BRAND') ?? 'Sem marca'
-  const flavor    = getAttr(item.attributes, 'FLAVOR')
-  const sizeGrams = parseGrams(getAttr(item.attributes, 'NET_WEIGHT'))
-  const ean       = getAttr(item.attributes, 'GTIN')
+type IngestOutcome =
+  | { ok: true }
+  | { ok: false; reason: 'inactive' | 'no_winner' }
+
+async function ingestCatalogProduct(
+  catalog: MlCatalogProduct,
+  storeId: number,
+): Promise<IngestOutcome> {
+  if (catalog.status !== 'active') return { ok: false, reason: 'inactive' }
+  if (!catalog.buy_box_winner)     return { ok: false, reason: 'no_winner' }
+
+  const brandName = getAttr(catalog.attributes, 'BRAND') ?? 'Sem marca'
+  const flavor    = getAttr(catalog.attributes, 'FLAVOR')
+  const sizeGrams = parseGrams(
+    getAttr(catalog.attributes, 'NET_WEIGHT') ??
+    getAttr(catalog.attributes, 'UNIT_WEIGHT'),
+  )
+  const ean       = getAttr(catalog.attributes, 'GTIN')
 
   const brandId   = await upsertBrand(brandName)
-  const productId = await upsertProduct({ name: item.title, brandId })
+  const productId = await upsertProduct({ name: catalog.name, brandId })
   const variantId = await upsertVariant({ productId, ean, flavor, sizeGrams })
 
-  await upsertOfferAndHistory({ variantId, storeId, item })
+  const winner = catalog.buy_box_winner
+  const url = buildMlLink(winner.permalink)
+
+  await upsertOfferAndHistory({
+    variantId,
+    storeId,
+    externalId: winner.item_id,
+    url,
+    price: winner.price,
+    available: (winner.available_quantity ?? 0) > 0 ||
+               winner.available_quantity === undefined,
+    raw: catalog,
+  })
+
+  return { ok: true }
 }
 
 // ---------- entry points ----------
 
 export type IngestKeywordResult = {
   keyword: string
-  category?: string
   total: number
   ingested: number
+  skipped_inactive: number
+  skipped_no_winner: number
   errors: string[]
 }
 
-export async function ingestKeyword(
-  keyword: string,
-  category?: string,
-): Promise<IngestKeywordResult> {
+export async function ingestKeyword(keyword: string): Promise<IngestKeywordResult> {
   const storeId = await getStoreId()
-  const search = await searchItems(keyword, { category, limit: 50 })
-  const ids = search.results.map(r => r.id)
+  // Filtra pelo domínio de suplementos pra reduzir lixo (barras de cereal, snacks, etc)
+  const search = await searchProducts(keyword, {
+    limit: 50,
+    domainId: SUPPLEMENTS_DOMAIN,
+  })
 
-  // Multi-get em lotes de 20 — pega payload completo de cada item
-  const items: MlItem[] = []
-  for (let i = 0; i < ids.length; i += 20) {
-    const batch = await getItems(ids.slice(i, i + 20), ITEM_ATTRIBUTES)
-    items.push(...batch)
+  const result: IngestKeywordResult = {
+    keyword,
+    total: search.results.length,
+    ingested: 0,
+    skipped_inactive: 0,
+    skipped_no_winner: 0,
+    errors: [],
   }
 
-  const errors: string[] = []
-  let ingested = 0
-  for (const item of items) {
+  for (const summary of search.results) {
     try {
-      await ingestItem(item, storeId)
-      ingested++
+      const detail = await getProduct(summary.id)
+      const r = await ingestCatalogProduct(detail, storeId)
+      if (r.ok) result.ingested++
+      else if (r.reason === 'inactive')  result.skipped_inactive++
+      else if (r.reason === 'no_winner') result.skipped_no_winner++
     } catch (e) {
-      errors.push(`${item.id}: ${e instanceof Error ? e.message : String(e)}`)
+      result.errors.push(
+        `${summary.id}: ${e instanceof Error ? e.message : String(e)}`,
+      )
     }
   }
 
-  return { keyword, category, total: items.length, ingested, errors }
+  return result
 }
 
 export type RunIngestResult = {
@@ -247,6 +269,8 @@ export async function runDefaultIngest(): Promise<RunIngestResult> {
         keyword: kw,
         total: 0,
         ingested: 0,
+        skipped_inactive: 0,
+        skipped_no_winner: 0,
         errors: [e instanceof Error ? e.message : String(e)],
       })
     }

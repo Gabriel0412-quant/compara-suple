@@ -1,7 +1,6 @@
 import type {
-  MlSearchResponse,
-  MlItem,
-  MlMultiGetEntry,
+  MlCatalogProductSearchResponse,
+  MlCatalogProduct,
 } from './types'
 import { getValidAccessToken } from './oauth'
 
@@ -9,10 +8,9 @@ const ML_BASE = 'https://api.mercadolibre.com'
 const SITE = 'MLB'
 
 const DEFAULT_TIMEOUT_MS = 15_000
-// ML permite ~1500 req/min/app (~25/s). Mantemos folga grande (10/s) para evitar 429.
+// ML permite ~1500 req/min/app. Mantemos 10 req/s pra evitar 429.
 const MIN_INTERVAL_MS = 100
 const MAX_RETRIES = 4
-const MULTI_GET_MAX = 20
 
 let lastCallAt = 0
 
@@ -28,7 +26,6 @@ async function fetchJson<T>(url: string, attempt = 0): Promise<T> {
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), DEFAULT_TIMEOUT_MS)
   try {
-    // Desde mai/2026, ML exige Bearer em todas as chamadas, inclusive na busca.
     const token = await getValidAccessToken()
     const res = await fetch(url, {
       signal: ctrl.signal,
@@ -38,8 +35,8 @@ async function fetchJson<T>(url: string, attempt = 0): Promise<T> {
       },
     })
 
-    // 401 = token inválido/expirado — força refresh e tenta uma vez
     if (res.status === 401 && attempt < 1) {
+      // Token pode ter expirado entre a leitura no DB e a chamada — força refresh+retry
       await new Promise(r => setTimeout(r, 200))
       return fetchJson<T>(url, attempt + 1)
     }
@@ -62,45 +59,39 @@ async function fetchJson<T>(url: string, attempt = 0): Promise<T> {
 }
 
 export type SearchOptions = {
-  category?: string
-  limit?: number          // default 50, máx 50
-  offset?: number         // default 0, máx ~1000
-  sort?: 'price_asc' | 'price_desc' | 'relevance'
-  condition?: 'new' | 'used'
+  category?: string        // ex.: 'MLB264201' (Suplementos Alimentares)
+  domainId?: string        // ex.: 'MLB-SUPPLEMENTS'
+  limit?: number           // default 50, máx 50
+  offset?: number          // default 0
 }
 
-export async function searchItems(
+/**
+ * Busca catalog products no Mercado Livre (substitui o antigo /sites/MLB/search).
+ * Retorna até 50 produtos canônicos por chamada.
+ */
+export async function searchProducts(
   keyword: string,
   opts: SearchOptions = {},
-): Promise<MlSearchResponse> {
-  const params = new URLSearchParams({ q: keyword })
-  if (opts.category)            params.set('category', opts.category)
-  if (opts.limit !== undefined) params.set('limit', String(opts.limit))
-  if (opts.offset !== undefined) params.set('offset', String(opts.offset))
-  if (opts.sort)                params.set('sort', opts.sort)
-  if (opts.condition)           params.set('condition', opts.condition)
-  return fetchJson<MlSearchResponse>(
-    `${ML_BASE}/sites/${SITE}/search?${params.toString()}`,
+): Promise<MlCatalogProductSearchResponse> {
+  const params = new URLSearchParams({
+    site_id: SITE,
+    q: keyword,
+    limit: String(opts.limit ?? 50),
+    offset: String(opts.offset ?? 0),
+  })
+  if (opts.category)  params.set('category',  opts.category)
+  if (opts.domainId)  params.set('domain_id', opts.domainId)
+  return fetchJson<MlCatalogProductSearchResponse>(
+    `${ML_BASE}/products/search?${params.toString()}`,
   )
 }
 
-/** Multi-get de até 20 ASINs por chamada. Items com code != 200 são descartados. */
-export async function getItems(
-  ids: string[],
-  attributes?: string,
-): Promise<MlItem[]> {
-  if (ids.length === 0) return []
-  if (ids.length > MULTI_GET_MAX) {
-    throw new Error(`getItems: máximo ${MULTI_GET_MAX} ids por chamada (recebeu ${ids.length})`)
-  }
-  const params = new URLSearchParams({ ids: ids.join(',') })
-  if (attributes) params.set('attributes', attributes)
-  const data = await fetchJson<MlMultiGetEntry[]>(
-    `${ML_BASE}/items?${params.toString()}`,
+/**
+ * Detalhe completo de um catalog product, incluindo `buy_box_winner`
+ * (a oferta vencedora — preço, seller, permalink).
+ */
+export async function getProduct(id: string): Promise<MlCatalogProduct> {
+  return fetchJson<MlCatalogProduct>(
+    `${ML_BASE}/products/${encodeURIComponent(id)}`,
   )
-  return data.filter(d => d.code === 200).map(d => d.body)
-}
-
-export async function getItem(id: string): Promise<MlItem> {
-  return fetchJson<MlItem>(`${ML_BASE}/items/${encodeURIComponent(id)}`)
 }

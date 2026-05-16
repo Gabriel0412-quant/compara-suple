@@ -1,80 +1,62 @@
-// Subconjunto dos types da Catalog API do Mercado Livre que usamos no ingest.
-// Referência completa: docs/mercado-livre-api-guia.md
+// Tipos da Catalog Products API do Mercado Livre.
+// Endpoint /sites/MLB/search foi descontinuado (403 mesmo com Bearer).
+// Substituto: /products/search + /products/{id}
 
 export type MlAttribute = {
-  id: string                       // "BRAND" | "FLAVOR" | "NET_WEIGHT" | "GTIN" | ...
-  name: string                     // rótulo em pt-BR
+  id: string                       // 'BRAND' | 'FLAVOR' | 'NET_WEIGHT' | 'GTIN' | 'IS_VEGAN' | ...
+  name: string                     // rótulo pt-BR
   value_id?: string | null
   value_name: string | null
+  values?: Array<{ id: string; name: string; meta?: { value: unknown } }>
+  meta?: { value: unknown }
 }
 
-export type MlSeller = {
-  id: number
-  nickname: string
-}
-
-export type MlShipping = {
-  free_shipping: boolean
-  logistic_type?: string
-  mode?: string
-  tags?: string[]
-}
-
-export type MlSearchItem = {
-  id: string                       // ex.: "MLB1234567890"
-  title: string
-  condition: 'new' | 'used' | string
-  thumbnail: string
-  price: number
-  original_price: number | null
-  currency_id: string
-  available_quantity: number
-  sold_quantity: number
-  permalink: string
-  category_id: string
-  seller: MlSeller
-  shipping: MlShipping
+/** Item resumido devolvido por /products/search */
+export type MlCatalogProductSummary = {
+  id: string                       // ex.: 'MLB6238755'
+  catalog_product_id: string
+  domain_id: string                // ex.: 'MLB-SUPPLEMENTS'
+  name: string
+  parent_id?: string
+  children_ids?: string[]
   attributes: MlAttribute[]
 }
 
-export type MlSearchResponse = {
-  site_id: string
-  query: string
-  paging: { total: number; offset: number; limit: number; primary_results: number }
-  results: MlSearchItem[]
+export type MlCatalogProductSearchResponse = {
+  keywords: string
+  paging: { total: number; limit: number; offset: number; last?: string }
+  results: MlCatalogProductSummary[]
 }
 
 export type MlPicture = {
   id: string
   url: string
-  secure_url: string
-  size?: string
-  max_size?: string
 }
 
-export type MlItem = {
-  id: string
-  title: string
-  category_id: string
+/** Oferta vencedora (buy box) — pode ser null se não há sellers ativos */
+export type MlBuyBoxWinner = {
+  item_id: string                  // ID do anúncio específico que ganhou o buy box
   price: number
-  base_price?: number
   original_price?: number | null
   currency_id: string
-  available_quantity: number
-  sold_quantity: number
-  condition: string
+  permalink: string                // URL do anúncio (usada com tracking de afiliado)
+  available_quantity?: number
+  sold_quantity?: number
+  seller_id: number
+  shipping?: { free_shipping?: boolean }
+} | null
+
+/** Resposta completa de /products/{id} */
+export type MlCatalogProduct = {
+  id: string
+  catalog_product_id: string
+  status: 'active' | 'inactive' | string
+  domain_id: string
+  name: string
+  family_name: string
+  type: string                     // 'catalog_product' | ...
   permalink: string
-  thumbnail: string
   pictures: MlPicture[]
   attributes: MlAttribute[]
-  shipping: MlShipping
-  catalog_product_id: string | null
-  domain_id: string | null
-  date_created: string
-  last_updated: string
-}
-
-export type MlMultiGetEntry = {
-  code: number                     // 200 = ok, 404 = não existe
-  body: MlItem
+  buy_box_winner: MlBuyBoxWinner
 }

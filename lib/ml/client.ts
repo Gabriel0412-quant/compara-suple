@@ -3,6 +3,7 @@ import type {
   MlItem,
   MlMultiGetEntry,
 } from './types'
+import { getValidAccessToken } from './oauth'
 
 const ML_BASE = 'https://api.mercadolibre.com'
 const SITE = 'MLB'
@@ -27,10 +28,21 @@ async function fetchJson<T>(url: string, attempt = 0): Promise<T> {
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), DEFAULT_TIMEOUT_MS)
   try {
+    // Desde mai/2026, ML exige Bearer em todas as chamadas, inclusive na busca.
+    const token = await getValidAccessToken()
     const res = await fetch(url, {
       signal: ctrl.signal,
-      headers: { Accept: 'application/json' },
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
     })
+
+    // 401 = token inválido/expirado — força refresh e tenta uma vez
+    if (res.status === 401 && attempt < 1) {
+      await new Promise(r => setTimeout(r, 200))
+      return fetchJson<T>(url, attempt + 1)
+    }
 
     if ((res.status === 429 || res.status >= 500) && attempt < MAX_RETRIES) {
       const delay = 2 ** attempt * 500

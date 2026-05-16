@@ -69,7 +69,7 @@ async function postToken(body: URLSearchParams): Promise<MlTokens> {
   const data = (await res.json()) as Record<string, unknown>
 
   const access_token  = typeof data.access_token  === 'string' ? data.access_token  : undefined
-  const refresh_token = typeof data.refresh_token === 'string' ? data.refresh_token : undefined
+  const refresh_token = typeof data.refresh_token === 'string' ? data.refresh_token : ''
   const expires_in    = typeof data.expires_in    === 'number' ? data.expires_in    : undefined
 
   // ML às vezes omite user_id do body mas embute no access_token:
@@ -81,10 +81,20 @@ async function postToken(body: URLSearchParams): Promise<MlTokens> {
     if (last && /^\d+$/.test(last)) user_id = Number(last)
   }
 
-  if (!access_token || !refresh_token || user_id === undefined || expires_in === undefined) {
+  if (!access_token || user_id === undefined || expires_in === undefined) {
     throw new Error(
       `ML OAuth resposta incompleta. Keys: [${Object.keys(data).join(', ')}]. ` +
       `Body: ${JSON.stringify(data).slice(0, 1500)}`,
+    )
+  }
+
+  if (!refresh_token) {
+    // TODO: investigar por que o ML não está devolvendo refresh_token.
+    // Por enquanto, salvamos string vazia e o auto-refresh falha — depois
+    // de 6h o usuário precisa fazer OAuth de novo manualmente.
+    console.warn(
+      '[ml/oauth] ATENÇÃO: ML não devolveu refresh_token. ' +
+      'Access token vai expirar em 6h e precisará de novo login manual.',
     )
   }
 
@@ -133,11 +143,10 @@ export async function refreshTokens(refreshToken: string): Promise<MlTokens> {
 // ---------- Persistência ----------
 
 export async function saveTokens(tokens: MlTokens): Promise<void> {
-  if (!tokens.ml_user_id || !tokens.access_token || !tokens.refresh_token) {
+  if (!tokens.ml_user_id || !tokens.access_token) {
     throw new Error(
       `saveTokens: tokens incompletos. ml_user_id=${tokens.ml_user_id}, ` +
-      `access_token=${tokens.access_token ? '[set]' : '[empty]'}, ` +
-      `refresh_token=${tokens.refresh_token ? '[set]' : '[empty]'}`,
+      `access_token=${tokens.access_token ? '[set]' : '[empty]'}`,
     )
   }
   const { error } = await supabaseAdmin
@@ -187,7 +196,14 @@ export async function getValidAccessToken(): Promise<string> {
   }
 
   // Token expirado ou perto de expirar — refresha
-  const fresh = await refreshTokens(data.refresh_token as string)
+  const rt = data.refresh_token as string
+  if (!rt) {
+    throw new Error(
+      'access_token ML expirou e não há refresh_token salvo. ' +
+      'Faça login novamente em /api/auth/ml/login.',
+    )
+  }
+  const fresh = await refreshTokens(rt)
   await saveTokens(fresh)
   return fresh.access_token
 }

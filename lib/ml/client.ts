@@ -1,8 +1,7 @@
 import type {
-  MlCatalogProductSearchResponse,
   MlCatalogProduct,
-  MlItem,
-  MlMultiGetEntry,
+  MlProductItemsResponse,
+  MlCatalogProductSearchResponse,
 } from './types'
 import { getValidAccessToken } from './oauth'
 
@@ -13,7 +12,6 @@ const DEFAULT_TIMEOUT_MS = 15_000
 // ML permite ~1500 req/min/app. Mantemos 10 req/s pra evitar 429.
 const MIN_INTERVAL_MS = 100
 const MAX_RETRIES = 4
-const MULTI_GET_MAX = 20
 
 let lastCallAt = 0
 
@@ -60,40 +58,28 @@ async function fetchJson<T>(url: string, attempt = 0): Promise<T> {
   }
 }
 
-// ---------- /items/{id} ----------
+// ---------- core: produto de catálogo + suas ofertas ----------
 
-/**
- * Detalhe de UM anúncio específico (seller listing). Devolve preço atual,
- * estoque, permalink e atributos estruturados. Este é o endpoint principal
- * do nosso ingest.
- */
-export async function getItem(id: string): Promise<MlItem> {
-  return fetchJson<MlItem>(`${ML_BASE}/items/${encodeURIComponent(id)}`)
-}
-
-/**
- * Multi-get de até 20 anúncios numa única requisição. Anúncios não-existentes
- * vêm com `code: 404` e são descartados na resposta.
- */
-export async function getItems(
-  ids: string[],
-  attributes?: string,
-): Promise<MlItem[]> {
-  if (ids.length === 0) return []
-  if (ids.length > MULTI_GET_MAX) {
-    throw new Error(
-      `getItems: máximo ${MULTI_GET_MAX} ids por chamada (recebeu ${ids.length})`,
-    )
-  }
-  const params = new URLSearchParams({ ids: ids.join(',') })
-  if (attributes) params.set('attributes', attributes)
-  const data = await fetchJson<MlMultiGetEntry[]>(
-    `${ML_BASE}/items?${params.toString()}`,
+/** Metadata do catalog product: nome, atributos estruturados, fotos. */
+export async function getProduct(catalogId: string): Promise<MlCatalogProduct> {
+  return fetchJson<MlCatalogProduct>(
+    `${ML_BASE}/products/${encodeURIComponent(catalogId)}`,
   )
-  return data.filter(d => d.code === 200).map(d => d.body)
 }
 
-// ---------- /products (uso futuro pra enriquecer metadata) ----------
+/**
+ * Lista de ofertas (sellers) vendendo um catalog product.
+ * Retorna `results: []` (mas não 404) quando há catalog product sem sellers ativos.
+ */
+export async function getProductItems(
+  catalogId: string,
+): Promise<MlProductItemsResponse> {
+  return fetchJson<MlProductItemsResponse>(
+    `${ML_BASE}/products/${encodeURIComponent(catalogId)}/items`,
+  )
+}
+
+// ---------- descoberta (futuro, não usado pelo ingest atual) ----------
 
 export type SearchProductsOptions = {
   category?: string
@@ -116,11 +102,5 @@ export async function searchProducts(
   if (opts.domainId)  params.set('domain_id', opts.domainId)
   return fetchJson<MlCatalogProductSearchResponse>(
     `${ML_BASE}/products/search?${params.toString()}`,
-  )
-}
-
-export async function getProduct(id: string): Promise<MlCatalogProduct> {
-  return fetchJson<MlCatalogProduct>(
-    `${ML_BASE}/products/${encodeURIComponent(id)}`,
   )
 }

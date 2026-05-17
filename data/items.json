@@ -1,20 +1,20 @@
 {
   "items": [
     {
-      "id": "MLB5872093596",
+      "catalog_id": "MLB19049048",
       "nota": "Whey Protein Concentrado 1kg Growth Supplements - Milkshake de Chocolate"
     },
     {
-      "id": "MLB5867381098",
+      "catalog_id": "MLB19049039",
       "nota": "Whey Protein Concentrado 1kg Growth Supplements - Morango"
     },
     {
-      "id": "MLB6224364034",
+      "catalog_id": "MLB38299314",
       "nota": "Blend Vegan (Proteína vegana) 1kg Growth Supplements - Sabor Chocolate"
     },
     {
-      "id": "MLB6620125422",
-      "nota": "Daily Whey Protein Zero Lactose 800g Growth Supplements"
+      "catalog_id": "MLBU3907661448",
+      "nota": "Daily Whey Protein Zero Lactose 800g Growth Supplements (user product)"
     }
   ]
 }

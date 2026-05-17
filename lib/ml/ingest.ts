@@ -1,22 +1,23 @@
-import { getItems } from './client'
-import { buildMlLink } from '../affiliate'
+import { getProduct, getProductItems } from './client'
+import { buildMlCatalogLink } from '../affiliate'
 import { supabaseAdmin } from '../db-admin'
-import type { MlAttribute, MlItem } from './types'
+import type { MlAttribute, MlCatalogProduct, MlProductItem } from './types'
 import itemsData from '@/data/items.json'
 
 const ML_STORE_SLUG = 'mercado-livre'
-const ITEMS_PER_BATCH = 20
 
-// ---------- carregar a lista curada ----------
+// ---------- carregar lista curada ----------
 
-type RawItem = string | { id: string; nota?: string }
+type RawCatalog =
+  | string
+  | { catalog_id?: string; id?: string; nota?: string }
 
-function loadCuratedIds(): string[] {
-  const raw = (itemsData as { items: RawItem[] }).items
+function loadCatalogIds(): string[] {
+  const raw = (itemsData as { items: RawCatalog[] }).items
   const ids: string[] = []
   for (const entry of raw) {
-    const id = typeof entry === 'string' ? entry : entry.id
-    if (typeof id === 'string' && /^MLB\d+$/.test(id)) {
+    const id = typeof entry === 'string' ? entry : entry.catalog_id ?? entry.id
+    if (typeof id === 'string' && /^MLB(U)?[A-Z0-9]+$/i.test(id)) {
       ids.push(id)
     }
   }
@@ -29,7 +30,6 @@ function getAttr(attrs: MlAttribute[], id: string): string | null {
   return attrs.find(a => a.id === id)?.value_name ?? null
 }
 
-/** Converte "900 g" / "1 kg" / "1.5 KG" para gramas. */
 function parseGrams(value: string | null): number | null {
   if (!value) return null
   const m = value.match(/([\d.,]+)\s*(g|kg)\b/i)
@@ -47,12 +47,6 @@ function slugify(input: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
     .slice(0, 200)
-}
-
-function chunk<T>(arr: T[], size: number): T[][] {
-  const out: T[][] = []
-  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
-  return out
 }
 
 // ---------- upserts ----------
@@ -82,8 +76,13 @@ async function upsertBrand(name: string): Promise<number> {
   return data!.id as number
 }
 
-async function upsertProduct(opts: { name: string; brandId: number }): Promise<number> {
-  const slug = slugify(`${opts.name}-${opts.brandId}`)
+async function upsertProduct(opts: {
+  catalogId: string
+  name: string
+  brandId: number
+}): Promise<number> {
+  // slug determinístico por catalogId — sobreviver a mudanças de nome
+  const slug = slugify(`${opts.name}-${opts.catalogId}`)
   const { data, error } = await supabaseAdmin
     .from('product')
     .upsert(
@@ -98,33 +97,22 @@ async function upsertProduct(opts: { name: string; brandId: number }): Promise<n
 
 async function upsertVariant(opts: {
   productId: number
-  ean: string | null
   flavor: string | null
   sizeGrams: number | null
 }): Promise<number> {
-  if (opts.ean) {
-    const { data: existing } = await supabaseAdmin
-      .from('variant')
-      .select('id')
-      .eq('product_id', opts.productId)
-      .eq('ean', opts.ean)
-      .maybeSingle()
-    if (existing) return existing.id as number
-  }
   let q = supabaseAdmin
     .from('variant')
     .select('id')
     .eq('product_id', opts.productId)
   q = opts.flavor    ? q.eq('flavor', opts.flavor)    : q.is('flavor', null)
   q = opts.sizeGrams ? q.eq('size_grams', opts.sizeGrams) : q.is('size_grams', null)
-  const { data: existingByAttr } = await q.maybeSingle()
-  if (existingByAttr) return existingByAttr.id as number
+  const { data: existing } = await q.maybeSingle()
+  if (existing) return existing.id as number
 
   const { data, error } = await supabaseAdmin
     .from('variant')
     .insert({
       product_id: opts.productId,
-      ean: opts.ean,
       flavor: opts.flavor,
       size_grams: opts.sizeGrams,
     })
@@ -178,33 +166,71 @@ async function upsertOfferAndHistory(opts: {
   if (histErr) throw histErr
 }
 
-// ---------- ingest de um único item ----------
+// ---------- processamento de um catalog product ----------
 
-async function ingestItem(item: MlItem, storeId: number): Promise<void> {
-  const brandName = getAttr(item.attributes, 'BRAND') ?? 'Sem marca'
-  const flavor    = getAttr(item.attributes, 'FLAVOR')
+type CatalogResult =
+  | { ok: true; offers_ingested: number; offers_total: number }
+  | { ok: false; reason: string }
+
+async function ingestCatalog(
+  catalogId: string,
+  storeId: number,
+): Promise<CatalogResult> {
+  let product: MlCatalogProduct
+  try {
+    product = await getProduct(catalogId)
+  } catch (e) {
+    return { ok: false, reason: `getProduct: ${e instanceof Error ? e.message : String(e)}` }
+  }
+
+  let items: MlProductItem[] = []
+  try {
+    const resp = await getProductItems(catalogId)
+    items = resp.results ?? []
+  } catch (e) {
+    return { ok: false, reason: `getProductItems: ${e instanceof Error ? e.message : String(e)}` }
+  }
+
+  if (items.length === 0) {
+    return { ok: false, reason: 'sem ofertas ativas (results: [])' }
+  }
+
+  // Metadata
+  const brandName = getAttr(product.attributes, 'BRAND') ?? 'Sem marca'
+  const flavor    = getAttr(product.attributes, 'FLAVOR')
   const sizeGrams = parseGrams(
-    getAttr(item.attributes, 'NET_WEIGHT') ??
-    getAttr(item.attributes, 'UNIT_WEIGHT'),
+    getAttr(product.attributes, 'NET_WEIGHT') ??
+    getAttr(product.attributes, 'UNIT_WEIGHT'),
   )
-  const ean       = getAttr(item.attributes, 'GTIN')
+  const thumbnail = product.pictures?.[0]?.url ?? null
 
   const brandId   = await upsertBrand(brandName)
-  const productId = await upsertProduct({ name: item.title, brandId })
-  const variantId = await upsertVariant({ productId, ean, flavor, sizeGrams })
+  const productId = await upsertProduct({ catalogId, name: product.name, brandId })
+  const variantId = await upsertVariant({ productId, flavor, sizeGrams })
 
-  const url = buildMlLink(item.permalink)
-  const available = item.status === 'active' && item.available_quantity > 0
+  // Ofertas
+  let ingested = 0
+  for (const offer of items) {
+    const url = buildMlCatalogLink(catalogId, offer.item_id)
+    await upsertOfferAndHistory({
+      variantId,
+      storeId,
+      externalId: offer.item_id,
+      url,
+      price: offer.price,
+      available: true,  // /products/{id}/items só devolve ofertas ativas
+      raw: {
+        ...offer,
+        // enriquecemos com info do catalog product (não vem na oferta individual)
+        thumbnail,
+        product_name: product.name,
+        catalog_id: catalogId,
+      },
+    })
+    ingested++
+  }
 
-  await upsertOfferAndHistory({
-    variantId,
-    storeId,
-    externalId: item.id,
-    url,
-    price: item.price,
-    available,
-    raw: item,
-  })
+  return { ok: true, offers_ingested: ingested, offers_total: items.length }
 }
 
 // ---------- entry points ----------
@@ -212,53 +238,48 @@ async function ingestItem(item: MlItem, storeId: number): Promise<void> {
 export type IngestResult = {
   startedAt: string
   durationMs: number
-  curatedIds: number
-  fetched: number
-  ingested: number
-  errors: Array<{ itemId: string; error: string }>
+  catalogIds: number
+  catalogs_ingested: number
+  offers_ingested: number
+  per_catalog: Array<{
+    catalog_id: string
+    status: 'ok' | 'skip' | 'error'
+    offers?: number
+    reason?: string
+  }>
 }
 
-/**
- * Ingere todos os IDs curados em data/items.json. Faz multi-get em lotes
- * de 20 e processa cada item retornado.
- */
 export async function runCuratedIngest(): Promise<IngestResult> {
   const startedAt = new Date().toISOString()
   const t0 = Date.now()
   const storeId = await getStoreId()
-  const ids = loadCuratedIds()
+  const ids = loadCatalogIds()
 
   const result: IngestResult = {
     startedAt,
     durationMs: 0,
-    curatedIds: ids.length,
-    fetched: 0,
-    ingested: 0,
-    errors: [],
+    catalogIds: ids.length,
+    catalogs_ingested: 0,
+    offers_ingested: 0,
+    per_catalog: [],
   }
 
-  for (const batchIds of chunk(ids, ITEMS_PER_BATCH)) {
-    let items: MlItem[] = []
+  for (const catalogId of ids) {
     try {
-      items = await getItems(batchIds)
-      result.fetched += items.length
-    } catch (e) {
-      // Falha no batch inteiro — registra um erro por ID
-      const msg = e instanceof Error ? e.message : String(e)
-      for (const id of batchIds) result.errors.push({ itemId: id, error: msg })
-      continue
-    }
-
-    for (const item of items) {
-      try {
-        await ingestItem(item, storeId)
-        result.ingested++
-      } catch (e) {
-        result.errors.push({
-          itemId: item.id,
-          error: e instanceof Error ? e.message : String(e),
-        })
+      const r = await ingestCatalog(catalogId, storeId)
+      if (r.ok) {
+        result.catalogs_ingested++
+        result.offers_ingested += r.offers_ingested
+        result.per_catalog.push({ catalog_id: catalogId, status: 'ok', offers: r.offers_ingested })
+      } else {
+        result.per_catalog.push({ catalog_id: catalogId, status: 'skip', reason: r.reason })
       }
+    } catch (e) {
+      result.per_catalog.push({
+        catalog_id: catalogId,
+        status: 'error',
+        reason: e instanceof Error ? e.message : String(e),
+      })
     }
   }
 
@@ -266,5 +287,4 @@ export async function runCuratedIngest(): Promise<IngestResult> {
   return result
 }
 
-/** Alias mantido por compat com chamadores antigos (cron sem body). */
 export const runDefaultIngest = runCuratedIngest

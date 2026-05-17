@@ -1,17 +1,19 @@
 // Tipos da API do Mercado Livre que usamos.
 //
-// IMPORTANTE: usamos DOIS endpoints com formatos diferentes:
-//   - /products/search + /products/{id}  → catalog products (rica em metadata, mas
-//                                           SEM preço/oferta — buy_box_winner vem null)
-//   - /items/{id} ou /items?ids=A,B,C   → anúncios específicos de sellers
-//                                           (TEM preço, seller, permalink)
+// Estratégia em produção:
+//   1. data/items.json lista CATALOG product IDs (formato MLB ou MLBU)
+//   2. Para cada catalog_id:
+//      - GET /products/{cat_id}            → metadata (nome, marca, atributos, fotos)
+//      - GET /products/{cat_id}/items      → lista de OFERTAS (N sellers, com preços)
+//   3. Salva 1 product + 1 variant + N offers por catalog_id
 //
-// O ingest atual usa SÓ /items/{id} a partir de uma lista curada em data/items.json
-// porque /products/search não devolve buy_box_winner pro nosso tipo de app.
+// Por que esse caminho funciona: /products/{cat_id}/items devolve TODAS as
+// ofertas ativas pro catalog product (mesmo quando buy_box_winner está null).
+// /items/{id} direto retorna 403 access_denied pro nosso tipo de app.
 
 export type MlAttribute = {
-  id: string                       // 'BRAND' | 'FLAVOR' | 'NET_WEIGHT' | 'GTIN' | 'IS_VEGAN' | ...
-  name: string                     // rótulo pt-BR
+  id: string
+  name: string
   value_id?: string | null
   value_name: string | null
   values?: Array<{ id: string; name: string; meta?: { value: unknown } }>
@@ -24,61 +26,7 @@ export type MlPicture = {
   secure_url?: string
 }
 
-export type MlShipping = {
-  free_shipping?: boolean
-  mode?: string
-  logistic_type?: string
-  tags?: string[]
-}
-
-// ---------- /items/{id} ----------
-
-/** Anúncio específico de um seller. Tem preço, é o que importa pro comparador. */
-export type MlItem = {
-  id: string                       // ex.: 'MLB5872093596'
-  title: string
-  category_id: string
-  price: number
-  base_price?: number
-  original_price?: number | null
-  currency_id: string              // 'BRL'
-  available_quantity: number
-  sold_quantity: number
-  condition: 'new' | 'used' | string
-  permalink: string                // URL pública (recebe ?affiliate=tag)
-  thumbnail: string
-  pictures: MlPicture[]
-  attributes: MlAttribute[]
-  shipping: MlShipping
-  catalog_product_id?: string | null
-  domain_id?: string | null
-  status: 'active' | 'paused' | 'closed' | string
-  seller_id: number
-  official_store_id?: number | null
-  date_created: string
-  last_updated: string
-}
-
-export type MlMultiGetEntry = {
-  code: number                     // 200 = ok, 404 = não existe
-  body: MlItem
-}
-
-// ---------- /products/search + /products/{id} (uso futuro / enriquecimento) ----------
-
-export type MlCatalogProductSummary = {
-  id: string
-  catalog_product_id: string
-  domain_id: string
-  name: string
-  attributes: MlAttribute[]
-}
-
-export type MlCatalogProductSearchResponse = {
-  keywords: string
-  paging: { total: number; limit: number; offset: number }
-  results: MlCatalogProductSummary[]
-}
+// ---------- /products/{id} ----------
 
 export type MlCatalogProduct = {
   id: string
@@ -86,14 +34,69 @@ export type MlCatalogProduct = {
   status: 'active' | 'inactive' | string
   domain_id: string
   name: string
-  family_name: string
-  permalink: string
-  pictures: MlPicture[]
+  family_name?: string
+  permalink?: string
+  pictures?: MlPicture[]
   attributes: MlAttribute[]
-  buy_box_winner: null | {
-    item_id: string
-    price: number
-    currency_id: string
-    permalink: string
+  buy_box_winner: null | { item_id: string; price: number; permalink: string }
+}
+
+// ---------- /products/{id}/items ----------
+
+/** Uma oferta (seller listing) que está vendendo um catalog product específico. */
+export type MlProductItem = {
+  item_id: string                    // ex.: 'MLB5872093596'
+  site_id: string
+  seller_id: number
+  price: number
+  original_price: number | null
+  currency_id: string                // 'BRL'
+  category_id: string
+  condition: 'new' | 'used' | string
+  warranty?: string
+  listing_type_id: string            // 'gold_special', 'gold_pro', ...
+  tags?: string[]
+  official_store_id: number | null   // não-null = loja oficial da marca
+  accepts_mercadopago?: boolean
+  shipping?: {
+    free_shipping?: boolean
+    mode?: string
+    logistic_type?: string
+    tags?: string[]
+    cost?: number
   }
+  seller_address?: {
+    city?: { id?: string; name?: string }
+    state?: { id?: string; name?: string }
+    neighborhood?: { id?: string; name?: string }
+  }
+  sale_terms?: Array<{
+    id: string
+    name: string
+    value_id?: string | null
+    value_name?: string | null
+  }>
+  user_product_id?: string
+  min_purchase_unit?: number
+  international_delivery_mode?: string
+}
+
+export type MlProductItemsResponse = {
+  paging: { total: number; offset: number; limit: number }
+  results: MlProductItem[]
+  experiments?: unknown
+}
+
+// ---------- /products/search (uso futuro pra descoberta automática se a Amazon liberar) ----------
+
+export type MlCatalogProductSearchResponse = {
+  keywords: string
+  paging: { total: number; limit: number; offset: number }
+  results: Array<{
+    id: string
+    catalog_product_id: string
+    domain_id: string
+    name: string
+    attributes: MlAttribute[]
+  }>
 }

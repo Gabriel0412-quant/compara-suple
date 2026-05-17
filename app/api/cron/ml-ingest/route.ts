@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { runDefaultIngest, ingestKeyword } from '@/lib/ml/ingest'
+import { runCuratedIngest } from '@/lib/ml/ingest'
 
 // Roda em Node.js runtime (não Edge) — temos chamadas longas e múltiplas
 export const runtime = 'nodejs'
@@ -16,9 +16,7 @@ function isAuthorized(req: NextRequest): boolean {
 /**
  * POST /api/cron/ml-ingest
  *
- * Sem body  → roda a lista DEFAULT_KEYWORDS.
- * Body JSON `{ "keyword": "...", "category": "..." }` → roda só essa keyword.
- *
+ * Roda a ingestão de todos os IDs em data/items.json.
  * Header obrigatório: `Authorization: Bearer ${CRON_SECRET}`.
  */
 export async function POST(req: NextRequest) {
@@ -26,23 +24,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
 
-  let payload: { keyword?: string } = {}
   try {
-    if (req.headers.get('content-type')?.includes('application/json')) {
-      payload = await req.json()
-    }
-  } catch {
-    // body inválido ou vazio — segue com defaults
-  }
-
-  try {
-    if (payload.keyword) {
-      const result = await ingestKeyword(payload.keyword)
-      return NextResponse.json({ ok: true, mode: 'single', result })
-    }
-    const result = await runDefaultIngest()
-    return NextResponse.json({ ok: true, mode: 'default', result })
+    const result = await runCuratedIngest()
+    return NextResponse.json({ ok: true, result })
   } catch (e) {
+    console.error('ml-ingest error:', e)
     return NextResponse.json(
       { ok: false, error: e instanceof Error ? e.message : String(e) },
       { status: 500 },
@@ -50,7 +36,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-/** GET serve apenas para healthcheck — não roda ingest. */
+/** GET — healthcheck */
 export async function GET() {
   return NextResponse.json({
     ok: true,

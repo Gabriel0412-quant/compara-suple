@@ -1,19 +1,27 @@
-import { searchProducts, getProduct } from './client'
+import { getItems } from './client'
 import { buildMlLink } from '../affiliate'
 import { supabaseAdmin } from '../db-admin'
-import type { MlAttribute, MlCatalogProduct } from './types'
+import type { MlAttribute, MlItem } from './types'
+import itemsData from '@/data/items.json'
 
 const ML_STORE_SLUG = 'mercado-livre'
-const SUPPLEMENTS_DOMAIN = 'MLB-SUPPLEMENTS'
+const ITEMS_PER_BATCH = 20
 
-// Keywords padrão do cron diário
-export const DEFAULT_KEYWORDS = [
-  'whey protein isolado',
-  'creatina monohidratada',
-  'multivitaminico',
-  'omega 3',
-  'pre treino',
-] as const
+// ---------- carregar a lista curada ----------
+
+type RawItem = string | { id: string; nota?: string }
+
+function loadCuratedIds(): string[] {
+  const raw = (itemsData as { items: RawItem[] }).items
+  const ids: string[] = []
+  for (const entry of raw) {
+    const id = typeof entry === 'string' ? entry : entry.id
+    if (typeof id === 'string' && /^MLB\d+$/.test(id)) {
+      ids.push(id)
+    }
+  }
+  return ids
+}
 
 // ---------- helpers ----------
 
@@ -41,6 +49,12 @@ function slugify(input: string): string {
     .slice(0, 200)
 }
 
+function chunk<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = []
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
+  return out
+}
+
 // ---------- upserts ----------
 
 async function getStoreId(): Promise<number> {
@@ -51,7 +65,7 @@ async function getStoreId(): Promise<number> {
     .single()
   if (error || !data) {
     throw new Error(
-      `Store '${ML_STORE_SLUG}' não encontrada. Rode a migration 0001_initial_schema.sql.`,
+      `Store '${ML_STORE_SLUG}' não encontrada. Rode 0001_initial_schema.sql no Supabase.`,
     )
   }
   return data.id as number
@@ -164,116 +178,93 @@ async function upsertOfferAndHistory(opts: {
   if (histErr) throw histErr
 }
 
-// ---------- core: ingest de um catalog product ----------
+// ---------- ingest de um único item ----------
 
-type IngestOutcome =
-  | { ok: true }
-  | { ok: false; reason: 'inactive' | 'no_winner' }
-
-async function ingestCatalogProduct(
-  catalog: MlCatalogProduct,
-  storeId: number,
-): Promise<IngestOutcome> {
-  if (catalog.status !== 'active') return { ok: false, reason: 'inactive' }
-  if (!catalog.buy_box_winner)     return { ok: false, reason: 'no_winner' }
-
-  const brandName = getAttr(catalog.attributes, 'BRAND') ?? 'Sem marca'
-  const flavor    = getAttr(catalog.attributes, 'FLAVOR')
+async function ingestItem(item: MlItem, storeId: number): Promise<void> {
+  const brandName = getAttr(item.attributes, 'BRAND') ?? 'Sem marca'
+  const flavor    = getAttr(item.attributes, 'FLAVOR')
   const sizeGrams = parseGrams(
-    getAttr(catalog.attributes, 'NET_WEIGHT') ??
-    getAttr(catalog.attributes, 'UNIT_WEIGHT'),
+    getAttr(item.attributes, 'NET_WEIGHT') ??
+    getAttr(item.attributes, 'UNIT_WEIGHT'),
   )
-  const ean       = getAttr(catalog.attributes, 'GTIN')
+  const ean       = getAttr(item.attributes, 'GTIN')
 
   const brandId   = await upsertBrand(brandName)
-  const productId = await upsertProduct({ name: catalog.name, brandId })
+  const productId = await upsertProduct({ name: item.title, brandId })
   const variantId = await upsertVariant({ productId, ean, flavor, sizeGrams })
 
-  const winner = catalog.buy_box_winner
-  const url = buildMlLink(winner.permalink)
+  const url = buildMlLink(item.permalink)
+  const available = item.status === 'active' && item.available_quantity > 0
 
   await upsertOfferAndHistory({
     variantId,
     storeId,
-    externalId: winner.item_id,
+    externalId: item.id,
     url,
-    price: winner.price,
-    available: (winner.available_quantity ?? 0) > 0 ||
-               winner.available_quantity === undefined,
-    raw: catalog,
+    price: item.price,
+    available,
+    raw: item,
   })
-
-  return { ok: true }
 }
 
 // ---------- entry points ----------
 
-export type IngestKeywordResult = {
-  keyword: string
-  total: number
+export type IngestResult = {
+  startedAt: string
+  durationMs: number
+  curatedIds: number
+  fetched: number
   ingested: number
-  skipped_inactive: number
-  skipped_no_winner: number
-  errors: string[]
+  errors: Array<{ itemId: string; error: string }>
 }
 
-export async function ingestKeyword(keyword: string): Promise<IngestKeywordResult> {
+/**
+ * Ingere todos os IDs curados em data/items.json. Faz multi-get em lotes
+ * de 20 e processa cada item retornado.
+ */
+export async function runCuratedIngest(): Promise<IngestResult> {
+  const startedAt = new Date().toISOString()
+  const t0 = Date.now()
   const storeId = await getStoreId()
-  // Filtra pelo domínio de suplementos pra reduzir lixo (barras de cereal, snacks, etc)
-  const search = await searchProducts(keyword, {
-    limit: 50,
-    domainId: SUPPLEMENTS_DOMAIN,
-  })
+  const ids = loadCuratedIds()
 
-  const result: IngestKeywordResult = {
-    keyword,
-    total: search.results.length,
+  const result: IngestResult = {
+    startedAt,
+    durationMs: 0,
+    curatedIds: ids.length,
+    fetched: 0,
     ingested: 0,
-    skipped_inactive: 0,
-    skipped_no_winner: 0,
     errors: [],
   }
 
-  for (const summary of search.results) {
+  for (const batchIds of chunk(ids, ITEMS_PER_BATCH)) {
+    let items: MlItem[] = []
     try {
-      const detail = await getProduct(summary.id)
-      const r = await ingestCatalogProduct(detail, storeId)
-      if (r.ok) result.ingested++
-      else if (r.reason === 'inactive')  result.skipped_inactive++
-      else if (r.reason === 'no_winner') result.skipped_no_winner++
+      items = await getItems(batchIds)
+      result.fetched += items.length
     } catch (e) {
-      result.errors.push(
-        `${summary.id}: ${e instanceof Error ? e.message : String(e)}`,
-      )
+      // Falha no batch inteiro — registra um erro por ID
+      const msg = e instanceof Error ? e.message : String(e)
+      for (const id of batchIds) result.errors.push({ itemId: id, error: msg })
+      continue
+    }
+
+    for (const item of items) {
+      try {
+        await ingestItem(item, storeId)
+        result.ingested++
+      } catch (e) {
+        result.errors.push({
+          itemId: item.id,
+          error: e instanceof Error ? e.message : String(e),
+        })
+      }
     }
   }
 
+  result.durationMs = Date.now() - t0
   return result
 }
 
-export type RunIngestResult = {
-  startedAt: string
-  durationMs: number
-  results: IngestKeywordResult[]
-}
-
-export async function runDefaultIngest(): Promise<RunIngestResult> {
-  const startedAt = new Date().toISOString()
-  const t0 = Date.now()
-  const results: IngestKeywordResult[] = []
-  for (const kw of DEFAULT_KEYWORDS) {
-    try {
-      results.push(await ingestKeyword(kw))
-    } catch (e) {
-      results.push({
-        keyword: kw,
-        total: 0,
-        ingested: 0,
-        skipped_inactive: 0,
-        skipped_no_winner: 0,
-        errors: [e instanceof Error ? e.message : String(e)],
-      })
-    }
-  }
-  return { startedAt, durationMs: Date.now() - t0, results }
-}
+/** Alias mantido por compat com chamadores antigos (cron sem body). */
+export const runDefaultIngest = runCuratedIngest

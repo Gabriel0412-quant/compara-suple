@@ -1,6 +1,8 @@
 import type {
   MlCatalogProductSearchResponse,
   MlCatalogProduct,
+  MlItem,
+  MlMultiGetEntry,
 } from './types'
 import { getValidAccessToken } from './oauth'
 
@@ -11,6 +13,7 @@ const DEFAULT_TIMEOUT_MS = 15_000
 // ML permite ~1500 req/min/app. Mantemos 10 req/s pra evitar 429.
 const MIN_INTERVAL_MS = 100
 const MAX_RETRIES = 4
+const MULTI_GET_MAX = 20
 
 let lastCallAt = 0
 
@@ -36,7 +39,6 @@ async function fetchJson<T>(url: string, attempt = 0): Promise<T> {
     })
 
     if (res.status === 401 && attempt < 1) {
-      // Token pode ter expirado entre a leitura no DB e a chamada — força refresh+retry
       await new Promise(r => setTimeout(r, 200))
       return fetchJson<T>(url, attempt + 1)
     }
@@ -58,20 +60,51 @@ async function fetchJson<T>(url: string, attempt = 0): Promise<T> {
   }
 }
 
-export type SearchOptions = {
-  category?: string        // ex.: 'MLB264201' (Suplementos Alimentares)
-  domainId?: string        // ex.: 'MLB-SUPPLEMENTS'
-  limit?: number           // default 50, máx 50
-  offset?: number          // default 0
+// ---------- /items/{id} ----------
+
+/**
+ * Detalhe de UM anúncio específico (seller listing). Devolve preço atual,
+ * estoque, permalink e atributos estruturados. Este é o endpoint principal
+ * do nosso ingest.
+ */
+export async function getItem(id: string): Promise<MlItem> {
+  return fetchJson<MlItem>(`${ML_BASE}/items/${encodeURIComponent(id)}`)
 }
 
 /**
- * Busca catalog products no Mercado Livre (substitui o antigo /sites/MLB/search).
- * Retorna até 50 produtos canônicos por chamada.
+ * Multi-get de até 20 anúncios numa única requisição. Anúncios não-existentes
+ * vêm com `code: 404` e são descartados na resposta.
  */
+export async function getItems(
+  ids: string[],
+  attributes?: string,
+): Promise<MlItem[]> {
+  if (ids.length === 0) return []
+  if (ids.length > MULTI_GET_MAX) {
+    throw new Error(
+      `getItems: máximo ${MULTI_GET_MAX} ids por chamada (recebeu ${ids.length})`,
+    )
+  }
+  const params = new URLSearchParams({ ids: ids.join(',') })
+  if (attributes) params.set('attributes', attributes)
+  const data = await fetchJson<MlMultiGetEntry[]>(
+    `${ML_BASE}/items?${params.toString()}`,
+  )
+  return data.filter(d => d.code === 200).map(d => d.body)
+}
+
+// ---------- /products (uso futuro pra enriquecer metadata) ----------
+
+export type SearchProductsOptions = {
+  category?: string
+  domainId?: string
+  limit?: number
+  offset?: number
+}
+
 export async function searchProducts(
   keyword: string,
-  opts: SearchOptions = {},
+  opts: SearchProductsOptions = {},
 ): Promise<MlCatalogProductSearchResponse> {
   const params = new URLSearchParams({
     site_id: SITE,
@@ -86,10 +119,6 @@ export async function searchProducts(
   )
 }
 
-/**
- * Detalhe completo de um catalog product, incluindo `buy_box_winner`
- * (a oferta vencedora — preço, seller, permalink).
- */
 export async function getProduct(id: string): Promise<MlCatalogProduct> {
   return fetchJson<MlCatalogProduct>(
     `${ML_BASE}/products/${encodeURIComponent(id)}`,

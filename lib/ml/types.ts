@@ -1,6 +1,13 @@
-// Tipos da Catalog Products API do Mercado Livre.
-// Endpoint /sites/MLB/search foi descontinuado (403 mesmo com Bearer).
-// Substituto: /products/search + /products/{id}
+// Tipos da API do Mercado Livre que usamos.
+//
+// IMPORTANTE: usamos DOIS endpoints com formatos diferentes:
+//   - /products/search + /products/{id}  → catalog products (rica em metadata, mas
+//                                           SEM preço/oferta — buy_box_winner vem null)
+//   - /items/{id} ou /items?ids=A,B,C   → anúncios específicos de sellers
+//                                           (TEM preço, seller, permalink)
+//
+// O ingest atual usa SÓ /items/{id} a partir de uma lista curada em data/items.json
+// porque /products/search não devolve buy_box_winner pro nosso tipo de app.
 
 export type MlAttribute = {
   id: string                       // 'BRAND' | 'FLAVOR' | 'NET_WEIGHT' | 'GTIN' | 'IS_VEGAN' | ...
@@ -11,42 +18,68 @@ export type MlAttribute = {
   meta?: { value: unknown }
 }
 
-/** Item resumido devolvido por /products/search */
+export type MlPicture = {
+  id: string
+  url: string
+  secure_url?: string
+}
+
+export type MlShipping = {
+  free_shipping?: boolean
+  mode?: string
+  logistic_type?: string
+  tags?: string[]
+}
+
+// ---------- /items/{id} ----------
+
+/** Anúncio específico de um seller. Tem preço, é o que importa pro comparador. */
+export type MlItem = {
+  id: string                       // ex.: 'MLB5872093596'
+  title: string
+  category_id: string
+  price: number
+  base_price?: number
+  original_price?: number | null
+  currency_id: string              // 'BRL'
+  available_quantity: number
+  sold_quantity: number
+  condition: 'new' | 'used' | string
+  permalink: string                // URL pública (recebe ?affiliate=tag)
+  thumbnail: string
+  pictures: MlPicture[]
+  attributes: MlAttribute[]
+  shipping: MlShipping
+  catalog_product_id?: string | null
+  domain_id?: string | null
+  status: 'active' | 'paused' | 'closed' | string
+  seller_id: number
+  official_store_id?: number | null
+  date_created: string
+  last_updated: string
+}
+
+export type MlMultiGetEntry = {
+  code: number                     // 200 = ok, 404 = não existe
+  body: MlItem
+}
+
+// ---------- /products/search + /products/{id} (uso futuro / enriquecimento) ----------
+
 export type MlCatalogProductSummary = {
-  id: string                       // ex.: 'MLB6238755'
+  id: string
   catalog_product_id: string
-  domain_id: string                // ex.: 'MLB-SUPPLEMENTS'
+  domain_id: string
   name: string
-  parent_id?: string
-  children_ids?: string[]
   attributes: MlAttribute[]
 }
 
 export type MlCatalogProductSearchResponse = {
   keywords: string
-  paging: { total: number; limit: number; offset: number; last?: string }
+  paging: { total: number; limit: number; offset: number }
   results: MlCatalogProductSummary[]
 }
 
-export type MlPicture = {
-  id: string
-  url: string
-}
-
-/** Oferta vencedora (buy box) — pode ser null se não há sellers ativos */
-export type MlBuyBoxWinner = {
-  item_id: string                  // ID do anúncio específico que ganhou o buy box
-  price: number
-  original_price?: number | null
-  currency_id: string
-  permalink: string                // URL do anúncio (usada com tracking de afiliado)
-  available_quantity?: number
-  sold_quantity?: number
-  seller_id: number
-  shipping?: { free_shipping?: boolean }
-} | null
-
-/** Resposta completa de /products/{id} */
 export type MlCatalogProduct = {
   id: string
   catalog_product_id: string
@@ -54,9 +87,13 @@ export type MlCatalogProduct = {
   domain_id: string
   name: string
   family_name: string
-  type: string                     // 'catalog_product' | ...
   permalink: string
   pictures: MlPicture[]
   attributes: MlAttribute[]
-  buy_box_winner: MlBuyBoxWinner
+  buy_box_winner: null | {
+    item_id: string
+    price: number
+    currency_id: string
+    permalink: string
+  }
 }

@@ -40,6 +40,7 @@ export type Offer = {
   price: number
   available: boolean
   fetched_at: string
+  ml_rank: number | null    // posição 0-based na resposta /products/{id}/items do ML
   raw: OfferRaw
 }
 
@@ -67,7 +68,7 @@ export async function getProductBySlug(slug: string): Promise<ProductDetail | nu
       id, slug, name,
       brand:brand_id ( name, slug ),
       variants:variant ( id, flavor, size_grams, servings,
-        offers:offer ( id, external_id, url, price, available, fetched_at, raw )
+        offers:offer ( id, external_id, url, price, available, fetched_at, ml_rank, raw )
       )
     `)
     .eq('slug', slug)
@@ -81,7 +82,7 @@ export async function getProductBySlug(slug: string): Promise<ProductDetail | nu
     flavor: string | null
     size_grams: number | null
     servings: number | null
-    offers: Offer[] | null
+    offers: (Offer & { ml_rank?: number | null })[] | null
   }) => ({
     id: v.id,
     flavor: v.flavor,
@@ -91,13 +92,7 @@ export async function getProductBySlug(slug: string): Promise<ProductDetail | nu
     // Necessário porque o meli.la redireciona pro catálogo, e o ML destaca
     // a vencedora do buy box independente do que clicamos. Sem isso, o
     // "menor preço" no nosso site não bate com o preço final no ML.
-    offers: (v.offers ?? []).sort((a, b) => {
-      const aOfficial = !!a.raw?.official_store_id
-      const bOfficial = !!b.raw?.official_store_id
-      if (aOfficial && !bOfficial) return -1
-      if (!aOfficial && bOfficial) return 1
-      return a.price - b.price
-    }),
+    offers: (v.offers ?? []).sort(compareOffers),
   }))
 
   const brand = Array.isArray(data.brand) ? (data.brand[0] ?? null) : data.brand
@@ -112,19 +107,30 @@ export async function getProductBySlug(slug: string): Promise<ProductDetail | nu
 }
 
 /**
- * Helper — todas ofertas de todas variantes, ordenadas pra aproximar o buy box
- * do ML: loja oficial primeiro, depois por preço. Mesma lógica de getProductBySlug.
+ * Helper — todas ofertas de todas variantes, ordenadas exatamente como o ML
+ * mostra (via ml_rank). Fallback heurístico pra ofertas legadas sem rank.
  */
 export function flattenOffers(product: ProductDetail): Offer[] {
-  return product.variants
-    .flatMap(v => v.offers)
-    .sort((a, b) => {
-      const aOfficial = !!a.raw?.official_store_id
-      const bOfficial = !!b.raw?.official_store_id
-      if (aOfficial && !bOfficial) return -1
-      if (!aOfficial && bOfficial) return 1
-      return a.price - b.price
-    })
+  return product.variants.flatMap(v => v.offers).sort(compareOffers)
+}
+
+/**
+ * Comparator central — segue o padrão do ML:
+ *   1. ml_rank (posição na resposta /products/{id}/items) — fonte de verdade
+ *   2. Fallback heurístico pra rows legadas (rank null): oficial primeiro, depois preço
+ */
+function compareOffers(a: Offer, b: Offer): number {
+  // Primário: ml_rank do ML
+  const aRank = a.ml_rank ?? Number.MAX_SAFE_INTEGER
+  const bRank = b.ml_rank ?? Number.MAX_SAFE_INTEGER
+  if (aRank !== bRank) return aRank - bRank
+
+  // Fallback (ambos sem rank ou empate): oficial primeiro, depois preço
+  const aOfficial = !!a.raw?.official_store_id
+  const bOfficial = !!b.raw?.official_store_id
+  if (aOfficial && !bOfficial) return -1
+  if (!aOfficial && bOfficial) return 1
+  return a.price - b.price
 }
 
 /** Helper — formata número em BRL. */

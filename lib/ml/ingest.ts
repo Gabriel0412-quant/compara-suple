@@ -150,6 +150,7 @@ async function upsertOfferAndHistory(opts: {
   url: string
   price: number
   available: boolean
+  mlRank: number
   raw: unknown
 }): Promise<void> {
   const { data: offer, error: offerErr } = await supabaseAdmin
@@ -162,6 +163,7 @@ async function upsertOfferAndHistory(opts: {
         url: opts.url,
         price: opts.price,
         available: opts.available,
+        ml_rank: opts.mlRank,
         raw: opts.raw,
         fetched_at: new Date().toISOString(),
       },
@@ -237,8 +239,12 @@ async function ingestCatalog(
 
   // Ofertas — usa affiliate_url do JSON quando presente (URL oficial do portal
   // ML Afiliados, tracking garantido). Fallback constrói via tag do env.
+  //
+  // IMPORTANTE: items vem em ordem específica do ML — primeiro = buy box winner.
+  // Salvamos essa posição em ml_rank pra preservar o destaque do ML.
   let ingested = 0
-  for (const offer of items) {
+  for (let rank = 0; rank < items.length; rank++) {
+    const offer = items[rank]
     const url = affiliateUrl ?? buildMlCatalogLink(catalogId, offer.item_id)
     await upsertOfferAndHistory({
       variantId,
@@ -247,6 +253,7 @@ async function ingestCatalog(
       url,
       price: offer.price,
       available: true,  // /products/{id}/items só devolve ofertas ativas
+      mlRank: rank,
       raw: {
         ...offer,
         // enriquecemos com info do catalog product (não vem na oferta individual)

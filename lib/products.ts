@@ -87,7 +87,17 @@ export async function getProductBySlug(slug: string): Promise<ProductDetail | nu
     flavor: v.flavor,
     size_grams: v.size_grams,
     servings: v.servings,
-    offers: (v.offers ?? []).sort((a, b) => a.price - b.price),
+    // Ordenação aproxima o buy box do ML (loja oficial primeiro, depois preço).
+    // Necessário porque o meli.la redireciona pro catálogo, e o ML destaca
+    // a vencedora do buy box independente do que clicamos. Sem isso, o
+    // "menor preço" no nosso site não bate com o preço final no ML.
+    offers: (v.offers ?? []).sort((a, b) => {
+      const aOfficial = !!a.raw?.official_store_id
+      const bOfficial = !!b.raw?.official_store_id
+      if (aOfficial && !bOfficial) return -1
+      if (!aOfficial && bOfficial) return 1
+      return a.price - b.price
+    }),
   }))
 
   const brand = Array.isArray(data.brand) ? (data.brand[0] ?? null) : data.brand

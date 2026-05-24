@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { Truck, ShieldCheck, MapPin, ArrowDownAZ } from 'lucide-react'
 import { formatBRL, pricePerDose, type Offer } from '@/lib/products'
 
-type SortBy = 'total' | 'price' | 'discount'
+type SortBy = 'featured' | 'total' | 'discount'
 
 type Loja = {
   offerId: number
@@ -80,7 +80,7 @@ export function OffersSection({
   const [onlyFreeShipping, setOnlyFreeShipping] = useState(false)
   const [onlyOfficial, setOnlyOfficial] = useState(false)
   const [onlyFull, setOnlyFull] = useState(false)
-  const [sortBy, setSortBy] = useState<SortBy>('total')
+  const [sortBy, setSortBy] = useState<SortBy>('featured')
 
   const allLojas = useMemo(() => offers.map(offerToLoja), [offers])
 
@@ -89,6 +89,7 @@ export function OffersSection({
     if (onlyFreeShipping) list = list.filter(l => l.freeShipping)
     if (onlyOfficial)     list = list.filter(l => l.isOfficial)
     if (onlyFull)         list = list.filter(l => l.isFulfillment)
+    if (sortBy === 'featured') return list   // server já entregou em ordem: oficial → preço
     return [...list].sort((a, b) => {
       if (sortBy === 'discount') {
         const dA = a.originalPrice ? (1 - a.preco / a.originalPrice) : 0
@@ -120,7 +121,7 @@ export function OffersSection({
               {filteredLojas.length === 1 ? 'loja' : 'lojas'}
             </h2>
             <p className="text-xs text-gray-400 mt-0.5">
-              Preços atualizados via API · ordem por preço total
+              Preços atualizados via API · ordenação Destaque prioriza loja oficial
             </p>
           </div>
           <SortDropdown value={sortBy} onChange={setSortBy} />
@@ -307,9 +308,18 @@ export function OffersSection({
         </div>
       )}
 
-      <p className="px-5 py-3 text-[10px] text-gray-400 border-t border-gray-50">
-        Preços e disponibilidade podem variar. ComparaSuple recebe comissão de afiliado nas vendas, sem custo extra para você.
-      </p>
+      <div className="px-5 py-3 text-[10px] text-gray-500 border-t border-gray-50 leading-relaxed bg-amber-50/30">
+        <p className="font-semibold text-amber-800 mb-1">⚠ Como funciona o redirecionamento</p>
+        <p>
+          Ao clicar em <strong>Comprar</strong>, você vai pra página do produto no Mercado Livre.
+          O ML decide qual seller destacar baseado em <strong>frete, CEP, estoque e reputação</strong> —
+          pode mostrar uma oferta diferente da que você clicou (geralmente a loja oficial).
+          Os preços acima refletem as ofertas ativas via API; o ML pode atualizar a qualquer momento.
+        </p>
+        <p className="mt-1.5">
+          ComparaSuple recebe comissão de afiliado nas vendas, sem custo extra para você.
+        </p>
+      </div>
     </div>
   )
 }
@@ -348,8 +358,8 @@ function SortDropdown({
   onChange: (v: SortBy) => void
 }) {
   const labels: Record<SortBy, string> = {
-    total: 'Menor preço total',
-    price: 'Menor preço (sem frete)',
+    featured: 'Destaque (loja oficial primeiro)',
+    total: 'Menor preço',
     discount: 'Maior desconto',
   }
   return (

@@ -111,11 +111,20 @@ export async function getProductBySlug(slug: string): Promise<ProductDetail | nu
   }
 }
 
-/** Helper — todas ofertas de todas variantes, ordenadas por preço. */
+/**
+ * Helper — todas ofertas de todas variantes, ordenadas pra aproximar o buy box
+ * do ML: loja oficial primeiro, depois por preço. Mesma lógica de getProductBySlug.
+ */
 export function flattenOffers(product: ProductDetail): Offer[] {
   return product.variants
     .flatMap(v => v.offers)
-    .sort((a, b) => a.price - b.price)
+    .sort((a, b) => {
+      const aOfficial = !!a.raw?.official_store_id
+      const bOfficial = !!b.raw?.official_store_id
+      if (aOfficial && !bOfficial) return -1
+      if (!aOfficial && bOfficial) return 1
+      return a.price - b.price
+    })
 }
 
 /** Helper — formata número em BRL. */

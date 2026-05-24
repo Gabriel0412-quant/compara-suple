@@ -1,96 +1,37 @@
 import { Star, Heart, Bell, ChevronRight } from 'lucide-react'
+import { notFound } from 'next/navigation'
+import type { Metadata } from 'next'
+
 import Header from '@/components/Header'
+import {
+  getProductBySlug,
+  flattenOffers,
+  formatBRL,
+  pricePerKg,
+  type Offer,
+} from '@/lib/products'
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
+export const dynamic = 'force-dynamic'
 
-const produto = {
-  slug: 'atlas-whey-iso-900g-baunilha',
-  marca: 'Atlas Nutrition',
-  nome: 'Whey Protein Isolado 900g · Baunilha',
-  rating: 4.7,
-  avaliacoes: 1284,
-  sku: 'ATL-WIS-900-BAU',
-  preco_original: 189.90,
-  preco_atual: 169.90,
-  desconto: 11,
-  proteina_por_dose: 27,
-  doses: 30,
-  preco_por_dose: 5.66,
-  score: 9.2,
-}
+type Props = { params: Promise<{ slug: string }> }
 
-interface Loja {
-  avatar: string
-  avatarColor: string
-  nome: string
-  stars: number
-  parcelas: string
-  preco: number
-  frete: number | null
-  total: number
-  diff: number | null
-  entrega: string
-  estoque: string
-  estoqueColor: string
-  melhorPreco?: boolean
-}
-
-const lojas: Loja[] = [
-  {
-    avatar: 'N', avatarColor: 'bg-green-600',
-    nome: 'NutriPrime', stars: 4, parcelas: '10× sem juros',
-    preco: 169.90, frete: null, total: 169.90, diff: null,
-    entrega: '2–4 dias', estoque: 'Em estoque', estoqueColor: 'text-green-600',
-    melhorPreco: true,
-  },
-  {
-    avatar: 'S', avatarColor: 'bg-gray-500',
-    nome: 'SuplementaJá', stars: 5, parcelas: '6× sem juros',
-    preco: 174.50, frete: 12.90, total: 187.40, diff: 17.50,
-    entrega: '3–5 dias', estoque: 'Em estoque', estoqueColor: 'text-gray-600',
-  },
-  {
-    avatar: 'LA', avatarColor: 'bg-orange-500',
-    nome: 'Loja Atleta', stars: 4, parcelas: '12× sem juros',
-    preco: 179.00, frete: null, total: 179.00, diff: 9.10,
-    entrega: '1–3 dias', estoque: 'Em estoque', estoqueColor: 'text-gray-600',
-  },
-  {
-    avatar: 'B', avatarColor: 'bg-purple-600',
-    nome: 'BodyMax', stars: 4, parcelas: '5× sem juros',
-    preco: 184.90, frete: 9.90, total: 194.80, diff: 24.90,
-    entrega: '4–7 dias', estoque: 'Últimas 4 unid.', estoqueColor: 'text-orange-500',
-  },
-  {
-    avatar: 'MS', avatarColor: 'bg-blue-600',
-    nome: 'MaxFit Shop', stars: 4, parcelas: 'À vista pix',
-    preco: 189.90, frete: 14.90, total: 204.80, diff: 34.90,
-    entrega: '5–8 dias', estoque: 'Sob encomenda', estoqueColor: 'text-gray-500',
-  },
+// ─── Mock fallbacks (sections sem dado real ainda) ─────────────────────────────
+// TODO: derivar de attributes ML quando disponível
+const NUTRICAO_PLACEHOLDER: Array<{ label: string; valor: string }> = [
+  { label: 'Valor energético', valor: '—' },
+  { label: 'Proteínas',        valor: '—' },
+  { label: 'Carboidratos',     valor: '—' },
+  { label: 'Açúcares',         valor: '—' },
+  { label: 'Gorduras totais',  valor: '—' },
+  { label: 'Sódio',            valor: '—' },
 ]
 
-interface NutriRow { label: string; valor: string }
-
-const nutricao: NutriRow[] = [
-  { label: 'Valor energético', valor: '110 kcal' },
-  { label: 'Proteínas', valor: '27 g' },
-  { label: 'Carboidratos', valor: '1,2 g' },
-  { label: 'Açúcares', valor: '0,5 g' },
-  { label: 'Gorduras totais', valor: '0,8 g' },
-  { label: 'Sódio', valor: '90 mg' },
-  { label: 'BCAA', valor: '5,9 g' },
-  { label: 'L-glutamina', valor: '4,1 g' },
-]
-
-// SVG chart points: 90-day price history (day → price in R$)
-const chartPoints = [
-  [0, 195], [8, 192], [18, 189.9], [28, 184], [38, 189.9],
-  [48, 178], [58, 182], [68, 177], [78, 173], [88, 170], [90, 169.9],
-]
+// SVG chart — mock até termos 90 dias reais em price_history
+// TODO: substituir por dados reais quando price_history tiver histórico
 const CHART_W = 600
 const CHART_H = 150
-const PRICE_MIN = 166
-const PRICE_MAX = 199
+const PRICE_MIN = 100
+const PRICE_MAX = 250
 const DAY_MAX = 90
 
 function toSvg(day: number, price: number): [number, number] {
@@ -99,13 +40,82 @@ function toSvg(day: number, price: number): [number, number] {
   return [Math.round(x), Math.round(y)]
 }
 
-const linePts = chartPoints.map(([d, p]) => toSvg(d, p).join(',')).join(' ')
-const areaPts = [
-  ...chartPoints.map(([d, p]) => toSvg(d, p).join(',')),
-  `${CHART_W},${CHART_H}`, `0,${CHART_H}`,
-].join(' ')
+// ─── Mapeamento Offer → linha da tabela ────────────────────────────────────────
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+type Loja = {
+  avatar: string
+  avatarColor: string
+  nome: string
+  isOfficial: boolean
+  parcelas: string
+  preco: number
+  frete: number | null
+  total: number
+  diff: number | null
+  entrega: string
+  estoque: string
+  estoqueColor: string
+  melhorPreco: boolean
+  url: string
+}
+
+const AVATAR_COLORS = [
+  'bg-gray-500', 'bg-orange-500', 'bg-purple-600',
+  'bg-blue-600', 'bg-pink-600', 'bg-cyan-600',
+]
+
+function derivaEntrega(logisticType: string | undefined): string {
+  if (logisticType === 'fulfillment')   return '1–2 dias (Full)'
+  if (logisticType === 'cross_docking') return '2–4 dias'
+  if (logisticType === 'xd_drop_off')   return '3–5 dias'
+  if (logisticType === 'drop_off')      return '4–7 dias'
+  return '3–7 dias'
+}
+
+function offerToLoja(offer: Offer, idx: number, cheapestTotal: number): Loja {
+  const isOfficial    = !!offer.raw?.official_store_id
+  const freeShipping  = !!offer.raw?.shipping?.free_shipping
+  const sellerId      = offer.raw?.seller_id ?? 0
+  const city          = offer.raw?.seller_address?.city?.name
+  const total         = offer.price                              // assume frete grátis ou já incluso
+  return {
+    avatar: isOfficial ? 'OF' : (city?.slice(0, 2).toUpperCase() ?? 'V'),
+    avatarColor: isOfficial ? 'bg-green-600' : AVATAR_COLORS[sellerId % AVATAR_COLORS.length],
+    nome: isOfficial ? 'Loja Oficial' : (city ? `Vendedor em ${city}` : `Vendedor #${sellerId}`),
+    isOfficial,
+    parcelas: '12× sem juros',                                   // ML não devolve — placeholder
+    preco: offer.price,
+    frete: freeShipping ? null : null,                           // sem custo conhecido; null = "consultar"
+    total,
+    diff: idx === 0 ? null : total - cheapestTotal,
+    entrega: derivaEntrega(offer.raw?.shipping?.logistic_type),
+    estoque: 'Em estoque',
+    estoqueColor: 'text-green-600',
+    melhorPreco: idx === 0,
+    url: offer.url,
+  }
+}
+
+// ─── SEO ───────────────────────────────────────────────────────────────────────
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { slug } = await params
+  const product = await getProductBySlug(slug)
+  if (!product) return { title: 'Produto não encontrado · ComparaSuple' }
+
+  const offers = flattenOffers(product)
+  const cheapest = offers[0]
+  const priceTxt = cheapest ? ` a partir de ${formatBRL(cheapest.price)}` : ''
+
+  return {
+    title: `${product.name} — Comparar preços${priceTxt} · ComparaSuple`,
+    description: `Compare ${offers.length} ofertas de ${product.name}${
+      product.brand ? ` (${product.brand.name})` : ''
+    } no Mercado Livre${priceTxt}.`,
+  }
+}
+
+// ─── Sub-components ────────────────────────────────────────────────────────────
 
 function StarRating({ rating, size = 'sm' }: { rating: number; size?: 'sm' | 'md' }) {
   const full = Math.floor(rating)
@@ -133,26 +143,46 @@ function StarRating({ rating, size = 'sm' }: { rating: number; size?: 'sm' | 'md
   )
 }
 
-function StoreStars({ count }: { count: number }) {
-  return (
-    <span className="text-amber-400 text-xs tracking-tight">
-      {'★'.repeat(count)}{'☆'.repeat(5 - count)}
-    </span>
-  )
-}
+// ─── Page ──────────────────────────────────────────────────────────────────────
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+export default async function ProductPage({ params }: Props) {
+  const { slug } = await params
+  const product = await getProductBySlug(slug)
+  if (!product) notFound()
 
-export function generateStaticParams() {
-  return [{ slug: produto.slug }]
-}
+  const offers = flattenOffers(product)
+  if (offers.length === 0) notFound()
 
-export default async function ProductPage({
-  params,
-}: {
-  params: Promise<{ slug: string }>
-}) {
-  await params
+  const cheapest        = offers[0]
+  const primaryVariant  = product.variants[0]
+  const sizeGrams       = primaryVariant?.size_grams ?? null
+  const flavor          = primaryVariant?.flavor ?? null
+  const thumbnail       = cheapest.raw?.thumbnail ?? null
+  const originalPrice   = cheapest.raw?.original_price ?? null
+  const hasDiscount     = !!originalPrice && originalPrice > cheapest.price
+  const descontoPct     = hasDiscount
+    ? Math.round((1 - cheapest.price / originalPrice) * 100)
+    : 0
+  const perKgStr        = pricePerKg(cheapest.price, sizeGrams) ?? '—'
+  const pesoTxt         = sizeGrams
+    ? sizeGrams >= 1000 ? `${sizeGrams / 1000} kg` : `${sizeGrams} g`
+    : '—'
+
+  // Mapeia ofertas reais pra estrutura da tabela
+  const lojas: Loja[] = offers.map((o, i) => offerToLoja(o, i, cheapest.price))
+
+  // Chart mock — TODO: trocar quando tivermos histórico
+  const chartPoints: Array<[number, number]> = [
+    [0,  cheapest.price * 1.10],
+    [30, cheapest.price * 1.05],
+    [60, cheapest.price * 1.02],
+    [90, cheapest.price],
+  ]
+  const linePts = chartPoints.map(([d, p]) => toSvg(d, p).join(',')).join(' ')
+  const areaPts = [
+    ...chartPoints.map(([d, p]) => toSvg(d, p).join(',')),
+    `${CHART_W},${CHART_H}`, `0,${CHART_H}`,
+  ].join(' ')
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-800">
@@ -162,11 +192,9 @@ export default async function ProductPage({
       <nav className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-1 text-xs text-gray-500 flex-wrap">
         <a href="/" className="hover:text-green-600 transition-colors">Suplementos</a>
         <ChevronRight className="w-3 h-3 shrink-0" />
-        <a href="/categoria/proteinas" className="hover:text-green-600 transition-colors">Proteínas</a>
+        <a href="/produtos" className="hover:text-green-600 transition-colors">Produtos</a>
         <ChevronRight className="w-3 h-3 shrink-0" />
-        <a href="/categoria/whey-protein" className="hover:text-green-600 transition-colors">Whey Protein</a>
-        <ChevronRight className="w-3 h-3 shrink-0" />
-        <span className="text-gray-800 font-medium">Atlas Whey Iso 900g Baunilha</span>
+        <span className="text-gray-800 font-medium truncate max-w-md">{product.name}</span>
       </nav>
 
       <main className="max-w-7xl mx-auto px-4 pb-12">
@@ -177,30 +205,41 @@ export default async function ProductPage({
           {/* Left — image + thumbnails */}
           <div>
             <div className="flex gap-2 mb-3 flex-wrap">
+              {hasDiscount && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-orange-100 text-orange-700">
+                  -{descontoPct}% no melhor preço
+                </span>
+              )}
               <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-green-100 text-green-700">
-                ● Menor preço 90d
-              </span>
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-orange-100 text-orange-700">
-                -{produto.desconto}% vs. mês anterior
+                ● {offers.length} {offers.length === 1 ? 'oferta' : 'ofertas'} comparadas
               </span>
             </div>
 
             {/* Main image */}
-            <div className="bg-gray-100 rounded-2xl aspect-square flex items-center justify-center mb-3 border border-gray-200">
-              <span className="text-gray-400 text-sm font-medium select-none">
-                atlas iso 900g · product render
-              </span>
+            <div className="bg-gray-100 rounded-2xl aspect-square flex items-center justify-center mb-3 border border-gray-200 overflow-hidden">
+              {thumbnail ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={thumbnail}
+                  alt={product.name}
+                  className="max-h-full max-w-full object-contain p-8"
+                />
+              ) : (
+                <span className="text-gray-400 text-sm font-medium select-none">
+                  sem imagem disponível
+                </span>
+              )}
             </div>
 
-            {/* Thumbnails */}
+            {/* Thumbnails placeholder — TODO: usar pictures[] do catalog product */}
             <div className="grid grid-cols-4 gap-2">
-              {['thumb_01', 'thumb_02', 'thumb_03', 'thumb_04'].map((label) => (
-                <button
-                  key={label}
-                  className="bg-gray-100 rounded-xl aspect-square flex items-center justify-center border-2 border-transparent hover:border-green-600 transition-colors"
+              {[1, 2, 3, 4].map(i => (
+                <div
+                  key={i}
+                  className="bg-gray-100 rounded-xl aspect-square flex items-center justify-center border-2 border-transparent"
                 >
-                  <span className="text-gray-400 text-[10px] font-medium select-none">{label}</span>
-                </button>
+                  <span className="text-gray-300 text-[10px] font-medium select-none">—</span>
+                </div>
               ))}
             </div>
           </div>
@@ -208,52 +247,66 @@ export default async function ProductPage({
           {/* Right — product details */}
           <div className="flex flex-col gap-4">
             <div>
-              <p className="text-xs font-bold tracking-widest text-green-600 uppercase mb-1">
-                {produto.marca}
-              </p>
+              {product.brand?.name && (
+                <p className="text-xs font-bold tracking-widest text-green-600 uppercase mb-1">
+                  {product.brand.name}
+                </p>
+              )}
               <h1 className="text-2xl md:text-3xl font-bold text-gray-800 leading-tight">
-                {produto.nome}
+                {product.name}
               </h1>
             </div>
 
-            {/* Rating row */}
+            {/* Rating row — placeholder; ML não dá rating estruturado */}
             <div className="flex flex-wrap items-center gap-2 text-sm">
-              <StarRating rating={produto.rating} size="md" />
-              <span className="font-semibold text-gray-800">{produto.rating}</span>
-              <span className="text-gray-400">({produto.avaliacoes.toLocaleString('pt-BR')} avaliações)</span>
-              <span className="text-gray-300">·</span>
-              <span className="text-gray-400 text-xs">SKU {produto.sku}</span>
+              <StarRating rating={4.5} size="md" />
+              <span className="text-gray-400 text-xs italic">
+                Avaliações em breve
+              </span>
             </div>
 
             {/* Store badge */}
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-500">Menor preço encontrado em 5 lojas</span>
-              <div className="w-8 h-8 rounded-full bg-green-600 flex items-center justify-center text-white text-xs font-bold">N</div>
+              <span className="text-sm text-gray-500">
+                Menor preço entre {offers.length} {offers.length === 1 ? 'loja' : 'lojas'}
+              </span>
+              <div className={`w-8 h-8 rounded-full ${lojas[0].avatarColor} flex items-center justify-center text-white text-xs font-bold`}>
+                {lojas[0].avatar}
+              </div>
             </div>
 
             {/* Pricing */}
             <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-gray-400 line-through text-base">
-                  R${produto.preco_original.toFixed(2).replace('.', ',')}
-                </span>
-                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-green-600 text-white">
-                  -{produto.desconto}%
-                </span>
-              </div>
+              {hasDiscount && (
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-gray-400 line-through text-base">
+                    {formatBRL(originalPrice!)}
+                  </span>
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-green-600 text-white">
+                    -{descontoPct}%
+                  </span>
+                </div>
+              )}
               <p className="text-4xl font-bold text-green-600">
-                R${produto.preco_atual.toFixed(2).replace('.', ',')}
+                {formatBRL(cheapest.price)}
               </p>
               <p className="text-sm text-gray-400 mt-1">
-                ou 10× R$16,99 sem juros · frete grátis
+                {lojas[0].frete === null
+                  ? 'frete grátis na melhor oferta'
+                  : 'consulte frete na loja'}
               </p>
             </div>
 
             {/* CTA row */}
             <div className="flex gap-2">
-              <button className="flex-1 py-3.5 bg-green-600 text-white rounded-xl font-semibold text-sm hover:bg-green-700 transition-colors">
-                Comprar na NutriPrime →
-              </button>
+              <a
+                href={lojas[0].url}
+                target="_blank"
+                rel="noopener noreferrer sponsored"
+                className="flex-1 py-3.5 bg-green-600 text-white rounded-xl font-semibold text-sm hover:bg-green-700 transition-colors text-center"
+              >
+                Comprar na {lojas[0].nome} →
+              </a>
               <button className="w-12 h-12 rounded-xl border-2 border-gray-200 flex items-center justify-center text-gray-400 hover:border-red-300 hover:text-red-400 transition-colors">
                 <Heart className="w-5 h-5" />
               </button>
@@ -264,18 +317,18 @@ export default async function ProductPage({
 
             {/* Trust seals */}
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
-              <span>✓ Compra segura</span>
+              <span>✓ Compra segura no ML</span>
               <span>✓ Link de afiliado</span>
-              <span>✓ Atualizado há 12 min</span>
+              <span>✓ Atualizado diariamente</span>
             </div>
 
             {/* Metrics grid */}
             <div className="flex border border-gray-100 rounded-xl overflow-hidden">
               {[
-                { label: 'PROTEÍNA/DOSE', value: `${produto.proteina_por_dose} g` },
-                { label: 'DOSES', value: `${produto.doses} porções` },
-                { label: 'R$/DOSE', value: `${produto.preco_por_dose.toFixed(2).replace('.', ',')} reais` },
-                { label: 'CUSTO-BENEFÍCIO', value: `${produto.score}/10` },
+                { label: 'MARCA',     value: product.brand?.name ?? '—' },
+                { label: 'PESO',      value: pesoTxt },
+                { label: 'SABOR',     value: flavor ?? '—' },
+                { label: 'R$/KG',     value: perKgStr },
               ].map((m, i) => (
                 <div
                   key={m.label}
@@ -284,7 +337,7 @@ export default async function ProductPage({
                   <p className="text-[9px] font-bold uppercase tracking-wide text-gray-400 leading-tight mb-1">
                     {m.label}
                   </p>
-                  <p className="text-sm font-bold text-gray-800 leading-tight">{m.value}</p>
+                  <p className="text-sm font-bold text-gray-800 leading-tight truncate">{m.value}</p>
                 </div>
               ))}
             </div>
@@ -296,9 +349,11 @@ export default async function ProductPage({
           <div className="p-5 border-b border-gray-100">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h2 className="text-lg font-bold text-gray-800">Comparar em 5 lojas</h2>
+                <h2 className="text-lg font-bold text-gray-800">
+                  Comparar em {offers.length} {offers.length === 1 ? 'loja' : 'lojas'}
+                </h2>
                 <p className="text-xs text-gray-400 mt-0.5">
-                  Preços atualizados automaticamente a cada 30 minutos · ordem por preço total
+                  Preços atualizados via API · ordem por preço total
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -326,10 +381,9 @@ export default async function ProductPage({
               <tbody>
                 {lojas.map((loja, i) => (
                   <tr
-                    key={loja.nome}
+                    key={`${loja.nome}-${i}`}
                     className={`border-b border-gray-50 last:border-0 ${loja.melhorPreco ? 'bg-green-50' : 'hover:bg-gray-50'} transition-colors`}
                   >
-                    {/* Loja */}
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2.5">
                         <div className={`w-8 h-8 rounded-full ${loja.avatarColor} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
@@ -343,50 +397,49 @@ export default async function ProductPage({
                                 MENOR PREÇO
                               </span>
                             )}
+                            {loja.isOfficial && !loja.melhorPreco && (
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">
+                                OFICIAL
+                              </span>
+                            )}
                           </div>
-                          <div className="flex items-center gap-1">
-                            <StoreStars count={loja.stars} />
-                            <span className="text-[10px] text-gray-400">· {loja.parcelas}</span>
-                          </div>
+                          <span className="text-[10px] text-gray-400">{loja.parcelas}</span>
                         </div>
                       </div>
                     </td>
 
-                    {/* Preço */}
                     <td className="px-4 py-3 text-sm font-semibold text-gray-800">
-                      R${loja.preco.toFixed(2).replace('.', ',')}
+                      {formatBRL(loja.preco)}
                     </td>
 
-                    {/* Frete */}
                     <td className="px-4 py-3 text-sm">
                       {loja.frete === null
                         ? <span className="text-green-600 font-semibold">Grátis</span>
-                        : <span className="text-gray-600">R${loja.frete.toFixed(2).replace('.', ',')}</span>
+                        : <span className="text-gray-600">{formatBRL(loja.frete)}</span>
                       }
                     </td>
 
-                    {/* Total */}
                     <td className="px-4 py-3">
                       <p className="text-sm font-bold text-gray-800">
-                        R${loja.total.toFixed(2).replace('.', ',')}
+                        {formatBRL(loja.total)}
                       </p>
-                      {loja.diff !== null && (
+                      {loja.diff !== null && loja.diff > 0 && (
                         <p className="text-[10px] text-gray-400">
-                          +R${loja.diff.toFixed(2).replace('.', ',')}
+                          +{formatBRL(loja.diff)}
                         </p>
                       )}
                     </td>
 
-                    {/* Entrega */}
                     <td className="px-4 py-3">
                       <p className="text-xs text-gray-600">{loja.entrega}</p>
                       <p className={`text-[10px] font-semibold ${loja.estoqueColor}`}>{loja.estoque}</p>
                     </td>
 
-                    {/* Ação */}
                     <td className="px-4 py-3">
                       <a
-                        href={`/go/${produto.slug}-${i}`}
+                        href={loja.url}
+                        target="_blank"
+                        rel="noopener noreferrer sponsored"
                         className={`text-xs font-semibold px-4 py-2 rounded-lg transition-colors whitespace-nowrap ${
                           loja.melhorPreco
                             ? 'bg-green-600 text-white hover:bg-green-700'
@@ -403,41 +456,40 @@ export default async function ProductPage({
           </div>
 
           <p className="px-5 py-3 text-[10px] text-gray-400 border-t border-gray-50">
-            Preços e disponibilidade podem variar. ComparaSuple pode receber comissão de afiliado nas lojas listadas, sem custo extra para você.
+            Preços e disponibilidade podem variar. ComparaSuple recebe comissão de afiliado nas vendas, sem custo extra para você.
           </p>
         </div>
 
         {/* ── Lower section ────────────────────────────────────────────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
 
-          {/* Price history */}
+          {/* Price history — mock até termos 90 dias reais */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
             <h2 className="text-lg font-bold text-gray-800 mb-0.5">Histórico de preço</h2>
-            <p className="text-xs text-gray-400 mb-4">Menor preço da NutriPrime nos últimos 90 dias</p>
+            <p className="text-xs text-gray-400 mb-4">
+              Em breve — coletando histórico real (precisa de 30+ dias de dados)
+            </p>
 
-            {/* Tabs */}
-            <div className="flex gap-1 mb-5">
+            <div className="flex gap-1 mb-5 opacity-50">
               {['30d', '90d', '6m', '1a', 'Tudo'].map(tab => (
                 <button
                   key={tab}
                   className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors ${
-                    tab === '90d'
-                      ? 'bg-green-600 text-white'
-                      : 'text-gray-500 hover:bg-gray-100'
+                    tab === '90d' ? 'bg-green-600 text-white' : 'text-gray-500 hover:bg-gray-100'
                   }`}
+                  disabled
                 >
                   {tab}
                 </button>
               ))}
             </div>
 
-            {/* Metric row */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
               {[
-                { label: 'Atual', value: 'R$169,90', color: 'text-green-600' },
-                { label: 'Mínimo 90d', value: 'R$169,90', color: 'text-gray-800' },
-                { label: 'Máximo 90d', value: 'R$195,00', color: 'text-gray-800' },
-                { label: 'Variação 30d', value: '↘ R$8,10', color: 'text-green-600' },
+                { label: 'Atual',         value: formatBRL(cheapest.price), color: 'text-green-600' },
+                { label: 'Mínimo 90d',    value: '—',                       color: 'text-gray-400' },
+                { label: 'Máximo 90d',    value: '—',                       color: 'text-gray-400' },
+                { label: 'Variação 30d',  value: '—',                       color: 'text-gray-400' },
               ].map(m => (
                 <div key={m.label}>
                   <p className="text-[10px] text-gray-400 uppercase tracking-wide">{m.label}</p>
@@ -446,21 +498,14 @@ export default async function ProductPage({
               ))}
             </div>
 
-            {/* SVG chart */}
-            <div className="rounded-xl overflow-hidden bg-gray-50 border border-gray-100 mb-4">
+            <div className="rounded-xl overflow-hidden bg-gray-50 border border-gray-100 mb-4 opacity-60">
               <svg
                 viewBox={`0 0 ${CHART_W} ${CHART_H}`}
                 className="w-full"
                 style={{ height: 140 }}
                 preserveAspectRatio="none"
               >
-                {/* Area fill */}
-                <polygon
-                  points={areaPts}
-                  fill="#16a34a"
-                  fillOpacity="0.08"
-                />
-                {/* Line */}
+                <polygon points={areaPts} fill="#16a34a" fillOpacity="0.08" />
                 <polyline
                   points={linePts}
                   fill="none"
@@ -468,38 +513,34 @@ export default async function ProductPage({
                   strokeWidth="2.5"
                   strokeLinejoin="round"
                   strokeLinecap="round"
+                  strokeDasharray="5,5"
                 />
-                {/* Current price dot */}
-                <circle cx={CHART_W} cy={toSvg(90, 169.9)[1]} r="5" fill="#16a34a" />
-                <circle cx={CHART_W} cy={toSvg(90, 169.9)[1]} r="9" fill="#16a34a" fillOpacity="0.2" />
+                <circle cx={CHART_W} cy={toSvg(90, cheapest.price)[1]} r="5" fill="#16a34a" />
               </svg>
             </div>
 
-            {/* Analysis */}
-            <div className="flex gap-2 items-start p-3 bg-green-50 rounded-xl mb-4">
-              <span className="text-green-600 shrink-0">✓</span>
-              <p className="text-xs text-green-800 leading-relaxed">
-                Bom momento para comprar. O preço está 11% abaixo da média do trimestre e atingiu o menor valor em 90 dias hoje.
-              </p>
-            </div>
-
-            <button className="w-full py-2.5 border-2 border-green-600 text-green-600 rounded-xl text-sm font-semibold hover:bg-green-50 transition-colors flex items-center justify-center gap-2">
+            <button
+              disabled
+              className="w-full py-2.5 border-2 border-gray-200 text-gray-400 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 cursor-not-allowed"
+            >
               <Bell className="w-4 h-4" />
-              Avisar quando baixar
+              Avisar quando baixar (em breve)
             </button>
           </div>
 
-          {/* Nutritional info */}
+          {/* Nutritional info — placeholder */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
             <h2 className="text-lg font-bold text-gray-800 mb-0.5">Informação nutricional</h2>
-            <p className="text-xs text-gray-400 mb-4">Por dose (30g)</p>
+            <p className="text-xs text-gray-400 mb-4">
+              Em breve — extração automática da ficha do ML
+            </p>
 
             <table className="w-full">
               <tbody>
-                {nutricao.map((row, i) => (
+                {NUTRICAO_PLACEHOLDER.map((row, i) => (
                   <tr key={row.label} className={i % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                     <td className="px-3 py-2.5 text-sm text-gray-600 rounded-l-lg">{row.label}</td>
-                    <td className="px-3 py-2.5 text-sm font-semibold text-gray-800 text-right rounded-r-lg">{row.valor}</td>
+                    <td className="px-3 py-2.5 text-sm font-semibold text-gray-400 text-right rounded-r-lg">{row.valor}</td>
                   </tr>
                 ))}
               </tbody>
@@ -513,9 +554,9 @@ export default async function ProductPage({
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center gap-5">
           <span className="text-4xl">⚖</span>
           <div className="flex-1 text-center sm:text-left">
-            <h3 className="text-lg font-bold text-white mb-1">Compare com outras whey</h3>
+            <h3 className="text-lg font-bold text-white mb-1">Compare com outros produtos</h3>
             <p className="text-green-200 text-sm leading-relaxed">
-              Adicione até 3 produtos lado-a-lado para comparar proteína, preço por dose e score.
+              Adicione até 3 suplementos lado-a-lado para comparar preço, marca e gramatura.
             </p>
           </div>
           <a

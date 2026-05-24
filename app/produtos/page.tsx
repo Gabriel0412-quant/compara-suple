@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import Header from '@/components/Header'
 import { supabase } from '@/lib/db'
 
@@ -123,9 +124,14 @@ export default async function ProdutosPage() {
                           </span>
                         )}
 
-                        <h2 className="font-semibold text-sm text-gray-800 line-clamp-2 mb-2">
-                          {product.name}
-                        </h2>
+                        <Link
+                          href={`/produto/${product.slug}`}
+                          className="block mb-2"
+                        >
+                          <h2 className="font-semibold text-sm text-gray-800 line-clamp-2 hover:text-green-600 transition-colors">
+                            {product.name}
+                          </h2>
+                        </Link>
 
                         <div className="text-xs text-gray-500 mb-3 flex gap-2 flex-wrap">
                           {variant.flavor && <span>{variant.flavor}</span>}
@@ -148,14 +154,22 @@ export default async function ProdutosPage() {
                             )}
                           </div>
 
-                          <a
-                            href={offer.url}
-                            target="_blank"
-                            rel="noopener noreferrer sponsored"
-                            className="block text-center w-full py-2.5 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition-colors"
-                          >
-                            Ver no Mercado Livre →
-                          </a>
+                          <div className="flex gap-2">
+                            <Link
+                              href={`/produto/${product.slug}`}
+                              className="flex-1 text-center py-2.5 border border-gray-200 text-gray-700 rounded-xl text-sm font-semibold hover:border-green-600 hover:text-green-600 transition-colors"
+                            >
+                              Comparar
+                            </Link>
+                            <a
+                              href={offer.url}
+                              target="_blank"
+                              rel="noopener noreferrer sponsored"
+                              className="flex-1 text-center py-2.5 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition-colors"
+                            >
+                              Comprar →
+                            </a>
+                          </div>
 
                           {!offer.available && (
                             <p className="text-xs text-red-600 mt-2 text-center">

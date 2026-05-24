@@ -121,8 +121,17 @@ export function flattenOffers(product: ProductDetail): Offer[] {
  *
  * Exportado pra reuso em outras camadas (categories, listings, etc) — toda página
  * que precisa decidir "qual oferta destacar" deve usar este comparator.
+ *
+ * Aceita qualquer objeto com {price, ml_rank, raw.official_store_id} —
+ * funciona com queries minimalistas (lite) ou completas (full).
  */
-export function compareOffers(a: Offer, b: Offer): number {
+type OfferSortable = {
+  price: number
+  ml_rank?: number | null
+  raw?: { official_store_id?: number | null } | null
+}
+
+export function compareOffers(a: OfferSortable, b: OfferSortable): number {
   // Primário: ml_rank do ML
   const aRank = a.ml_rank ?? Number.MAX_SAFE_INTEGER
   const bRank = b.ml_rank ?? Number.MAX_SAFE_INTEGER
@@ -164,4 +173,106 @@ export function pricePerDoseNumber(
 ): number | null {
   if (!servings || servings <= 0) return null
   return price / servings
+}
+
+/**
+ * Busca múltiplos produtos por ID, preservando a ordem do array de entrada.
+ * Usado pelo comparador (?ids=1,2,3).
+ */
+export async function getProductsByIds(ids: number[]): Promise<ProductDetail[]> {
+  if (ids.length === 0) return []
+
+  const { data, error } = await supabase
+    .from('product')
+    .select(`
+      id, slug, name,
+      brand:brand_id ( name, slug ),
+      variants:variant ( id, flavor, size_grams, servings,
+        offers:offer ( id, external_id, url, price, available, fetched_at, ml_rank, raw )
+      )
+    `)
+    .in('id', ids)
+
+  if (error || !data) return []
+
+  // Mapeia + ordena pela ordem solicitada
+  const byId = new Map<number, ProductDetail>()
+  for (const row of data) {
+    const variants: Variant[] = (row.variants ?? []).map((v: {
+      id: number
+      flavor: string | null
+      size_grams: number | null
+      servings: number | null
+      offers: (Offer & { ml_rank?: number | null })[] | null
+    }) => ({
+      id: v.id,
+      flavor: v.flavor,
+      size_grams: v.size_grams,
+      servings: v.servings,
+      offers: (v.offers ?? []).sort(compareOffers),
+    }))
+    const brand = Array.isArray(row.brand) ? (row.brand[0] ?? null) : row.brand
+    byId.set(row.id, {
+      id: row.id,
+      slug: row.slug,
+      name: row.name,
+      brand,
+      variants,
+    })
+  }
+  return ids.map(id => byId.get(id)).filter((p): p is ProductDetail => !!p)
+}
+
+/** Versão "lite" pra picker — só info pra exibir o produto + linkar pelo ID. */
+export type ProductLite = {
+  id: number
+  slug: string
+  name: string
+  brand: string | null
+  thumbnail: string | null
+  cheapestPrice: number | null
+}
+
+export async function getAllProductsLite(): Promise<ProductLite[]> {
+  const { data, error } = await supabase
+    .from('product')
+    .select(`
+      id, slug, name,
+      brand:brand_id ( name ),
+      variants:variant ( offers:offer ( price, ml_rank, raw ) )
+    `)
+    .order('id', { ascending: true })
+
+  if (error || !data) return []
+
+  // Cast pra shape mínima — Supabase TS infer pode divergir do select; sabemos
+  // que cada offer tem ao menos price, ml_rank, raw (foi o que pedimos no select)
+  type LiteRow = {
+    id: number
+    slug: string
+    name: string
+    brand: { name: string } | { name: string }[] | null
+    variants: Array<{
+      offers: Array<{
+        price: number
+        ml_rank: number | null
+        raw: { thumbnail?: string; official_store_id?: number | null } | null
+      }> | null
+    }> | null
+  }
+
+  return (data as unknown as LiteRow[]).map(p => {
+    const offers = (p.variants ?? []).flatMap(v => v.offers ?? [])
+    const sorted = [...offers].sort(compareOffers)
+    const featured = sorted[0]
+    const brand = Array.isArray(p.brand) ? p.brand[0] : p.brand
+    return {
+      id: p.id,
+      slug: p.slug,
+      name: p.name,
+      brand: brand?.name ?? null,
+      thumbnail: featured?.raw?.thumbnail ?? null,
+      cheapestPrice: featured?.price ?? null,
+    }
+  })
 }

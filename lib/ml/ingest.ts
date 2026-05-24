@@ -10,18 +10,27 @@ const ML_STORE_SLUG = 'mercado-livre'
 
 type RawCatalog =
   | string
-  | { catalog_id?: string; id?: string; nota?: string }
+  | { catalog_id?: string; id?: string; nota?: string; affiliate_url?: string }
 
-function loadCatalogIds(): string[] {
+export type CuratedItem = {
+  catalogId: string
+  affiliateUrl?: string
+}
+
+function loadCuratedItems(): CuratedItem[] {
   const raw = (itemsData as { items: RawCatalog[] }).items
-  const ids: string[] = []
+  const items: CuratedItem[] = []
   for (const entry of raw) {
-    const id = typeof entry === 'string' ? entry : entry.catalog_id ?? entry.id
+    if (typeof entry === 'string') {
+      if (/^MLB(U)?[A-Z0-9]+$/i.test(entry)) items.push({ catalogId: entry })
+      continue
+    }
+    const id = entry.catalog_id ?? entry.id
     if (typeof id === 'string' && /^MLB(U)?[A-Z0-9]+$/i.test(id)) {
-      ids.push(id)
+      items.push({ catalogId: id, affiliateUrl: entry.affiliate_url })
     }
   }
-  return ids
+  return items
 }
 
 // ---------- helpers ----------
@@ -187,6 +196,7 @@ type CatalogResult =
 async function ingestCatalog(
   catalogId: string,
   storeId: number,
+  affiliateUrl?: string,
 ): Promise<CatalogResult> {
   let product: MlCatalogProduct
   try {
@@ -225,10 +235,11 @@ async function ingestCatalog(
   const productId = await upsertProduct({ catalogId, name: product.name, brandId })
   const variantId = await upsertVariant({ productId, flavor, sizeGrams, servings })
 
-  // Ofertas
+  // Ofertas — usa affiliate_url do JSON quando presente (URL oficial do portal
+  // ML Afiliados, tracking garantido). Fallback constrói via tag do env.
   let ingested = 0
   for (const offer of items) {
-    const url = buildMlCatalogLink(catalogId, offer.item_id)
+    const url = affiliateUrl ?? buildMlCatalogLink(catalogId, offer.item_id)
     await upsertOfferAndHistory({
       variantId,
       storeId,
@@ -270,20 +281,21 @@ export async function runCuratedIngest(): Promise<IngestResult> {
   const startedAt = new Date().toISOString()
   const t0 = Date.now()
   const storeId = await getStoreId()
-  const ids = loadCatalogIds()
+  const items = loadCuratedItems()
 
   const result: IngestResult = {
     startedAt,
     durationMs: 0,
-    catalogIds: ids.length,
+    catalogIds: items.length,
     catalogs_ingested: 0,
     offers_ingested: 0,
     per_catalog: [],
   }
 
-  for (const catalogId of ids) {
+  for (const item of items) {
+    const catalogId = item.catalogId
     try {
-      const r = await ingestCatalog(catalogId, storeId)
+      const r = await ingestCatalog(catalogId, storeId, item.affiliateUrl)
       if (r.ok) {
         result.catalogs_ingested++
         result.offers_ingested += r.offers_ingested

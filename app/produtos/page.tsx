@@ -24,6 +24,7 @@ type VariantRow = {
   id: number
   flavor: string | null
   size_grams: number | null
+  servings: number | null
   offer: OfferRow[] | null
 }
 
@@ -46,13 +47,18 @@ function pricePerKg(price: number, sizeGrams: number | null): string | null {
   return `${formatBRL(perKg)} / kg`
 }
 
+function pricePerDose(price: number, servings: number | null): string | null {
+  if (!servings || servings <= 0) return null
+  return `${formatBRL(price / servings)} / dose`
+}
+
 export default async function ProdutosPage() {
   const { data, error } = await supabase
     .from('product')
     .select(`
       id, name, slug, created_at,
       brand:brand_id ( name, slug ),
-      variant ( id, flavor, size_grams,
+      variant ( id, flavor, size_grams, servings,
         offer ( id, price, url, available, fetched_at, raw )
       )
     `)
@@ -100,6 +106,7 @@ export default async function ProdutosPage() {
                     null
                   const sold = offer.raw?.sold_quantity ?? null
                   const perKg = pricePerKg(offer.price, variant.size_grams)
+                  const perDose = pricePerDose(offer.price, variant.servings)
 
                   return (
                     <article
@@ -145,12 +152,19 @@ export default async function ProdutosPage() {
                         </div>
 
                         <div className="mt-auto">
-                          <div className="flex items-baseline gap-2 mb-3">
-                            <span className="text-2xl font-bold text-green-600">
-                              {formatBRL(offer.price)}
-                            </span>
+                          <div className="mb-3">
+                            <div className="flex items-baseline gap-2">
+                              <span className="text-2xl font-bold text-green-600">
+                                {formatBRL(offer.price)}
+                              </span>
+                              {perDose && (
+                                <span className="text-xs font-semibold text-green-700">
+                                  {perDose.replace(' / dose', '/dose')}
+                                </span>
+                              )}
+                            </div>
                             {perKg && (
-                              <span className="text-xs text-gray-500">{perKg}</span>
+                              <span className="text-xs text-gray-400">{perKg}</span>
                             )}
                           </div>
 

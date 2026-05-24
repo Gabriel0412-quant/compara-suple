@@ -3,12 +3,13 @@ import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 
 import Header from '@/components/Header'
+import { OffersSection } from '@/components/product/OffersSection'
 import {
   getProductBySlug,
   flattenOffers,
   formatBRL,
   pricePerKg,
-  type Offer,
+  pricePerDose,
 } from '@/lib/products'
 
 export const dynamic = 'force-dynamic'
@@ -38,62 +39,6 @@ function toSvg(day: number, price: number): [number, number] {
   const x = (day / DAY_MAX) * CHART_W
   const y = CHART_H - ((price - PRICE_MIN) / (PRICE_MAX - PRICE_MIN)) * (CHART_H - 16) - 8
   return [Math.round(x), Math.round(y)]
-}
-
-// ─── Mapeamento Offer → linha da tabela ────────────────────────────────────────
-
-type Loja = {
-  avatar: string
-  avatarColor: string
-  nome: string
-  isOfficial: boolean
-  parcelas: string
-  preco: number
-  frete: number | null
-  total: number
-  diff: number | null
-  entrega: string
-  estoque: string
-  estoqueColor: string
-  melhorPreco: boolean
-  url: string
-}
-
-const AVATAR_COLORS = [
-  'bg-gray-500', 'bg-orange-500', 'bg-purple-600',
-  'bg-blue-600', 'bg-pink-600', 'bg-cyan-600',
-]
-
-function derivaEntrega(logisticType: string | undefined): string {
-  if (logisticType === 'fulfillment')   return '1–2 dias (Full)'
-  if (logisticType === 'cross_docking') return '2–4 dias'
-  if (logisticType === 'xd_drop_off')   return '3–5 dias'
-  if (logisticType === 'drop_off')      return '4–7 dias'
-  return '3–7 dias'
-}
-
-function offerToLoja(offer: Offer, idx: number, cheapestTotal: number): Loja {
-  const isOfficial    = !!offer.raw?.official_store_id
-  const freeShipping  = !!offer.raw?.shipping?.free_shipping
-  const sellerId      = offer.raw?.seller_id ?? 0
-  const city          = offer.raw?.seller_address?.city?.name
-  const total         = offer.price                              // assume frete grátis ou já incluso
-  return {
-    avatar: isOfficial ? 'OF' : (city?.slice(0, 2).toUpperCase() ?? 'V'),
-    avatarColor: isOfficial ? 'bg-green-600' : AVATAR_COLORS[sellerId % AVATAR_COLORS.length],
-    nome: isOfficial ? 'Loja Oficial' : (city ? `Vendedor em ${city}` : `Vendedor #${sellerId}`),
-    isOfficial,
-    parcelas: '12× sem juros',                                   // ML não devolve — placeholder
-    preco: offer.price,
-    frete: freeShipping ? null : null,                           // sem custo conhecido; null = "consultar"
-    total,
-    diff: idx === 0 ? null : total - cheapestTotal,
-    entrega: derivaEntrega(offer.raw?.shipping?.logistic_type),
-    estoque: 'Em estoque',
-    estoqueColor: 'text-green-600',
-    melhorPreco: idx === 0,
-    url: offer.url,
-  }
 }
 
 // ─── SEO ───────────────────────────────────────────────────────────────────────
@@ -156,6 +101,7 @@ export default async function ProductPage({ params }: Props) {
   const cheapest        = offers[0]
   const primaryVariant  = product.variants[0]
   const sizeGrams       = primaryVariant?.size_grams ?? null
+  const servings        = primaryVariant?.servings ?? null
   const flavor          = primaryVariant?.flavor ?? null
   const thumbnail       = cheapest.raw?.thumbnail ?? null
   const originalPrice   = cheapest.raw?.original_price ?? null
@@ -164,14 +110,18 @@ export default async function ProductPage({ params }: Props) {
     ? Math.round((1 - cheapest.price / originalPrice) * 100)
     : 0
   const perKgStr        = pricePerKg(cheapest.price, sizeGrams) ?? '—'
+  const perDoseStr      = pricePerDose(cheapest.price, servings)
   const pesoTxt         = sizeGrams
     ? sizeGrams >= 1000 ? `${sizeGrams / 1000} kg` : `${sizeGrams} g`
     : '—'
+  const cheapestFreeShipping = !!cheapest.raw?.shipping?.free_shipping
+  const cheapestSellerLabel  = cheapest.raw?.official_store_id
+    ? 'Loja Oficial'
+    : (cheapest.raw?.seller_address?.city?.name
+        ? `Vendedor em ${cheapest.raw.seller_address.city.name}`
+        : 'Mercado Livre')
 
-  // Mapeia ofertas reais pra estrutura da tabela
-  const lojas: Loja[] = offers.map((o, i) => offerToLoja(o, i, cheapest.price))
-
-  // Chart mock — TODO: trocar quando tivermos histórico
+  // Chart mock — TODO: trocar quando tivermos histórico real (>30 dias)
   const chartPoints: Array<[number, number]> = [
     [0,  cheapest.price * 1.10],
     [30, cheapest.price * 1.05],
@@ -215,7 +165,6 @@ export default async function ProductPage({ params }: Props) {
               </span>
             </div>
 
-            {/* Main image */}
             <div className="bg-gray-100 rounded-2xl aspect-square flex items-center justify-center mb-3 border border-gray-200 overflow-hidden">
               {thumbnail ? (
                 /* eslint-disable-next-line @next/next/no-img-element */
@@ -231,7 +180,6 @@ export default async function ProductPage({ params }: Props) {
               )}
             </div>
 
-            {/* Thumbnails placeholder — TODO: usar pictures[] do catalog product */}
             <div className="grid grid-cols-4 gap-2">
               {[1, 2, 3, 4].map(i => (
                 <div
@@ -257,7 +205,6 @@ export default async function ProductPage({ params }: Props) {
               </h1>
             </div>
 
-            {/* Rating row — placeholder; ML não dá rating estruturado */}
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <StarRating rating={4.5} size="md" />
               <span className="text-gray-400 text-xs italic">
@@ -265,17 +212,15 @@ export default async function ProductPage({ params }: Props) {
               </span>
             </div>
 
-            {/* Store badge */}
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-500">
                 Menor preço entre {offers.length} {offers.length === 1 ? 'loja' : 'lojas'}
               </span>
-              <div className={`w-8 h-8 rounded-full ${lojas[0].avatarColor} flex items-center justify-center text-white text-xs font-bold`}>
-                {lojas[0].avatar}
-              </div>
+              <span className="text-xs font-semibold text-gray-700 truncate max-w-[60%]">
+                {cheapestSellerLabel}
+              </span>
             </div>
 
-            {/* Pricing */}
             <div>
               {hasDiscount && (
                 <div className="flex items-center gap-2 mb-1">
@@ -291,21 +236,24 @@ export default async function ProductPage({ params }: Props) {
                 {formatBRL(cheapest.price)}
               </p>
               <p className="text-sm text-gray-400 mt-1">
-                {lojas[0].frete === null
-                  ? 'frete grátis na melhor oferta'
-                  : 'consulte frete na loja'}
+                {cheapestFreeShipping ? 'frete grátis na melhor oferta' : 'consulte frete na loja'}
+                {perDoseStr && (
+                  <>
+                    {' · '}
+                    <span className="text-gray-600 font-semibold">{perDoseStr}</span>
+                  </>
+                )}
               </p>
             </div>
 
-            {/* CTA row */}
             <div className="flex gap-2">
               <a
-                href={lojas[0].url}
+                href={cheapest.url}
                 target="_blank"
                 rel="noopener noreferrer sponsored"
                 className="flex-1 py-3.5 bg-green-600 text-white rounded-xl font-semibold text-sm hover:bg-green-700 transition-colors text-center"
               >
-                Comprar na {lojas[0].nome} →
+                Comprar agora →
               </a>
               <button className="w-12 h-12 rounded-xl border-2 border-gray-200 flex items-center justify-center text-gray-400 hover:border-red-300 hover:text-red-400 transition-colors">
                 <Heart className="w-5 h-5" />
@@ -315,20 +263,20 @@ export default async function ProductPage({ params }: Props) {
               </button>
             </div>
 
-            {/* Trust seals */}
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
               <span>✓ Compra segura no ML</span>
               <span>✓ Link de afiliado</span>
               <span>✓ Atualizado diariamente</span>
             </div>
 
-            {/* Metrics grid */}
+            {/* Metrics grid — agora com R$/DOSE quando temos servings */}
             <div className="flex border border-gray-100 rounded-xl overflow-hidden">
               {[
-                { label: 'MARCA',     value: product.brand?.name ?? '—' },
-                { label: 'PESO',      value: pesoTxt },
-                { label: 'SABOR',     value: flavor ?? '—' },
-                { label: 'R$/KG',     value: perKgStr },
+                { label: 'MARCA',   value: product.brand?.name ?? '—' },
+                { label: 'PESO',    value: pesoTxt },
+                { label: 'DOSES',   value: servings ? `${servings} porções` : '—' },
+                { label: 'R$/DOSE', value: perDoseStr ? perDoseStr.replace(' / dose', '') : '—', emphasize: true },
+                { label: 'R$/KG',   value: perKgStr },
               ].map((m, i) => (
                 <div
                   key={m.label}
@@ -337,127 +285,22 @@ export default async function ProductPage({ params }: Props) {
                   <p className="text-[9px] font-bold uppercase tracking-wide text-gray-400 leading-tight mb-1">
                     {m.label}
                   </p>
-                  <p className="text-sm font-bold text-gray-800 leading-tight truncate">{m.value}</p>
+                  <p
+                    className={`text-sm font-bold leading-tight truncate ${
+                      m.emphasize ? 'text-green-600' : 'text-gray-800'
+                    }`}
+                  >
+                    {m.value}
+                  </p>
                 </div>
               ))}
             </div>
           </div>
         </div>
 
-        {/* ── Store comparison table ───────────────────────────────────────── */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-10">
-          <div className="p-5 border-b border-gray-100">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-bold text-gray-800">
-                  Comparar em {offers.length} {offers.length === 1 ? 'loja' : 'lojas'}
-                </h2>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  Preços atualizados via API · ordem por preço total
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button className="text-xs px-3 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors">
-                  ⚙ Filtrar
-                </button>
-                <button className="text-xs px-3 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors">
-                  Ordenar por: Total ▾
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px]">
-              <thead>
-                <tr className="border-b border-gray-100">
-                  {['LOJA', 'PREÇO', 'FRETE', 'TOTAL', 'ENTREGA', 'AÇÃO'].map(col => (
-                    <th key={col} className="px-4 py-3 text-left text-[10px] font-bold tracking-widest text-gray-400 uppercase">
-                      {col}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {lojas.map((loja, i) => (
-                  <tr
-                    key={`${loja.nome}-${i}`}
-                    className={`border-b border-gray-50 last:border-0 ${loja.melhorPreco ? 'bg-green-50' : 'hover:bg-gray-50'} transition-colors`}
-                  >
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2.5">
-                        <div className={`w-8 h-8 rounded-full ${loja.avatarColor} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
-                          {loja.avatar}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-sm font-semibold text-gray-800">{loja.nome}</span>
-                            {loja.melhorPreco && (
-                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-green-600 text-white">
-                                MENOR PREÇO
-                              </span>
-                            )}
-                            {loja.isOfficial && !loja.melhorPreco && (
-                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">
-                                OFICIAL
-                              </span>
-                            )}
-                          </div>
-                          <span className="text-[10px] text-gray-400">{loja.parcelas}</span>
-                        </div>
-                      </div>
-                    </td>
-
-                    <td className="px-4 py-3 text-sm font-semibold text-gray-800">
-                      {formatBRL(loja.preco)}
-                    </td>
-
-                    <td className="px-4 py-3 text-sm">
-                      {loja.frete === null
-                        ? <span className="text-green-600 font-semibold">Grátis</span>
-                        : <span className="text-gray-600">{formatBRL(loja.frete)}</span>
-                      }
-                    </td>
-
-                    <td className="px-4 py-3">
-                      <p className="text-sm font-bold text-gray-800">
-                        {formatBRL(loja.total)}
-                      </p>
-                      {loja.diff !== null && loja.diff > 0 && (
-                        <p className="text-[10px] text-gray-400">
-                          +{formatBRL(loja.diff)}
-                        </p>
-                      )}
-                    </td>
-
-                    <td className="px-4 py-3">
-                      <p className="text-xs text-gray-600">{loja.entrega}</p>
-                      <p className={`text-[10px] font-semibold ${loja.estoqueColor}`}>{loja.estoque}</p>
-                    </td>
-
-                    <td className="px-4 py-3">
-                      <a
-                        href={loja.url}
-                        target="_blank"
-                        rel="noopener noreferrer sponsored"
-                        className={`text-xs font-semibold px-4 py-2 rounded-lg transition-colors whitespace-nowrap ${
-                          loja.melhorPreco
-                            ? 'bg-green-600 text-white hover:bg-green-700'
-                            : 'border border-gray-200 text-gray-700 hover:border-green-600 hover:text-green-600'
-                        }`}
-                      >
-                        Comprar →
-                      </a>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <p className="px-5 py-3 text-[10px] text-gray-400 border-t border-gray-50">
-            Preços e disponibilidade podem variar. ComparaSuple recebe comissão de afiliado nas vendas, sem custo extra para você.
-          </p>
+        {/* ── Offers table (client component com filtros) ──────────────────── */}
+        <div className="mb-10">
+          <OffersSection offers={offers} servings={servings} />
         </div>
 
         {/* ── Lower section ────────────────────────────────────────────────── */}

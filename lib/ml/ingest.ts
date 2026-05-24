@@ -99,15 +99,26 @@ async function upsertVariant(opts: {
   productId: number
   flavor: string | null
   sizeGrams: number | null
+  servings: number | null
 }): Promise<number> {
   let q = supabaseAdmin
     .from('variant')
-    .select('id')
+    .select('id, servings')
     .eq('product_id', opts.productId)
   q = opts.flavor    ? q.eq('flavor', opts.flavor)    : q.is('flavor', null)
   q = opts.sizeGrams ? q.eq('size_grams', opts.sizeGrams) : q.is('size_grams', null)
   const { data: existing } = await q.maybeSingle()
-  if (existing) return existing.id as number
+
+  if (existing) {
+    // Atualiza servings se a info nova for diferente / chegou agora
+    if (opts.servings != null && existing.servings !== opts.servings) {
+      await supabaseAdmin
+        .from('variant')
+        .update({ servings: opts.servings })
+        .eq('id', existing.id)
+    }
+    return existing.id as number
+  }
 
   const { data, error } = await supabaseAdmin
     .from('variant')
@@ -115,6 +126,7 @@ async function upsertVariant(opts: {
       product_id: opts.productId,
       flavor: opts.flavor,
       size_grams: opts.sizeGrams,
+      servings: opts.servings,
     })
     .select('id')
     .single()
@@ -196,17 +208,22 @@ async function ingestCatalog(
   }
 
   // Metadata
-  const brandName = getAttr(product.attributes, 'BRAND') ?? 'Sem marca'
-  const flavor    = getAttr(product.attributes, 'FLAVOR')
-  const sizeGrams = parseGrams(
+  const brandName     = getAttr(product.attributes, 'BRAND') ?? 'Sem marca'
+  const flavor        = getAttr(product.attributes, 'FLAVOR')
+  const sizeGrams     = parseGrams(
     getAttr(product.attributes, 'NET_WEIGHT') ??
     getAttr(product.attributes, 'UNIT_WEIGHT'),
   )
-  const thumbnail = product.pictures?.[0]?.url ?? null
+  const servingGrams  = parseGrams(getAttr(product.attributes, 'SERVING_WEIGHT'))
+  // Doses = peso total / peso por dose (arredondado para inteiro mais próximo)
+  const servings      = sizeGrams && servingGrams && servingGrams > 0
+    ? Math.round(sizeGrams / servingGrams)
+    : null
+  const thumbnail     = product.pictures?.[0]?.url ?? null
 
   const brandId   = await upsertBrand(brandName)
   const productId = await upsertProduct({ catalogId, name: product.name, brandId })
-  const variantId = await upsertVariant({ productId, flavor, sizeGrams })
+  const variantId = await upsertVariant({ productId, flavor, sizeGrams, servings })
 
   // Ofertas
   let ingested = 0

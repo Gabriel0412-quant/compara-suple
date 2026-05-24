@@ -47,6 +47,7 @@ export type Variant = {
   id: number
   flavor: string | null
   size_grams: number | null
+  servings: number | null
   offers: Offer[]
 }
 
@@ -65,7 +66,7 @@ export async function getProductBySlug(slug: string): Promise<ProductDetail | nu
     .select(`
       id, slug, name,
       brand:brand_id ( name, slug ),
-      variants:variant ( id, flavor, size_grams,
+      variants:variant ( id, flavor, size_grams, servings,
         offers:offer ( id, external_id, url, price, available, fetched_at, raw )
       )
     `)
@@ -79,11 +80,13 @@ export async function getProductBySlug(slug: string): Promise<ProductDetail | nu
     id: number
     flavor: string | null
     size_grams: number | null
+    servings: number | null
     offers: Offer[] | null
   }) => ({
     id: v.id,
     flavor: v.flavor,
     size_grams: v.size_grams,
+    servings: v.servings,
     offers: (v.offers ?? []).sort((a, b) => a.price - b.price),
   }))
 
@@ -118,4 +121,19 @@ export function pricePerKg(price: number, sizeGrams: number | null): string | nu
   if (!sizeGrams || sizeGrams <= 0) return null
   const perKg = (price / sizeGrams) * 1000
   return `${formatBRL(perKg)} / kg`
+}
+
+/** Helper — preço por dose (porção), devolve string formatada ou null. */
+export function pricePerDose(price: number, servings: number | null): string | null {
+  if (!servings || servings <= 0) return null
+  return `${formatBRL(price / servings)} / dose`
+}
+
+/** Helper — número bruto de R$/dose, útil pra comparar entre produtos. */
+export function pricePerDoseNumber(
+  price: number,
+  servings: number | null,
+): number | null {
+  if (!servings || servings <= 0) return null
+  return price / servings
 }

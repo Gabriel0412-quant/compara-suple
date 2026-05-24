@@ -118,8 +118,11 @@ export function flattenOffers(product: ProductDetail): Offer[] {
  * Comparator central — segue o padrão do ML:
  *   1. ml_rank (posição na resposta /products/{id}/items) — fonte de verdade
  *   2. Fallback heurístico pra rows legadas (rank null): oficial primeiro, depois preço
+ *
+ * Exportado pra reuso em outras camadas (categories, listings, etc) — toda página
+ * que precisa decidir "qual oferta destacar" deve usar este comparator.
  */
-function compareOffers(a: Offer, b: Offer): number {
+export function compareOffers(a: Offer, b: Offer): number {
   // Primário: ml_rank do ML
   const aRank = a.ml_rank ?? Number.MAX_SAFE_INTEGER
   const bRank = b.ml_rank ?? Number.MAX_SAFE_INTEGER

@@ -1,4 +1,5 @@
 import { supabase } from './db'
+import { compareOffers, type Offer } from './products'
 
 /**
  * Categorias suportadas — slug → metadata + keywords pra matching.
@@ -138,22 +139,12 @@ export type CategoryProduct = {
   cheapestPerDose: number | null
 }
 
-type RawOffer = {
-  id: number
-  price: number
-  url: string
-  raw: {
-    thumbnail?: string
-    original_price?: number | null
-  } | null
-}
-
 type RawVariant = {
   id: number
   flavor: string | null
   size_grams: number | null
   servings: number | null
-  offers: RawOffer[] | null
+  offers: Offer[] | null
 }
 
 type RawProduct = {
@@ -166,8 +157,11 @@ type RawProduct = {
 
 function rowToCard(p: RawProduct): CategoryProduct {
   const allOffers = (p.variants ?? []).flatMap(v => v.offers ?? [])
-  const sortedOffers = [...allOffers].sort((a, b) => a.price - b.price)
-  const cheapest = sortedOffers[0] as RawOffer | undefined
+  // Mesma lógica do PDP: respeitar ordem do ML (ml_rank), fallback oficial → preço.
+  // Sem isto, card mostrava o seller mais barato (que ML não destaca), causando
+  // dissonância entre preço listado e preço cobrado no clique.
+  const sortedOffers = [...allOffers].sort(compareOffers)
+  const featured = sortedOffers[0]
   const primaryVariant = p.variants?.[0]
   const servings = primaryVariant?.servings ?? null
   const sizeGrams = primaryVariant?.size_grams ?? null
@@ -178,14 +172,14 @@ function rowToCard(p: RawProduct): CategoryProduct {
     slug: p.slug,
     name: p.name,
     brand: brand?.name ?? null,
-    thumbnail: cheapest?.raw?.thumbnail ?? null,
+    thumbnail: featured?.raw?.thumbnail ?? null,
     offerCount: allOffers.length,
-    cheapestPrice: cheapest?.price ?? 0,
-    cheapestOriginalPrice: cheapest?.raw?.original_price ?? null,
-    cheapestUrl: cheapest?.url ?? '#',
+    cheapestPrice: featured?.price ?? 0,
+    cheapestOriginalPrice: featured?.raw?.original_price ?? null,
+    cheapestUrl: featured?.url ?? '#',
     servings,
     sizeGrams,
-    cheapestPerDose: servings && cheapest ? cheapest.price / servings : null,
+    cheapestPerDose: servings && featured ? featured.price / servings : null,
   }
 }
 
@@ -199,7 +193,7 @@ export async function getProductsByCategory(
       id, slug, name,
       brand:brand_id ( name ),
       variants:variant ( id, flavor, size_grams, servings,
-        offers:offer ( id, price, url, raw )
+        offers:offer ( id, external_id, url, price, available, fetched_at, ml_rank, raw )
       )
     `)
     .returns<RawProduct[]>()
@@ -225,7 +219,7 @@ export async function getProductsOnSale(): Promise<CategoryProduct[]> {
       id, slug, name,
       brand:brand_id ( name ),
       variants:variant ( id, flavor, size_grams, servings,
-        offers:offer ( id, price, url, raw )
+        offers:offer ( id, external_id, url, price, available, fetched_at, ml_rank, raw )
       )
     `)
     .returns<RawProduct[]>()

@@ -1,57 +1,24 @@
-import { Search, Star, ArrowRight } from 'lucide-react'
+import Link from 'next/link'
+import { Search, Flame, TrendingDown, Trophy } from 'lucide-react'
+
 import Header from '@/components/Header'
+import { getProductsOnSale, type CategoryProduct } from '@/lib/categories'
+import { formatBRL } from '@/lib/products'
 
-const fallingProducts = [
-  { initial: 'P', category: 'Whey', name: 'Pure Whey 1kg', price: 154, oldPrice: 181, drop: 15 },
-  { initial: 'M', category: 'Whey', name: 'Hydro Whey 900g', price: 219, oldPrice: 258, drop: 15 },
-  { initial: 'P', category: 'Creatina', name: 'Creatina Mono 300g', price: 89, oldPrice: 105, drop: 14 },
-  { initial: 'V', category: 'Pré-treino', name: 'Pré-treino 300g', price: 119, oldPrice: 140, drop: 14 },
-  { initial: 'G', category: 'Vegano', name: 'Vegan Protein 900g', price: 169, oldPrice: 199, drop: 14 },
-  { initial: 'Z', category: 'BCAA', name: 'BCAA 2:1:1 250g', price: 59, oldPrice: 69, drop: 14 },
-]
-
-const smallCategories = [
-  { name: 'Creatina', count: 86, slug: 'creatina' },
-  { name: 'Pré-treino', count: 127, slug: 'pre-treino' },
-  { name: 'BCAA', count: 61, slug: 'bcaa' },
-  { name: 'Vitaminas', count: 340, slug: 'vitaminas' },
-  { name: 'Vegano', count: 74, slug: 'vegano' },
-  { name: 'Hipercalórico', count: 38, slug: 'hipercalorico' },
-  { name: 'Termogênicos', count: 52, slug: 'termogenicos' },
-]
-
+export const dynamic = 'force-dynamic'
 
 const searchTags = ['Whey Isolado', 'Creatina', 'Pré-treino', 'Hipercalórico', 'BCAA']
 
-function StarRating({ rating }: { rating: number }) {
-  const full = Math.floor(rating)
-  const hasHalf = rating - full >= 0.5
-  const empty = 5 - full - (hasHalf ? 1 : 0)
+// ---------- Home ----------
 
-  return (
-    <div className="flex items-center gap-0.5">
-      {Array.from({ length: full }).map((_, i) => (
-        <Star key={i} className="w-4 h-4 fill-amber-400 text-amber-400" />
-      ))}
-      {hasHalf && (
-        <span className="relative inline-block w-4 h-4">
-          <Star className="absolute inset-0 w-4 h-4 text-amber-200" />
-          <span className="absolute inset-0 overflow-hidden" style={{ width: '60%' }}>
-            <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
-          </span>
-        </span>
-      )}
-      {Array.from({ length: empty }).map((_, i) => (
-        <Star key={`e${i}`} className="w-4 h-4 text-amber-200" />
-      ))}
-    </div>
-  )
-}
+export default async function Home() {
+  // Busca os produtos em oferta (já vem ordenado por desconto absoluto)
+  const onSale = await getProductsOnSale()
+  const topOffers = onSale.slice(0, 2)        // hero
+  const fallingProducts = onSale.slice(0, 6)  // "em queda agora"
 
-export default function Home() {
   return (
     <div className="min-h-screen bg-gray-50 text-gray-800">
-
       {/* 1. Announcement bar */}
       <div className="bg-green-900 py-2 px-4 text-center text-sm text-white">
         Alertas de preço por WhatsApp já estão no ar.{' '}
@@ -63,10 +30,9 @@ export default function Home() {
       {/* 2. Header */}
       <Header />
 
-      {/* 3. Hero section */}
-      <section className="bg-white py-12 px-4">
+      {/* 3. Hero — text à esquerda + top 2 ofertas à direita */}
+      <section className="bg-white py-10 md:py-14 px-4">
         <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
-
           {/* Left column */}
           <div>
             <h1 className="text-3xl md:text-5xl font-bold leading-tight text-gray-800 mb-4">
@@ -77,7 +43,8 @@ export default function Home() {
               do Brasil.
             </h1>
             <p className="text-gray-500 text-base md:text-lg mb-6 leading-relaxed">
-              Acompanhamos o preço de whey, creatina, pré-treino e mais — em tempo real, em 8 lojas. Compare, receba alertas e nunca mais pague caro.
+              Acompanhamos preço de whey, creatina, pré-treino e mais — em tempo real,
+              comparando até <strong>100 lojas por produto</strong>. Compare, escolha e nunca mais pague caro.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-2 mb-4">
@@ -89,48 +56,38 @@ export default function Home() {
                   className="w-full pl-10 pr-3 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
                 />
               </div>
-              <button className="px-5 py-3 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition-colors whitespace-nowrap">
-                Comparar agora →
-              </button>
+              <Link
+                href="/comparar"
+                className="px-5 py-3 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition-colors whitespace-nowrap text-center"
+              >
+                Abrir comparador →
+              </Link>
             </div>
 
             <div className="flex flex-wrap gap-2">
               {searchTags.map(tag => (
-                <button
+                <Link
                   key={tag}
+                  href={`/categoria/${tag.toLowerCase().replace(/\s+/g, '-').replace('pré', 'pre').replace('hipercalórico', 'hipercalorico')}`}
                   className="px-3 py-1.5 text-xs font-medium border border-green-600 text-green-600 rounded-full hover:bg-green-600 hover:text-white transition-colors"
                 >
                   {tag}
-                </button>
+                </Link>
               ))}
             </div>
           </div>
 
-          {/* Right column — offer card */}
-          <div className="flex justify-center md:justify-end">
-            <div className="bg-white border-2 border-gray-100 rounded-2xl p-6 shadow-lg w-full max-w-sm">
-              <span className="inline-block px-3 py-1 text-xs font-bold rounded-full bg-green-600 text-white mb-4">
-                Oferta da Semana
-              </span>
-              <h3 className="font-bold text-lg text-gray-800 mb-1">
-                Atlas Nutrition — Whey Iso 900g
-              </h3>
-              <p className="text-sm text-gray-400 mb-3">Baunilha</p>
-              <div className="flex items-center gap-2 mb-4">
-                <StarRating rating={4.7} />
-                <span className="text-sm font-semibold text-gray-700">4.7</span>
+          {/* Right column — 2 top offers stacked */}
+          <div className="flex flex-col gap-3 w-full max-w-md mx-auto md:ml-auto md:mr-0">
+            {topOffers.length > 0 ? (
+              topOffers.map((p, i) => (
+                <TopOfferCard key={p.id} product={p} position={i + 1} />
+              ))
+            ) : (
+              <div className="bg-gray-50 border border-gray-200 rounded-2xl p-8 text-center text-sm text-gray-400">
+                Sem ofertas em destaque no momento — volte em breve.
               </div>
-              <div className="flex items-end gap-2 mb-5">
-                <span className="text-3xl font-bold text-green-600">R$169,90</span>
-                <span className="text-gray-400 line-through text-sm mb-1">R$189,90</span>
-                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-green-600 text-white mb-1">
-                  -11%
-                </span>
-              </div>
-              <button className="w-full py-3 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition-colors">
-                Comprar na NutriPrime →
-              </button>
-            </div>
+            )}
           </div>
         </div>
       </section>
@@ -153,100 +110,10 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 5. Em queda agora */}
-      <section className="bg-green-900 py-12 px-4">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
-            <div>
-              <span className="inline-block px-3 py-1 text-xs font-bold rounded-full bg-green-800 text-green-400 mb-3">
-                ● ATUALIZANDO AGORA
-              </span>
-              <h2 className="text-3xl font-bold text-white">
-                Em queda <span className="text-green-400">agora.</span>
-              </h2>
-              <p className="text-green-200 text-sm mt-2">Os 6 produtos que mais caíram nas últimas 24h</p>
-            </div>
-            <button className="self-start sm:self-auto text-sm font-semibold px-4 py-2 rounded-lg border border-green-400 text-green-400 hover:bg-green-800 transition-colors">
-              Ver todas as quedas +
-            </button>
-          </div>
+      {/* 5. Em queda agora — REDESIGN: fundo claro, cards brancos, alta legibilidade */}
+      <FallingProductsSection products={fallingProducts} />
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {fallingProducts.map((product, i) => (
-              <div key={i} className="rounded-xl p-5 flex flex-col gap-3" style={{ backgroundColor: '#0d3320' }}>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-green-600 flex items-center justify-center text-white font-bold text-sm shrink-0">
-                    {product.initial}
-                  </div>
-                  <span className="text-xs font-semibold text-green-400">{product.category}</span>
-                </div>
-                <p className="text-white font-semibold text-sm">{product.name}</p>
-                <div className="flex items-end gap-2">
-                  <span className="text-2xl font-bold text-white">R${product.price}</span>
-                  <span className="text-gray-400 line-through text-sm mb-0.5">R${product.oldPrice}</span>
-                  <span className="ml-auto text-xs font-bold px-2 py-0.5 rounded-full bg-green-800 text-green-400">
-                    -{product.drop}%
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* 6. Categories */}
-      <section className="bg-white py-12 px-4">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-2xl font-bold text-gray-800">O que você procura hoje?</h2>
-            <a href="/categorias" className="text-sm font-semibold text-green-600 hover:underline">
-              Explorar todas →
-            </a>
-          </div>
-
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Large card */}
-            <div className="col-span-2 lg:row-span-2 bg-green-600 rounded-2xl p-6 flex flex-col justify-between min-h-52 text-white">
-              <div>
-                <span className="inline-block px-2 py-0.5 text-xs font-bold rounded-full bg-green-900 text-green-400 mb-3">
-                  Mais Comparado
-                </span>
-                <h3 className="text-2xl font-bold mb-2">Whey Protein</h3>
-                <p className="text-green-100 text-sm leading-relaxed mb-3">
-                  412 produtos: concentrado, isolado, hidrolisado e vegano. Comparamos teor de proteína por real.
-                </p>
-                <p className="text-sm font-semibold text-green-100">a partir de R$85,00 / kg</p>
-              </div>
-              <div className="flex justify-end mt-4">
-                <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow">
-                  <ArrowRight className="w-5 h-5 text-green-600" />
-                </div>
-              </div>
-            </div>
-
-            {/* 7 small cards */}
-            {smallCategories.map(cat => (
-              <a
-                key={cat.slug}
-                href={`/categoria/${cat.slug}`}
-                className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col justify-between hover:shadow-md transition-shadow group min-h-32"
-              >
-                <div>
-                  <h3 className="font-bold text-sm text-gray-800 mb-1">{cat.name}</h3>
-                  <p className="text-xs text-gray-400">{cat.count} produtos</p>
-                </div>
-                <div className="flex justify-end mt-4">
-                  <span className="w-8 h-8 rounded-full bg-green-600 flex items-center justify-center text-white text-lg font-bold group-hover:bg-green-700 transition-colors">
-                    +
-                  </span>
-                </div>
-              </a>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* 7. Price alert */}
+      {/* 6. Price alert */}
       <section id="alertas" className="bg-green-900 py-16 px-4">
         <div className="max-w-xl mx-auto text-center">
           <span className="inline-block px-3 py-1 text-xs font-bold rounded-full bg-green-800 text-green-400 mb-4">
@@ -268,14 +135,14 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 8. Footer */}
+      {/* 7. Footer */}
       <footer className="bg-gray-900 py-10 px-4">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center md:items-start justify-between gap-6">
           <div>
-            <a href="/" className="flex items-center mb-3">
+            <Link href="/" className="flex items-center mb-3">
               <span className="text-xl font-bold text-green-600">Compara</span>
               <span className="text-xl font-bold text-white">Suple</span>
-            </a>
+            </Link>
             <p className="text-gray-400 text-xs max-w-xs leading-relaxed">
               Alguns links são de afiliados. O preço que você paga é o mesmo.
             </p>
@@ -289,7 +156,226 @@ export default function Home() {
           </nav>
         </div>
       </footer>
-
     </div>
+  )
+}
+
+// ---------- Top Offer Card (hero direita) ----------
+// Horizontal compact card: thumbnail à esquerda + info + CTA
+
+function TopOfferCard({
+  product,
+  position,
+}: {
+  product: CategoryProduct
+  position: number
+}) {
+  const hasDiscount =
+    product.cheapestOriginalPrice != null &&
+    product.cheapestOriginalPrice > product.cheapestPrice
+  const discountPct = hasDiscount
+    ? Math.round((1 - product.cheapestPrice / product.cheapestOriginalPrice!) * 100)
+    : 0
+
+  return (
+    <Link
+      href={`/produto/${product.slug}`}
+      className="group block bg-white border-2 border-gray-100 hover:border-green-600 hover:shadow-lg rounded-2xl p-4 transition-all"
+    >
+      <div className="flex gap-3 items-start">
+        {/* Thumbnail */}
+        <div className="relative w-24 h-24 shrink-0 bg-gray-50 rounded-xl flex items-center justify-center p-2">
+          {product.thumbnail ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={product.thumbnail}
+              alt={product.name}
+              className="max-h-full max-w-full object-contain"
+            />
+          ) : (
+            <span className="text-gray-300 text-[10px]">sem img</span>
+          )}
+          {position === 1 && (
+            <span className="absolute -top-1.5 -left-1.5 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[9px] font-bold shadow-sm">
+              <Trophy className="w-2.5 h-2.5" />
+              TOP
+            </span>
+          )}
+        </div>
+
+        {/* Info */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <span className="inline-block px-2 py-0.5 text-[10px] font-bold rounded-full bg-green-600 text-white">
+              Oferta {position}
+            </span>
+            {hasDiscount && (
+              <span className="inline-block px-2 py-0.5 text-[10px] font-bold rounded-full bg-orange-100 text-orange-700">
+                -{discountPct}%
+              </span>
+            )}
+          </div>
+          {product.brand && (
+            <p className="text-[10px] font-bold uppercase tracking-wide text-green-600 truncate">
+              {product.brand}
+            </p>
+          )}
+          <h3 className="text-sm font-bold text-gray-800 leading-tight line-clamp-2 mb-1.5 group-hover:text-green-700 transition-colors">
+            {product.name}
+          </h3>
+          <div className="flex items-baseline gap-1.5 flex-wrap">
+            <span className="text-xl font-bold text-green-600">
+              {formatBRL(product.cheapestPrice)}
+            </span>
+            {hasDiscount && (
+              <span className="text-xs text-gray-400 line-through">
+                {formatBRL(product.cheapestOriginalPrice!)}
+              </span>
+            )}
+            {product.cheapestPerDose && (
+              <span className="text-[11px] font-semibold text-green-700 ml-1">
+                · {formatBRL(product.cheapestPerDose)}/dose
+              </span>
+            )}
+          </div>
+          <p className="text-[11px] text-gray-400 mt-1">
+            Comparado em {product.offerCount}{' '}
+            {product.offerCount === 1 ? 'loja' : 'lojas'}
+          </p>
+        </div>
+      </div>
+    </Link>
+  )
+}
+
+// ---------- Em queda agora — NOVO DESIGN ----------
+// Fundo claro com pulse de "atualizando agora" verde
+// Cards brancos com sombra, alta legibilidade
+
+function FallingProductsSection({ products }: { products: CategoryProduct[] }) {
+  return (
+    <section className="bg-white py-14 px-4 border-y border-gray-100">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
+          <div>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold rounded-full bg-orange-50 text-orange-700 mb-3 border border-orange-100">
+              <Flame className="w-3.5 h-3.5" />
+              <span className="flex items-center gap-1">
+                EM QUEDA
+                <span className="relative flex h-1.5 w-1.5 ml-1">
+                  <span className="absolute inline-flex h-full w-full rounded-full bg-orange-500 opacity-75 animate-ping" />
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-orange-500" />
+                </span>
+              </span>
+            </div>
+            <h2 className="text-3xl font-bold text-gray-800 flex items-center gap-2 flex-wrap">
+              <TrendingDown className="w-7 h-7 text-orange-500" />
+              Em queda agora
+            </h2>
+            <p className="text-gray-500 text-sm mt-2">
+              Produtos com maior desconto detectado no Mercado Livre.
+            </p>
+          </div>
+          <Link
+            href="/ofertas"
+            className="self-start sm:self-auto text-sm font-semibold px-4 py-2 rounded-lg border border-green-600 text-green-600 hover:bg-green-600 hover:text-white transition-colors"
+          >
+            Ver todas as ofertas →
+          </Link>
+        </div>
+
+        {/* Grid */}
+        {products.length === 0 ? (
+          <div className="bg-gray-50 border border-gray-100 rounded-2xl p-10 text-center text-sm text-gray-400">
+            Nenhuma promoção rolando agora. Verificamos o ML diariamente — quando rolar desconto, aparece aqui.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {products.map(p => (
+              <FallingCard key={p.id} product={p} />
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
+function FallingCard({ product }: { product: CategoryProduct }) {
+  const hasDiscount =
+    product.cheapestOriginalPrice != null &&
+    product.cheapestOriginalPrice > product.cheapestPrice
+  const discountPct = hasDiscount
+    ? Math.round((1 - product.cheapestPrice / product.cheapestOriginalPrice!) * 100)
+    : 0
+  const economyAbs = hasDiscount
+    ? product.cheapestOriginalPrice! - product.cheapestPrice
+    : 0
+
+  return (
+    <Link
+      href={`/produto/${product.slug}`}
+      className="group bg-white border border-gray-100 hover:border-orange-400 hover:shadow-md transition-all rounded-2xl overflow-hidden flex flex-col"
+    >
+      <div className="flex gap-3 p-4 items-start">
+        {/* Thumbnail */}
+        <div className="relative w-20 h-20 shrink-0 bg-gray-50 rounded-lg flex items-center justify-center p-1.5">
+          {product.thumbnail ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={product.thumbnail}
+              alt={product.name}
+              className="max-h-full max-w-full object-contain"
+            />
+          ) : (
+            <span className="text-gray-300 text-[9px]">sem img</span>
+          )}
+        </div>
+
+        {/* Info */}
+        <div className="flex-1 min-w-0">
+          {product.brand && (
+            <p className="text-[10px] font-bold uppercase tracking-wide text-green-600 truncate">
+              {product.brand}
+            </p>
+          )}
+          <h3 className="text-sm font-bold text-gray-800 leading-tight line-clamp-2 group-hover:text-orange-600 transition-colors">
+            {product.name}
+          </h3>
+          {product.cheapestPerDose && (
+            <p className="text-[11px] text-gray-500 mt-1">
+              {formatBRL(product.cheapestPerDose)}/dose
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Footer com preço + desconto, destacado em laranja */}
+      <div className="px-4 py-3 bg-orange-50/60 border-t border-orange-100/60 flex items-end justify-between gap-2">
+        <div>
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-xl font-bold text-gray-800">
+              {formatBRL(product.cheapestPrice)}
+            </span>
+            {hasDiscount && (
+              <span className="text-xs text-gray-400 line-through">
+                {formatBRL(product.cheapestOriginalPrice!)}
+              </span>
+            )}
+          </div>
+          {hasDiscount && (
+            <p className="text-[11px] font-semibold text-orange-700 mt-0.5">
+              Economiza {formatBRL(economyAbs)}
+            </p>
+          )}
+        </div>
+        {hasDiscount && (
+          <span className="text-sm font-bold px-2.5 py-1 rounded-lg bg-orange-500 text-white shadow-sm">
+            -{discountPct}%
+          </span>
+        )}
+      </div>
+    </Link>
   )
 }

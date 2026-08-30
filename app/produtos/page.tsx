@@ -90,7 +90,7 @@ export default async function ProdutosPage() {
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-yellow-800 text-sm">
             <strong>Nenhum produto ainda.</strong> Dispare o cron de ingestão pra popular:
             <code className="block mt-2 px-3 py-2 bg-yellow-100 rounded text-xs font-mono">
-              curl -X POST {process.env.NEXT_PUBLIC_SITE_URL ?? 'https://compara-suple-sable.vercel.app'}/api/cron/ml-ingest -H "Authorization: Bearer $CRON_SECRET"
+              {`curl -X POST ${process.env.NEXT_PUBLIC_SITE_URL ?? 'https://compara-suple-sable.vercel.app'}/api/cron/ml-ingest -H "Authorization: Bearer $CRON_SECRET"`}
             </code>
           </div>
         )}

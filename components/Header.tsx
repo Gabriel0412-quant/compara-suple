@@ -1,4 +1,5 @@
 import { Search } from 'lucide-react'
+import Link from 'next/link'
 
 const navLinks = [
   { label: 'Whey Protein', href: '/categoria/whey-protein' },
@@ -14,16 +15,16 @@ export default function Header() {
   return (
     <header className="bg-white shadow-sm sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-3">
-        <a href="/" className="shrink-0 flex items-center">
+        <Link href="/" className="shrink-0 flex items-center">
           <span className="text-xl font-bold text-green-600">Compara</span>
           <span className="text-xl font-bold text-gray-800">Suple</span>
-        </a>
+        </Link>
 
         <nav className="hidden lg:flex items-center gap-4 text-sm text-gray-600 flex-1 mx-4">
           {navLinks.map(link => (
-            <a key={link.href} href={link.href} className="hover:text-green-700 whitespace-nowrap transition-colors">
+            <Link key={link.href} href={link.href} className="hover:text-green-700 whitespace-nowrap transition-colors">
               {link.label}
-            </a>
+            </Link>
           ))}
         </nav>
 

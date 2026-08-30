@@ -1,4 +1,5 @@
 import { Star, Heart, Bell, ChevronRight } from 'lucide-react'
+import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 
@@ -102,7 +103,6 @@ export default async function ProductPage({ params }: Props) {
   const primaryVariant  = product.variants[0]
   const sizeGrams       = primaryVariant?.size_grams ?? null
   const servings        = primaryVariant?.servings ?? null
-  const flavor          = primaryVariant?.flavor ?? null
   const thumbnail       = cheapest.raw?.thumbnail ?? null
   const originalPrice   = cheapest.raw?.original_price ?? null
   const hasDiscount     = !!originalPrice && originalPrice > cheapest.price
@@ -140,9 +140,9 @@ export default async function ProductPage({ params }: Props) {
 
       {/* Breadcrumb */}
       <nav className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-1 text-xs text-gray-500 flex-wrap">
-        <a href="/" className="hover:text-green-600 transition-colors">Suplementos</a>
+        <Link href="/" className="hover:text-green-600 transition-colors">Suplementos</Link>
         <ChevronRight className="w-3 h-3 shrink-0" />
-        <a href="/produtos" className="hover:text-green-600 transition-colors">Produtos</a>
+        <Link href="/produtos" className="hover:text-green-600 transition-colors">Produtos</Link>
         <ChevronRight className="w-3 h-3 shrink-0" />
         <span className="text-gray-800 font-medium truncate max-w-md">{product.name}</span>
       </nav>

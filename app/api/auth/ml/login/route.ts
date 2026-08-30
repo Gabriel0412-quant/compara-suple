@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { buildAuthUrl } from '@/lib/ml/oauth'
 import { randomBytes } from 'node:crypto'
 
@@ -11,7 +11,7 @@ export const runtime = 'nodejs'
  * Gera um state CSRF, salva em cookie httpOnly e redireciona o usuário pro ML.
  * Após autorizar, o ML chama de volta /api/auth/ml/callback.
  */
-export async function GET(_req: NextRequest) {
+export async function GET() {
   try {
     const state = randomBytes(16).toString('hex')
     const authUrl = buildAuthUrl(state)

@@ -16,15 +16,6 @@ const TOKEN_URL = 'https://api.mercadolibre.com/oauth/token'
 
 const REFRESH_MARGIN_MS = 5 * 60 * 1000  // refresh se faltar menos de 5min
 
-type TokenResponse = {
-  access_token: string
-  refresh_token: string
-  expires_in: number     // segundos (21600 = 6h)
-  user_id: number
-  token_type: string
-  scope?: string
-}
-
 export type MlTokens = {
   access_token: string
   refresh_token: string

@@ -10,8 +10,6 @@ import {
   getAllProductsLite,
   flattenOffers,
   formatBRL,
-  pricePerKg,
-  pricePerDose,
   pricePerDoseNumber,
   type ProductDetail,
   type ProductLite,

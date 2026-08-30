@@ -4,6 +4,10 @@ import type {
   MlCatalogProductSearchResponse,
 } from './types'
 import { getValidAccessToken } from './oauth'
+import {
+  collectMlProductItemsSnapshot,
+  type MlProductItemsSnapshot,
+} from './snapshot'
 
 const ML_BASE = 'https://api.mercadolibre.com'
 const SITE = 'MLB'
@@ -71,12 +75,21 @@ export async function getProduct(catalogId: string): Promise<MlCatalogProduct> {
  * Lista de ofertas (sellers) vendendo um catalog product.
  * Retorna `results: []` (mas não 404) quando há catalog product sem sellers ativos.
  */
-export async function getProductItems(
+async function getProductItemsPage(
   catalogId: string,
+  options: { offset: number; limit: number },
 ): Promise<MlProductItemsResponse> {
+  const params = new URLSearchParams({
+    offset: String(options.offset),
+    limit: String(options.limit),
+  })
   return fetchJson<MlProductItemsResponse>(
-    `${ML_BASE}/products/${encodeURIComponent(catalogId)}/items`,
+    `${ML_BASE}/products/${encodeURIComponent(catalogId)}/items?${params.toString()}`,
   )
+}
+
+export function getProductItems(catalogId: string): Promise<MlProductItemsSnapshot> {
+  return collectMlProductItemsSnapshot(catalogId, getProductItemsPage)
 }
 
 // ---------- descoberta (futuro, não usado pelo ingest atual) ----------

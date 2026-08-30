@@ -1,7 +1,8 @@
 import { getProduct, getProductItems } from './client'
 import { buildMlCatalogLink } from '../affiliate'
 import { supabaseAdmin } from '../db-admin'
-import type { MlAttribute, MlCatalogProduct, MlProductItem } from './types'
+import type { MlAttribute, MlCatalogProduct } from './types'
+import type { MlProductItemsSnapshot } from './snapshot'
 import itemsData from '@/data/items.json'
 
 const ML_STORE_SLUG = 'mercado-livre'
@@ -192,8 +193,33 @@ async function upsertOfferAndHistory(opts: {
 // ---------- processamento de um catalog product ----------
 
 type CatalogResult =
-  | { ok: true; offers_ingested: number; offers_total: number }
-  | { ok: false; reason: string }
+  | {
+      ok: true
+      status: 'success' | 'success_empty'
+      offers_ingested: number
+      offers_total: number
+      total_received: number
+      pages_fetched: number
+      rejected_by_reason: MlProductItemsSnapshot['rejectedByReason']
+    }
+  | {
+      ok: false
+      status: 'upstream_error' | 'snapshot_invalid' | 'product_error'
+      reason: string
+      total_received?: number
+      pages_fetched?: number
+      rejected_by_reason?: MlProductItemsSnapshot['rejectedByReason']
+    }
+
+function logSnapshot(catalogId: string, snapshot: MlProductItemsSnapshot): void {
+  console.info('ml_snapshot', {
+    catalogId,
+    status: snapshot.status,
+    totalReceived: snapshot.totalReceived,
+    pagesFetched: snapshot.pagesFetched,
+    rejectedByReason: snapshot.rejectedByReason,
+  })
+}
 
 async function ingestCatalog(
   catalogId: string,
@@ -203,20 +229,33 @@ async function ingestCatalog(
   let product: MlCatalogProduct
   try {
     product = await getProduct(catalogId)
-  } catch (e) {
-    return { ok: false, reason: `getProduct: ${e instanceof Error ? e.message : String(e)}` }
+  } catch {
+    return { ok: false, status: 'product_error', reason: 'product_request_failed' }
   }
 
-  let items: MlProductItem[] = []
-  try {
-    const resp = await getProductItems(catalogId)
-    items = resp.results ?? []
-  } catch (e) {
-    return { ok: false, reason: `getProductItems: ${e instanceof Error ? e.message : String(e)}` }
+  const snapshot = await getProductItems(catalogId)
+  logSnapshot(catalogId, snapshot)
+  if (snapshot.status === 'upstream_error' || snapshot.status === 'snapshot_invalid') {
+    return {
+      ok: false,
+      status: snapshot.status,
+      reason: snapshot.reason,
+      total_received: snapshot.totalReceived,
+      pages_fetched: snapshot.pagesFetched,
+      rejected_by_reason: snapshot.rejectedByReason,
+    }
   }
 
-  if (items.length === 0) {
-    return { ok: false, reason: 'sem ofertas ativas (results: [])' }
+  if (snapshot.status === 'success_empty') {
+    return {
+      ok: true,
+      status: 'success_empty',
+      offers_ingested: 0,
+      offers_total: 0,
+      total_received: snapshot.totalReceived,
+      pages_fetched: snapshot.pagesFetched,
+      rejected_by_reason: snapshot.rejectedByReason,
+    }
   }
 
   // Metadata
@@ -243,8 +282,9 @@ async function ingestCatalog(
   // IMPORTANTE: items vem em ordem específica do ML — primeiro = buy box winner.
   // Salvamos essa posição em ml_rank pra preservar o destaque do ML.
   let ingested = 0
-  for (let rank = 0; rank < items.length; rank++) {
-    const offer = items[rank]
+  for (const snapshotItem of snapshot.items) {
+    if (snapshotItem.kind === 'invalid') continue
+    const offer = snapshotItem.item
     const url = affiliateUrl ?? buildMlCatalogLink(catalogId, offer.item_id)
     await upsertOfferAndHistory({
       variantId,
@@ -253,7 +293,7 @@ async function ingestCatalog(
       url,
       price: offer.price,
       available: true,  // /products/{id}/items só devolve ofertas ativas
-      mlRank: rank,
+      mlRank: snapshotItem.mlRank,
       raw: {
         ...offer,
         // enriquecemos com info do catalog product (não vem na oferta individual)
@@ -265,7 +305,15 @@ async function ingestCatalog(
     ingested++
   }
 
-  return { ok: true, offers_ingested: ingested, offers_total: items.length }
+  return {
+    ok: true,
+    status: 'success',
+    offers_ingested: ingested,
+    offers_total: snapshot.totalReceived,
+    total_received: snapshot.totalReceived,
+    pages_fetched: snapshot.pagesFetched,
+    rejected_by_reason: snapshot.rejectedByReason,
+  }
 }
 
 // ---------- entry points ----------
@@ -278,9 +326,12 @@ export type IngestResult = {
   offers_ingested: number
   per_catalog: Array<{
     catalog_id: string
-    status: 'ok' | 'skip' | 'error'
+    status: 'success' | 'success_empty' | 'upstream_error' | 'snapshot_invalid' | 'product_error'
     offers?: number
     reason?: string
+    total_received?: number
+    pages_fetched?: number
+    rejected_by_reason?: MlProductItemsSnapshot['rejectedByReason']
   }>
 }
 
@@ -306,15 +357,29 @@ export async function runCuratedIngest(): Promise<IngestResult> {
       if (r.ok) {
         result.catalogs_ingested++
         result.offers_ingested += r.offers_ingested
-        result.per_catalog.push({ catalog_id: catalogId, status: 'ok', offers: r.offers_ingested })
+        result.per_catalog.push({
+          catalog_id: catalogId,
+          status: r.status,
+          offers: r.offers_ingested,
+          total_received: r.total_received,
+          pages_fetched: r.pages_fetched,
+          rejected_by_reason: r.rejected_by_reason,
+        })
       } else {
-        result.per_catalog.push({ catalog_id: catalogId, status: 'skip', reason: r.reason })
+        result.per_catalog.push({
+          catalog_id: catalogId,
+          status: r.status,
+          reason: r.reason,
+          total_received: r.total_received,
+          pages_fetched: r.pages_fetched,
+          rejected_by_reason: r.rejected_by_reason,
+        })
       }
-    } catch (e) {
+    } catch {
       result.per_catalog.push({
         catalog_id: catalogId,
-        status: 'error',
-        reason: e instanceof Error ? e.message : String(e),
+        status: 'product_error',
+        reason: 'persistence_failed',
       })
     }
   }

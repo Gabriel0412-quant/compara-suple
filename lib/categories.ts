@@ -134,6 +134,8 @@ export type CategoryProduct = {
   cheapestPrice: number
   cheapestOriginalPrice: number | null
   cheapestUrl: string
+  /** Oferta destacada, para o link /go de tracking. */
+  cheapestOfferId: number | null
   servings: number | null
   sizeGrams: number | null
   cheapestPerDose: number | null
@@ -177,6 +179,7 @@ function rowToCard(p: RawProduct): CategoryProduct {
     cheapestPrice: featured?.price ?? 0,
     cheapestOriginalPrice: featured?.raw?.original_price ?? null,
     cheapestUrl: featured?.url ?? '#',
+    cheapestOfferId: featured?.id ?? null,
     servings,
     sizeGrams,
     cheapestPerDose: servings && featured ? featured.price / servings : null,

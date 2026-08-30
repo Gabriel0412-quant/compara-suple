@@ -288,7 +288,7 @@ export function OffersSection({
                     {/* Ação */}
                     <td className="px-4 py-3">
                       <a
-                        href={loja.url}
+                        href={`/go/${loja.offerId}`}
                         target="_blank"
                         rel="noopener noreferrer sponsored"
                         className={`text-xs font-semibold px-4 py-2 rounded-lg transition-colors whitespace-nowrap ${

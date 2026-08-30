@@ -248,7 +248,7 @@ export default async function ProductPage({ params }: Props) {
 
             <div className="flex gap-2">
               <a
-                href={cheapest.url}
+                href={`/go/${cheapest.id}`}
                 target="_blank"
                 rel="noopener noreferrer sponsored"
                 className="flex-1 py-3.5 bg-green-600 text-white rounded-xl font-semibold text-sm hover:bg-green-700 transition-colors text-center"

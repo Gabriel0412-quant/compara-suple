@@ -88,7 +88,7 @@ export function ProductGridCard({ product }: { product: CategoryProduct }) {
               Comparar
             </Link>
             <a
-              href={product.cheapestUrl}
+              href={product.cheapestOfferId ? `/go/${product.cheapestOfferId}` : '#'}
               target="_blank"
               rel="noopener noreferrer sponsored"
               className="flex-1 text-center py-2.5 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition-colors"

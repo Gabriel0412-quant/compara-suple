@@ -176,7 +176,7 @@ export default async function ProdutosPage() {
                               Comparar
                             </Link>
                             <a
-                              href={offer.url}
+                              href={`/go/${offer.id}`}
                               target="_blank"
                               rel="noopener noreferrer sponsored"
                               className="flex-1 text-center py-2.5 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition-colors"

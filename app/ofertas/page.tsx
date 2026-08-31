@@ -5,6 +5,7 @@ import Header from '@/components/Header'
 import { Breadcrumb } from '@/components/Breadcrumb'
 import { ProductGridCard } from '@/components/category/ProductGridCard'
 import { getProductsOnSale } from '@/lib/categories'
+import { getCatalogStats, formatUpdatedAt } from '@/lib/stats'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,7 +16,10 @@ export const metadata: Metadata = {
 }
 
 export default async function OfertasPage() {
-  const products = await getProductsOnSale()
+  const [products, { lastUpdated }] = await Promise.all([
+    getProductsOnSale(),
+    getCatalogStats(),
+  ])
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-800">
@@ -42,7 +46,7 @@ export default async function OfertasPage() {
               <p className="text-xs text-gray-500 mt-3">
                 {products.length}{' '}
                 {products.length === 1 ? 'produto em promoção' : 'produtos em promoção'}
-                {' '}· atualizado diariamente
+                {' '}· preços coletados {formatUpdatedAt(lastUpdated)}
               </p>
             </div>
           </div>

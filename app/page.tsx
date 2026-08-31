@@ -4,6 +4,7 @@ import { Search, Flame, TrendingDown, Trophy } from 'lucide-react'
 import Header from '@/components/Header'
 import { getProductsOnSale, type CategoryProduct } from '@/lib/categories'
 import { formatBRL } from '@/lib/products'
+import { getCatalogStats, formatCount, formatUpdatedAt } from '@/lib/stats'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,20 +14,12 @@ const searchTags = ['Whey Isolado', 'Creatina', 'Pré-treino', 'Hipercalórico',
 
 export default async function Home() {
   // Busca os produtos em oferta (já vem ordenado por desconto absoluto)
-  const onSale = await getProductsOnSale()
+  const [onSale, stats] = await Promise.all([getProductsOnSale(), getCatalogStats()])
   const topOffers = onSale.slice(0, 2)        // hero
   const fallingProducts = onSale.slice(0, 6)  // "em queda agora"
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-800">
-      {/* 1. Announcement bar */}
-      <div className="bg-green-900 py-2 px-4 text-center text-sm text-white">
-        Alertas de preço por WhatsApp já estão no ar.{' '}
-        <a href="#alertas" className="font-semibold underline text-green-400">
-          Ativar agora →
-        </a>
-      </div>
-
       {/* 2. Header */}
       <Header />
 
@@ -43,8 +36,10 @@ export default async function Home() {
               do Brasil.
             </h1>
             <p className="text-gray-500 text-base md:text-lg mb-6 leading-relaxed">
-              Acompanhamos preço de whey, creatina, pré-treino e mais — em tempo real,
-              comparando até <strong>100 lojas por produto</strong>. Compare, escolha e nunca mais pague caro.
+              Acompanhamos preço de whey, creatina, pré-treino e mais. Hoje são{' '}
+              <strong>{formatCount(stats.offers)} ofertas</strong> de{' '}
+              <strong>{formatCount(stats.products)} produtos</strong>, com preço por dose e por
+              quilo lado a lado.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-2 mb-4">
@@ -96,44 +91,22 @@ export default async function Home() {
       <section className="bg-gray-100 py-8 px-4">
         <div className="max-w-4xl mx-auto grid grid-cols-3 gap-4 text-center">
           <div>
-            <p className="text-xl sm:text-2xl font-bold text-green-600">R$4,2M</p>
-            <p className="text-xs sm:text-sm text-gray-600 mt-1">economizados pelos usuários em 2026</p>
+            <p className="text-xl sm:text-2xl font-bold text-green-600">{formatCount(stats.offers)}</p>
+            <p className="text-xs sm:text-sm text-gray-600 mt-1">ofertas comparadas</p>
           </div>
           <div>
-            <p className="text-xl sm:text-2xl font-bold text-green-600">1.482</p>
+            <p className="text-xl sm:text-2xl font-bold text-green-600">{formatCount(stats.products)}</p>
             <p className="text-xs sm:text-sm text-gray-600 mt-1">produtos monitorados</p>
           </div>
           <div>
-            <p className="text-xl sm:text-2xl font-bold text-green-600">30 min</p>
-            <p className="text-xs sm:text-sm text-gray-600 mt-1">intervalo de atualização</p>
+            <p className="text-xl sm:text-2xl font-bold text-green-600">{formatUpdatedAt(stats.lastUpdated)}</p>
+            <p className="text-xs sm:text-sm text-gray-600 mt-1">última coleta de preços</p>
           </div>
         </div>
       </section>
 
       {/* 5. Em queda agora — REDESIGN: fundo claro, cards brancos, alta legibilidade */}
       <FallingProductsSection products={fallingProducts} />
-
-      {/* 6. Price alert */}
-      <section id="alertas" className="bg-green-900 py-16 px-4">
-        <div className="max-w-xl mx-auto text-center">
-          <span className="inline-block px-3 py-1 text-xs font-bold rounded-full bg-green-800 text-green-400 mb-4">
-            ALERTAS INTELIGENTES
-          </span>
-          <h2 className="text-3xl md:text-4xl font-bold text-white mb-2">Defina seu preço.</h2>
-          <h2 className="text-3xl md:text-4xl font-bold text-green-400 mb-6">A gente avisa.</h2>
-          <div className="flex flex-col sm:flex-row gap-2 max-w-md mx-auto mb-4">
-            <input
-              type="email"
-              placeholder="seu@email.com"
-              className="flex-1 px-4 py-3 rounded-xl text-sm bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-400"
-            />
-            <button className="px-5 py-3 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition-colors whitespace-nowrap">
-              Criar alerta →
-            </button>
-          </div>
-          <p className="text-green-300 text-sm">Grátis sempre · Cancele quando quiser · 38k+ cadastros</p>
-        </div>
-      </section>
 
       {/* 7. Footer */}
       <footer className="bg-gray-900 py-10 px-4">

@@ -10,6 +10,7 @@ import {
   getProductsByCategory,
   listCategories,
 } from '@/lib/categories'
+import { getCatalogStats, formatUpdatedAt } from '@/lib/stats'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,7 +33,10 @@ export default async function CategoryPage({ params }: Props) {
   const cat = getCategoryBySlug(slug)
   if (!cat) notFound()
 
-  const products = await getProductsByCategory(cat)
+  const [products, { lastUpdated }] = await Promise.all([
+    getProductsByCategory(cat),
+    getCatalogStats(),
+  ])
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-800">
@@ -60,7 +64,7 @@ export default async function CategoryPage({ params }: Props) {
               <p className="text-xs text-gray-500 mt-3">
                 {products.length}{' '}
                 {products.length === 1 ? 'produto comparado' : 'produtos comparados'}
-                {' '}· preços atualizados diariamente
+                {' '}· preços coletados {formatUpdatedAt(lastUpdated)}
               </p>
             </div>
           </div>

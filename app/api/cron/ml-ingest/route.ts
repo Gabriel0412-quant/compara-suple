@@ -1,16 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { runCuratedIngest } from '@/lib/ml/ingest'
+import { classifyMlIngestError, getMissingMlIngestConfig } from '@/lib/ml/runtime'
 
 // Roda em Node.js runtime (não Edge) — temos chamadas longas e múltiplas
 export const runtime = 'nodejs'
 // Vercel Pro permite até 300s; Hobby tem 60s. Ajustar se for plano Hobby.
 export const maxDuration = 300
 
-function isAuthorized(req: NextRequest): boolean {
-  const expected = process.env.CRON_SECRET
-  if (!expected) return false
-  const got = req.headers.get('authorization')
-  return got === `Bearer ${expected}`
+function authorize(req: NextRequest): NextResponse | null {
+  const cronSecret = process.env.CRON_SECRET
+  if (!cronSecret) {
+    console.error('ml_ingest_configuration_error', { missing: ['CRON_SECRET'] })
+    return NextResponse.json(
+      { ok: false, error: 'configuration_error' },
+      { status: 503 },
+    )
+  }
+  if (req.headers.get('authorization') !== `Bearer ${cronSecret}`) {
+    return NextResponse.json(
+      { ok: false, error: 'unauthorized' },
+      { status: 401 },
+    )
+  }
+
+  const missing = getMissingMlIngestConfig().filter(name => name !== 'CRON_SECRET')
+  if (missing.length > 0) {
+    console.error('ml_ingest_configuration_error', { missing })
+    return NextResponse.json(
+      { ok: false, error: 'configuration_error' },
+      { status: 503 },
+    )
+  }
+  return null
 }
 
 /**
@@ -20,43 +41,27 @@ function isAuthorized(req: NextRequest): boolean {
  * Header obrigatório: `Authorization: Bearer ${CRON_SECRET}`.
  */
 export async function POST(req: NextRequest) {
-  if (!isAuthorized(req)) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-  }
+  const rejection = authorize(req)
+  if (rejection) return rejection
   return runIngest()
 }
 
-/** Corpo compartilhado por POST (manual) e GET autorizado (Vercel Cron). */
 async function runIngest() {
   try {
     const result = await runCuratedIngest()
     return NextResponse.json({ ok: true, result })
   } catch (e) {
-    console.error('ml-ingest error:', e)
+    const error = classifyMlIngestError(e)
+    console.error('ml_ingest_failed', { error })
     return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : String(e) },
-      { status: 500 },
+      { ok: false, error },
+      { status: error === 'ingestion_failed' ? 500 : 503 },
     )
   }
 }
 
-/**
- * GET /api/cron/ml-ingest
- *
- * Entrada do Vercel Cron, que dispara sempre GET — nunca POST. Enquanto esta
- * rota só respondia POST, o agendamento batia no healthcheck e nenhuma coleta
- * acontecia. A Vercel injeta `Authorization: Bearer ${CRON_SECRET}` quando a
- * env var existe, então a checagem é a mesma do POST.
- *
- * Sem autorização, segue devolvendo o healthcheck de antes.
- */
 export async function GET(req: NextRequest) {
-  if (isAuthorized(req)) {
-    return runIngest()
-  }
-  return NextResponse.json({
-    ok: true,
-    endpoint: 'ml-ingest',
-    method: 'POST com Authorization: Bearer $CRON_SECRET (GET autorizado roda a coleta, usado pelo Vercel Cron)',
-  })
+  const rejection = authorize(req)
+  if (rejection) return rejection
+  return runIngest()
 }

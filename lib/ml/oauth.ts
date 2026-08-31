@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '../db-admin'
+import { parseMlTokenResponse, type MlTokens } from './token-response'
 
 /**
  * Authorization Code flow do Mercado Livre.
@@ -16,12 +17,7 @@ const TOKEN_URL = 'https://api.mercadolibre.com/oauth/token'
 
 const REFRESH_MARGIN_MS = 5 * 60 * 1000  // refresh se faltar menos de 5min
 
-export type MlTokens = {
-  access_token: string
-  refresh_token: string
-  expires_at: Date
-  ml_user_id: number
-}
+export type { MlTokens } from './token-response'
 
 // ---------- URL builders ----------
 
@@ -54,47 +50,9 @@ async function postToken(body: URLSearchParams): Promise<MlTokens> {
     body,
   })
   if (!res.ok) {
-    const txt = await res.text().catch(() => '')
-    throw new Error(`ML OAuth ${res.status}: ${txt.slice(0, 300)}`)
+    throw new Error(`ML_OAUTH_REQUEST_FAILED_${res.status}`)
   }
-  const data = (await res.json()) as Record<string, unknown>
-
-  const access_token  = typeof data.access_token  === 'string' ? data.access_token  : undefined
-  const refresh_token = typeof data.refresh_token === 'string' ? data.refresh_token : ''
-  const expires_in    = typeof data.expires_in    === 'number' ? data.expires_in    : undefined
-
-  // ML às vezes omite user_id do body mas embute no access_token:
-  // APP_USR-{app_id}-{date}-{hash}-{user_id}  → o último segmento é o user_id
-  let user_id: number | undefined =
-    typeof data.user_id === 'number' ? data.user_id : undefined
-  if (user_id === undefined && access_token) {
-    const last = access_token.split('-').pop()
-    if (last && /^\d+$/.test(last)) user_id = Number(last)
-  }
-
-  if (!access_token || user_id === undefined || expires_in === undefined) {
-    throw new Error(
-      `ML OAuth resposta incompleta. Keys: [${Object.keys(data).join(', ')}]. ` +
-      `Body: ${JSON.stringify(data).slice(0, 1500)}`,
-    )
-  }
-
-  if (!refresh_token) {
-    // TODO: investigar por que o ML não está devolvendo refresh_token.
-    // Por enquanto, salvamos string vazia e o auto-refresh falha — depois
-    // de 6h o usuário precisa fazer OAuth de novo manualmente.
-    console.warn(
-      '[ml/oauth] ATENÇÃO: ML não devolveu refresh_token. ' +
-      'Access token vai expirar em 6h e precisará de novo login manual.',
-    )
-  }
-
-  return {
-    access_token,
-    refresh_token,
-    expires_at: new Date(Date.now() + expires_in * 1000),
-    ml_user_id: user_id,
-  }
+  return parseMlTokenResponse(await res.json())
 }
 
 export async function exchangeCodeForTokens(code: string): Promise<MlTokens> {
@@ -134,11 +92,8 @@ export async function refreshTokens(refreshToken: string): Promise<MlTokens> {
 // ---------- Persistência ----------
 
 export async function saveTokens(tokens: MlTokens): Promise<void> {
-  if (!tokens.ml_user_id || !tokens.access_token) {
-    throw new Error(
-      `saveTokens: tokens incompletos. ml_user_id=${tokens.ml_user_id}, ` +
-      `access_token=${tokens.access_token ? '[set]' : '[empty]'}`,
-    )
+  if (!tokens.ml_user_id || !tokens.access_token || !tokens.refresh_token) {
+    throw new Error('ML_OAUTH_TOKENS_INCOMPLETE')
   }
   const { error } = await supabaseAdmin
     .from('ml_oauth_tokens')

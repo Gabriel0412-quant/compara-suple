@@ -100,7 +100,20 @@ export function OffersSection({
     })
   }, [allLojas, onlyFreeShipping, onlyOfficial, onlyFull, sortBy])
 
-  const cheapestTotal = filteredLojas[0]?.total ?? 0
+  /*
+   * O selo de menor preço vinha de `i === 0`, ou seja, da primeira linha da
+   * ORDENAÇÃO escolhida. Com "Destaque" selecionado — que é o padrão — ele ia
+   * para a oferta que o ML promove, mesmo quando havia outra mais barata na
+   * tabela. O EP02-06 exige que esse selo independa da ordenação.
+   *
+   * Calculado sobre as linhas visíveis: filtrar é uma escolha legítima do
+   * usuário sobre QUAIS ofertas comparar; ordenar não deveria mudar qual é a
+   * mais barata.
+   */
+  const cheapestLoja = filteredLojas.length
+    ? filteredLojas.reduce((menor, l) => (l.total < menor.total ? l : menor))
+    : null
+  const cheapestTotal = cheapestLoja?.total ?? 0
   const activeFiltersCount = [onlyFreeShipping, onlyOfficial, onlyFull].filter(Boolean).length
 
   return (
@@ -188,8 +201,8 @@ export function OffersSection({
               </tr>
             </thead>
             <tbody>
-              {filteredLojas.map((loja, i) => {
-                const isCheapest = i === 0
+              {filteredLojas.map(loja => {
+                const isCheapest = loja.offerId === cheapestLoja?.offerId
                 const perDose = pricePerDose(loja.preco, servings)
                 const diff = isCheapest ? null : loja.total - cheapestTotal
                 return (

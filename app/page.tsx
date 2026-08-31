@@ -144,10 +144,10 @@ function TopOfferCard({
   position: number
 }) {
   const hasDiscount =
-    product.cheapestOriginalPrice != null &&
-    product.cheapestOriginalPrice > product.cheapestPrice
+    product.featuredOriginalPrice != null &&
+    product.featuredOriginalPrice > product.featuredPrice
   const discountPct = hasDiscount
-    ? Math.round((1 - product.cheapestPrice / product.cheapestOriginalPrice!) * 100)
+    ? Math.round((1 - product.featuredPrice / product.featuredOriginalPrice!) * 100)
     : 0
 
   return (
@@ -198,16 +198,16 @@ function TopOfferCard({
           </h3>
           <div className="flex items-baseline gap-1.5 flex-wrap">
             <span className="text-xl font-bold text-green-600">
-              {formatBRL(product.cheapestPrice)}
+              {formatBRL(product.featuredPrice)}
             </span>
             {hasDiscount && (
               <span className="text-xs text-gray-400 line-through">
-                {formatBRL(product.cheapestOriginalPrice!)}
+                {formatBRL(product.featuredOriginalPrice!)}
               </span>
             )}
-            {product.cheapestPerDose && (
+            {product.featuredPerDose && (
               <span className="text-[11px] font-semibold text-green-700 ml-1">
-                · {formatBRL(product.cheapestPerDose)}/dose
+                · {formatBRL(product.featuredPerDose)}/dose
               </span>
             )}
           </div>
@@ -277,13 +277,13 @@ function FallingProductsSection({ products }: { products: CategoryProduct[] }) {
 
 function FallingCard({ product }: { product: CategoryProduct }) {
   const hasDiscount =
-    product.cheapestOriginalPrice != null &&
-    product.cheapestOriginalPrice > product.cheapestPrice
+    product.featuredOriginalPrice != null &&
+    product.featuredOriginalPrice > product.featuredPrice
   const discountPct = hasDiscount
-    ? Math.round((1 - product.cheapestPrice / product.cheapestOriginalPrice!) * 100)
+    ? Math.round((1 - product.featuredPrice / product.featuredOriginalPrice!) * 100)
     : 0
   const economyAbs = hasDiscount
-    ? product.cheapestOriginalPrice! - product.cheapestPrice
+    ? product.featuredOriginalPrice! - product.featuredPrice
     : 0
 
   return (
@@ -316,9 +316,9 @@ function FallingCard({ product }: { product: CategoryProduct }) {
           <h3 className="text-sm font-bold text-gray-800 leading-tight line-clamp-2 group-hover:text-orange-600 transition-colors">
             {product.name}
           </h3>
-          {product.cheapestPerDose && (
+          {product.featuredPerDose && (
             <p className="text-[11px] text-gray-500 mt-1">
-              {formatBRL(product.cheapestPerDose)}/dose
+              {formatBRL(product.featuredPerDose)}/dose
             </p>
           )}
         </div>
@@ -329,11 +329,11 @@ function FallingCard({ product }: { product: CategoryProduct }) {
         <div>
           <div className="flex items-baseline gap-1.5">
             <span className="text-xl font-bold text-gray-800">
-              {formatBRL(product.cheapestPrice)}
+              {formatBRL(product.featuredPrice)}
             </span>
             {hasDiscount && (
               <span className="text-xs text-gray-400 line-through">
-                {formatBRL(product.cheapestOriginalPrice!)}
+                {formatBRL(product.featuredOriginalPrice!)}
               </span>
             )}
           </div>

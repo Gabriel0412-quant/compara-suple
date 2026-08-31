@@ -9,6 +9,8 @@ import {
   getProductsByIds,
   getAllProductsLite,
   flattenOffers,
+  featuredOffer,
+  lowestPriceOffer,
   formatBRL,
   pricePerDoseNumber,
   type ProductDetail,
@@ -138,26 +140,33 @@ function ComparisonGrid({
   // Computa atributos por produto + winners
   const rows = products.map(p => {
     const offers = flattenOffers(p)
-    const cheapest = offers[0]
+    const featured = featuredOffer(offers)
+    /*
+     * O comparador existe para responder "qual entrega mais por menos". Usar o
+     * preço destacado pelo ML distorceria a resposta: um produto venceria por
+     * ter uma oferta promovida barata, não por ser o melhor negócio. Todas as
+     * métricas comparáveis saem do menor preço disponível.
+     */
+    const lowest = lowestPriceOffer(offers)
     const primary = p.variants[0]
     const sizeGrams = primary?.size_grams ?? null
     const servings = primary?.servings ?? null
     return {
       product: p,
-      thumbnail: cheapest?.raw?.thumbnail ?? null,
-      cheapestPrice: cheapest?.price ?? null,
-      perDose: cheapest ? pricePerDoseNumber(cheapest.price, servings) : null,
-      perKg: cheapest && sizeGrams ? (cheapest.price / sizeGrams) * 1000 : null,
+      thumbnail: featured?.raw?.thumbnail ?? null,
+      lowestPrice: lowest?.price ?? null,
+      perDose: lowest ? pricePerDoseNumber(lowest.price, servings) : null,
+      perKg: lowest && sizeGrams ? (lowest.price / sizeGrams) * 1000 : null,
       sizeGrams,
       servings,
       flavor: primary?.flavor ?? null,
       offerCount: offers.length,
-      isOfficial: !!cheapest?.raw?.official_store_id,
+      isOfficial: !!featured?.raw?.official_store_id,
     }
   })
 
   // Winners (menor preço, menor R$/dose, menor R$/kg, mais ofertas)
-  const lowestPrice = Math.min(...rows.map(r => r.cheapestPrice ?? Infinity))
+  const bestPrice = Math.min(...rows.map(r => r.lowestPrice ?? Infinity))
   const lowestPerDose = Math.min(...rows.map(r => r.perDose ?? Infinity))
   const lowestPerKg = Math.min(...rows.map(r => r.perKg ?? Infinity))
   const mostOffers = Math.max(...rows.map(r => r.offerCount))
@@ -238,12 +247,12 @@ function ComparisonGrid({
               <div>
                 <div className="flex items-baseline gap-1 flex-wrap">
                   <span className={`text-lg font-bold ${
-                    r.cheapestPrice === lowestPrice && r.cheapestPrice != null
+                    r.lowestPrice === bestPrice && r.lowestPrice != null
                       ? 'text-green-700' : 'text-green-600'
                   }`}>
-                    {r.cheapestPrice != null ? formatBRL(r.cheapestPrice) : '—'}
+                    {r.lowestPrice != null ? formatBRL(r.lowestPrice) : '—'}
                   </span>
-                  {r.cheapestPrice === lowestPrice && r.cheapestPrice != null && (
+                  {r.lowestPrice === bestPrice && r.lowestPrice != null && (
                     <Trophy className="w-3 h-3 text-amber-500" />
                   )}
                 </div>
@@ -395,9 +404,9 @@ function AddProductPicker({
                   {p.name}
                 </p>
               </div>
-              {p.cheapestPrice != null && (
+              {p.lowestPrice != null && (
                 <span className="text-[11px] text-gray-500 shrink-0 hidden sm:inline">
-                  {formatBRL(p.cheapestPrice)}
+                  {formatBRL(p.lowestPrice)}
                 </span>
               )}
               <Link

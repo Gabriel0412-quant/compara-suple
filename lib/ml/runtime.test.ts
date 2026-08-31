@@ -3,6 +3,10 @@ import { describe, expect, it } from 'vitest'
 import { classifyMlIngestError, getMissingMlIngestConfig } from './runtime'
 
 const completeEnv: NodeJS.ProcessEnv = {
+  // NodeJS.ProcessEnv exige NODE_ENV. Sem ele o objeto não satisfaz o tipo e
+  // `tsc --noEmit` falha — o build e o vitest não pegam porque nenhum dos dois
+  // faz checagem de tipos deste arquivo.
+  NODE_ENV: 'test',
   NEXT_PUBLIC_SUPABASE_URL: 'https://example.supabase.co',
   SUPABASE_SERVICE_ROLE_KEY: 'service-role',
   ML_APP_ID: 'app-id',

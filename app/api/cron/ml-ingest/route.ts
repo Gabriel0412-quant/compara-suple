@@ -23,7 +23,11 @@ export async function POST(req: NextRequest) {
   if (!isAuthorized(req)) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
+  return runIngest()
+}
 
+/** Corpo compartilhado por POST (manual) e GET autorizado (Vercel Cron). */
+async function runIngest() {
   try {
     const result = await runCuratedIngest()
     return NextResponse.json({ ok: true, result })
@@ -36,11 +40,23 @@ export async function POST(req: NextRequest) {
   }
 }
 
-/** GET — healthcheck */
-export async function GET() {
+/**
+ * GET /api/cron/ml-ingest
+ *
+ * Entrada do Vercel Cron, que dispara sempre GET — nunca POST. Enquanto esta
+ * rota só respondia POST, o agendamento batia no healthcheck e nenhuma coleta
+ * acontecia. A Vercel injeta `Authorization: Bearer ${CRON_SECRET}` quando a
+ * env var existe, então a checagem é a mesma do POST.
+ *
+ * Sem autorização, segue devolvendo o healthcheck de antes.
+ */
+export async function GET(req: NextRequest) {
+  if (isAuthorized(req)) {
+    return runIngest()
+  }
   return NextResponse.json({
     ok: true,
     endpoint: 'ml-ingest',
-    method: 'POST com Authorization: Bearer $CRON_SECRET',
+    method: 'POST com Authorization: Bearer $CRON_SECRET (GET autorizado roda a coleta, usado pelo Vercel Cron)',
   })
 }

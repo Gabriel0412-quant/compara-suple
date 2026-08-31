@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import Header from '@/components/Header'
 import { supabase } from '@/lib/db'
@@ -5,6 +6,14 @@ import { supabase } from '@/lib/db'
 // Página simples de listagem dos produtos ingeridos. Server component:
 // faz query no Supabase em tempo de renderização, sem cache.
 export const dynamic = 'force-dynamic'
+
+// Era a única página de listagem sem metadata própria, então herdava o título
+// do layout — aparecia como "Create Next App" no Google e na aba do navegador.
+export const metadata: Metadata = {
+  title: 'Produtos no comparador · ComparaSuple',
+  description:
+    'Catálogo curado de suplementos com preços do Mercado Livre, custo por dose e custo por quilo.',
+}
 
 type OfferRow = {
   id: number

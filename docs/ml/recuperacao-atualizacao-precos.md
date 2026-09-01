@@ -19,6 +19,10 @@ O projeto ligado a `matheus050/compara-suple` serve o site espelhado, mas não d
 | `ML_APP_ID` | Identidade da aplicação no Mercado Livre. |
 | `ML_CLIENT_SECRET` | Troca e renovação dos tokens. |
 | `ML_REDIRECT_URI` | Callback exato cadastrado no DevCenter. |
+| `ML_ADMIN_SECRET` | Protege o início da autorização administrativa. |
+| `ML_ALLOWED_USER_ID` | Identifica a única conta aceita. |
+| `ML_TOKEN_ENCRYPTION_KEY` | Criptografa o par de tokens no servidor. |
+| `ML_TOKEN_ENCRYPTION_KEY_VERSION` | Versiona a chave usada pelo payload. |
 | `CRON_SECRET` | Autoriza o cron e a execução manual. |
 
 O redirect de produção é `https://compara-suple-sable.vercel.app/api/auth/ml/callback`. O DevCenter deve habilitar `offline_access` para devolver um refresh token.
@@ -38,9 +42,18 @@ Valores nunca devem ser copiados para issue, PR, resposta HTTP ou log. A valida�
 
 1. Confirmar no DevCenter que a aplicação oficial possui `offline_access` e o redirect exato do executor.
 2. Conferir a presença das variáveis obrigatórias no ambiente Production do executor, sem imprimir valores.
-3. Abrir `https://compara-suple-sable.vercel.app/api/auth/ml/login` em uma sessão autenticada na conta oficial do Mercado Livre.
-4. Autorizar a aplicação e confirmar que o callback informa sucesso, usuário esperado e expiração futura. A resposta não deve conter tokens.
-5. Disparar a coleta manual com o segredo lido diretamente do gerenciador de segredos:
+3. Solicitar uma URL de autorização usando o segredo lido diretamente do gerenciador de segredos:
+
+   ```bash
+   curl --fail-with-body \
+     --request POST \
+     --header "Authorization: Bearer ${ML_ADMIN_SECRET}" \
+     https://compara-suple-sable.vercel.app/api/auth/ml/login
+   ```
+
+4. Abrir o `authorization_url` retornado em uma sessão autenticada na conta oficial do Mercado Livre.
+5. Autorizar a aplicação e confirmar que o callback informa sucesso, usuário esperado e expiração futura. A resposta não deve conter tokens.
+6. Disparar a coleta manual com o segredo lido diretamente do gerenciador de segredos:
 
    ```bash
    curl --fail-with-body \
@@ -49,12 +62,12 @@ Valores nunca devem ser copiados para issue, PR, resposta HTTP ou log. A valida�
      https://compara-suple-sable.vercel.app/api/cron/ml-ingest
    ```
 
-6. Confirmar que `catalogs_ingested` e `offers_ingested` são maiores que zero ou que cada catálogo possui falha explícita.
-7. Consultar somente metadados no Supabase: maior `offer.fetched_at`, observações de `price_history` no dia e expiração futura do token.
-8. Abrir a home pública e confirmar `hoje` em “última coleta de preços”.
-9. Conferir pelo menos três produtos contra as respostas atuais do Mercado Livre.
-10. Depois que o primeiro access token vencer, repetir a coleta sem novo login e confirmar atualização da expiração. Isso prova a rotação do refresh token.
-11. Observar a próxima execução das 09:00 UTC e registrar apenas horário, duração, totais e código de resultado.
+7. Confirmar que `catalogs_ingested` e `offers_ingested` são maiores que zero ou que cada catálogo possui falha explícita.
+8. Consultar somente metadados no Supabase: maior `offer.fetched_at`, observações de `price_history` no dia e expiração futura do token.
+9. Abrir a home pública e confirmar `hoje` em “última coleta de preços”.
+10. Conferir pelo menos três produtos contra as respostas atuais do Mercado Livre.
+11. Depois que o primeiro access token vencer, repetir a coleta sem novo login e confirmar atualização da expiração. Isso prova a rotação do refresh token.
+12. Observar a próxima execução das 09:00 UTC e registrar apenas horário, duração, totais e código de resultado.
 
 ## Diagnóstico por código
 

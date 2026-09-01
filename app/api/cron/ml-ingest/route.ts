@@ -60,6 +60,25 @@ export async function POST(req: NextRequest) {
 async function runIngest(simular: boolean) {
   try {
     const result = await runCuratedIngest({ simular })
+    if (result.catalogIds > 0 && result.catalogs_ingested === 0) {
+      console.error('ml_ingest_failed', {
+        error: 'all_catalogs_failed',
+        catalog_ids: result.catalogIds,
+      })
+      return NextResponse.json(
+        { ok: false, error: 'ingestion_failed' },
+        { status: 500 },
+      )
+    }
+    const failedCatalogs = result.per_catalog.filter(catalog =>
+      catalog.status !== 'success' && catalog.status !== 'success_empty'
+    ).length
+    if (failedCatalogs > 0) {
+      console.warn('ml_ingest_partial_failure', {
+        failed_catalogs: failedCatalogs,
+        catalog_ids: result.catalogIds,
+      })
+    }
     return NextResponse.json({ ok: true, result })
   } catch (e) {
     const error = classifyMlIngestError(e)

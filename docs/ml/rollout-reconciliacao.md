@@ -27,6 +27,8 @@ No SQL Editor do Supabase, em ordem:
 | `supabase/migrations/0007_reconciliar_simulacao.sql` | adiciona `p_simular` |
 | `supabase/tests/0007_simulacao.test.sql` | espera `simulacao: todos os casos ok` |
 
+As migrations OAuth seguem em `0008_secure_ml_oauth_foundation.sql` e `0009_finalize_ml_oauth_security.sql`. A numeração é única e preserva a ordem entre reconciliação e segurança OAuth.
+
 Os dois testes rodam dentro de `begin/rollback` e não deixam resíduo.
 
 ## 2. Simular antes de executar

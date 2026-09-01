@@ -24,6 +24,7 @@ Permitir que somente um operador autorizado conecte a conta oficial do Mercado L
 5. A ingestão lê somente a conexão da conta configurada.
 6. Ao aproximar-se da expiração, uma instância adquire a posse de renovação e as demais aguardam o token persistido.
 7. `invalid_grant` muda o estado para `reconnect_required`; falhas transitórias liberam a posse.
+8. O operador consulta `GET /api/auth/ml/connection` e desconecta com `DELETE /api/auth/ml/connection`, sempre usando `ML_ADMIN_SECRET`.
 
 ## Estados operacionais
 
@@ -38,6 +39,7 @@ Permitir que somente um operador autorizado conecte a conta oficial do Mercado L
 - `anon` e `authenticated` não leem nem escrevem tentativas ou conexões.
 - O callback de outra conta retorna `403` e não altera a conexão vigente.
 - O rollback pode desabilitar a integração, mas não pode voltar a ler ou gravar tokens em texto simples.
+- As colunas `access_token` e `refresh_token` não existem no schema final.
 
 ## Rollout
 
@@ -46,12 +48,12 @@ Permitir que somente um operador autorizado conecte a conta oficial do Mercado L
 3. Implantar o código e confirmar respostas sanitizadas.
 4. Autorizar novamente a conta permitida.
 5. Executar coleta e renovação controladas.
-6. Apagar e remover as colunas antigas de token legível.
+6. Aplicar `0009_finalize_ml_oauth_security.sql`, que aborta sem backfill e remove as colunas antigas de token legível.
 7. Rotacionar `ML_CLIENT_SECRET` e repetir a autorização final.
 
 ## Observabilidade inicial
 
-Os eventos permitidos são `authorization_started`, `authorization_rejected`, `connected`, `refresh_started`, `refresh_succeeded`, `refresh_failed`, `reconnect_required` e `disconnected`. Eles podem conter duração, resultado, código categorizado, expiração e identificador interno, nunca credenciais.
+Os eventos usam `ml_oauth_event` com `event`, `result`, `duration_ms` e um `code` categorizado somente quando necessário. Autorização, renovação, rejeição e desconexão nunca registram credenciais nem payloads externos.
 
 ## Relação com outros trabalhos
 

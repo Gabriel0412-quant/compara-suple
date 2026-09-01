@@ -19,8 +19,6 @@ export type MlTokenWriteRow = {
   refresh_lease_id: null
   refresh_lease_expires_at: null
   updated_at: string
-  access_token: null
-  refresh_token: null
 }
 
 export type MlTokenConnectionRow = {
@@ -82,8 +80,6 @@ export async function persistEncryptedTokens(
     refresh_lease_id: null,
     refresh_lease_expires_at: null,
     updated_at: new Date().toISOString(),
-    access_token: null,
-    refresh_token: null,
   })
   if (result.error) {
     throw new Error('ML_TOKEN_STORE_WRITE_FAILED')

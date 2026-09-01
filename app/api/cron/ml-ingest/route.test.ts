@@ -81,14 +81,24 @@ describe('/api/cron/ml-ingest', () => {
   })
 
   it('runs a configured and authorized ingest', async () => {
-    runCuratedIngest.mockResolvedValue({ catalogs_ingested: 16, offers_ingested: 451 })
+    runCuratedIngest.mockResolvedValue({
+      catalogIds: 16,
+      catalogs_ingested: 16,
+      offers_ingested: 451,
+      per_catalog: [],
+    })
 
     const response = await GET(request('GET', 'Bearer cron-secret'))
 
     expect(response.status).toBe(200)
     await expect(response.json()).resolves.toEqual({
       ok: true,
-      result: { catalogs_ingested: 16, offers_ingested: 451 },
+      result: {
+        catalogIds: 16,
+        catalogs_ingested: 16,
+        offers_ingested: 451,
+        per_catalog: [],
+      },
     })
   })
 
@@ -99,7 +109,12 @@ describe('/api/cron/ml-ingest', () => {
     ['?simular=0', false],
     ['?simular=talvez', false],
   ] as const)('reads %s as simular=%s', async (query, esperado) => {
-    runCuratedIngest.mockResolvedValue({ simulado: esperado })
+    runCuratedIngest.mockResolvedValue({
+      simulado: esperado,
+      catalogIds: 0,
+      catalogs_ingested: 0,
+      per_catalog: [],
+    })
 
     await GET(request('GET', 'Bearer cron-secret', query))
 
@@ -125,5 +140,44 @@ describe('/api/cron/ml-ingest', () => {
       ok: false,
       error: 'auth_required',
     })
+  })
+
+  it('returns 500 when every curated catalog fails', async () => {
+    runCuratedIngest.mockResolvedValue({
+      catalogIds: 16,
+      catalogs_ingested: 0,
+      per_catalog: Array.from({ length: 16 }, () => ({
+        status: 'product_error',
+      })),
+    })
+
+    const response = await POST(request('POST', 'Bearer cron-secret'))
+
+    expect(response.status).toBe(500)
+    await expect(response.json()).resolves.toEqual({
+      ok: false,
+      error: 'ingestion_failed',
+    })
+  })
+
+  it('keeps a partial ingest successful and emits an operational warning', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    runCuratedIngest.mockResolvedValue({
+      catalogIds: 2,
+      catalogs_ingested: 1,
+      per_catalog: [
+        { status: 'success' },
+        { status: 'product_error' },
+      ],
+    })
+
+    const response = await POST(request('POST', 'Bearer cron-secret'))
+
+    expect(response.status).toBe(200)
+    expect(warn).toHaveBeenCalledWith('ml_ingest_partial_failure', {
+      failed_catalogs: 1,
+      catalog_ids: 2,
+    })
+    warn.mockRestore()
   })
 })

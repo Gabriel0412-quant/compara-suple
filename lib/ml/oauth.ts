@@ -1,5 +1,9 @@
-import { supabaseAdmin } from '../db-admin'
+import {
+  createAccessTokenDependencies,
+  getEncryptedAccessToken,
+} from './access-token'
 import { parseMlTokenResponse, type MlTokens } from './token-response'
+import { persistEncryptedTokens } from './token-vault'
 
 /**
  * Authorization Code flow do Mercado Livre.
@@ -14,8 +18,6 @@ import { parseMlTokenResponse, type MlTokens } from './token-response'
 
 const AUTH_URL  = 'https://auth.mercadolivre.com.br/authorization'
 const TOKEN_URL = 'https://api.mercadolibre.com/oauth/token'
-
-const REFRESH_MARGIN_MS = 5 * 60 * 1000  // refresh se faltar menos de 5min
 
 export type { MlTokens } from './token-response'
 
@@ -50,6 +52,10 @@ async function postToken(body: URLSearchParams): Promise<MlTokens> {
     body,
   })
   if (!res.ok) {
+    const payload = await res.json().catch(() => null) as Record<string, unknown> | null
+    if (payload?.error === 'invalid_grant') {
+      throw new Error('ML_OAUTH_INVALID_GRANT')
+    }
     throw new Error(`ML_OAUTH_REQUEST_FAILED_${res.status}`)
   }
   return parseMlTokenResponse(await res.json())
@@ -92,27 +98,7 @@ export async function refreshTokens(refreshToken: string): Promise<MlTokens> {
 // ---------- Persistência ----------
 
 export async function saveTokens(tokens: MlTokens): Promise<void> {
-  if (!tokens.ml_user_id || !tokens.access_token || !tokens.refresh_token) {
-    throw new Error('ML_OAUTH_TOKENS_INCOMPLETE')
-  }
-  const { error } = await supabaseAdmin
-    .from('ml_oauth_tokens')
-    .upsert(
-      {
-        ml_user_id: tokens.ml_user_id,
-        access_token: tokens.access_token,
-        refresh_token: tokens.refresh_token,
-        expires_at: tokens.expires_at.toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'ml_user_id' },
-    )
-  if (error) {
-    throw new Error(
-      `Supabase upsert ml_oauth_tokens falhou: ${error.message} ` +
-      `(code=${error.code}, details=${error.details ?? 'n/a'})`,
-    )
-  }
+  return persistEncryptedTokens(tokens)
 }
 
 /**
@@ -121,35 +107,5 @@ export async function saveTokens(tokens: MlTokens): Promise<void> {
  * via /api/auth/ml/login antes).
  */
 export async function getValidAccessToken(): Promise<string> {
-  const { data, error } = await supabaseAdmin
-    .from('ml_oauth_tokens')
-    .select('access_token, refresh_token, expires_at')
-    .order('updated_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  if (error) throw error
-  if (!data) {
-    throw new Error(
-      'Nenhum token ML salvo no Supabase. Faça login em /api/auth/ml/login primeiro.',
-    )
-  }
-
-  const expiresAt = new Date(data.expires_at as string)
-  const now = Date.now()
-  if (expiresAt.getTime() - now > REFRESH_MARGIN_MS) {
-    return data.access_token as string
-  }
-
-  // Token expirado ou perto de expirar — refresha
-  const rt = data.refresh_token as string
-  if (!rt) {
-    throw new Error(
-      'access_token ML expirou e não há refresh_token salvo. ' +
-      'Faça login novamente em /api/auth/ml/login.',
-    )
-  }
-  const fresh = await refreshTokens(rt)
-  await saveTokens(fresh)
-  return fresh.access_token
+  return getEncryptedAccessToken(createAccessTokenDependencies(refreshTokens))
 }

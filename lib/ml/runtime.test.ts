@@ -11,6 +11,9 @@ const completeEnv: NodeJS.ProcessEnv = {
   SUPABASE_SERVICE_ROLE_KEY: 'service-role',
   ML_APP_ID: 'app-id',
   ML_CLIENT_SECRET: 'client-secret',
+  ML_ALLOWED_USER_ID: '437089518',
+  ML_TOKEN_ENCRYPTION_KEY: 'encryption-key',
+  ML_TOKEN_ENCRYPTION_KEY_VERSION: '1',
   CRON_SECRET: 'cron-secret',
 }
 
@@ -45,6 +48,20 @@ describe('classifyMlIngestError', () => {
   it('does not report a provider outage as an authorization error', () => {
     expect(classifyMlIngestError(new Error('ML_OAUTH_REQUEST_FAILED_500')))
       .toBe('ingestion_failed')
+  })
+
+  it.each([
+    'ML_OAUTH_CONNECTION_NOT_FOUND',
+    'ML_OAUTH_RECONNECT_REQUIRED',
+  ])('classifies %s as an authorization error', message => {
+    expect(classifyMlIngestError(new Error(message))).toBe('auth_required')
+  })
+
+  it.each([
+    'ML_OAUTH_SECURITY_CONFIGURATION_INVALID',
+    'ML_TOKEN_KEY_VERSION_UNAVAILABLE',
+  ])('classifies %s as a configuration error', message => {
+    expect(classifyMlIngestError(new Error(message))).toBe('configuration_error')
   })
 
   it('uses a generic code for an unknown upstream failure', () => {

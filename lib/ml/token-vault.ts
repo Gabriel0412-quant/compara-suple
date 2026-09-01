@@ -31,6 +31,11 @@ export type MlTokenConnectionRow = {
   expires_at: string
 }
 
+export type SealedMlTokens = {
+  tokenPayload: string
+  tokenKeyVersion: number
+}
+
 type StoreResult<T> = {
   data?: T | null
   error: unknown | null
@@ -65,22 +70,12 @@ export async function persistEncryptedTokens(
   store: MlTokenVaultStore = supabaseTokenVaultStore,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<void> {
-  if (!tokens.access_token || !tokens.refresh_token || !tokens.ml_user_id) {
-    throw new Error('ML_OAUTH_TOKENS_INCOMPLETE')
-  }
-
-  const config = loadMlTokenSecurityConfig(env)
-  if (tokens.ml_user_id !== config.allowedUserId) {
-    throw new Error('ML_OAUTH_USER_NOT_ALLOWED')
-  }
+  const sealed = sealTokens(tokens, env)
 
   const result = await store.upsert({
     ml_user_id: tokens.ml_user_id,
-    token_payload: encryptTokenPair({
-      accessToken: tokens.access_token,
-      refreshToken: tokens.refresh_token,
-    }, config.key),
-    token_key_version: config.keyVersion,
+    token_payload: sealed.tokenPayload,
+    token_key_version: sealed.tokenKeyVersion,
     connection_state: 'connected',
     expires_at: tokens.expires_at.toISOString(),
     last_error_code: null,
@@ -92,6 +87,28 @@ export async function persistEncryptedTokens(
   })
   if (result.error) {
     throw new Error('ML_TOKEN_STORE_WRITE_FAILED')
+  }
+}
+
+export function sealTokens(
+  tokens: MlTokens,
+  env: NodeJS.ProcessEnv = process.env,
+): SealedMlTokens {
+  if (!tokens.access_token || !tokens.refresh_token || !tokens.ml_user_id) {
+    throw new Error('ML_OAUTH_TOKENS_INCOMPLETE')
+  }
+
+  const config = loadMlTokenSecurityConfig(env)
+  if (tokens.ml_user_id !== config.allowedUserId) {
+    throw new Error('ML_OAUTH_USER_NOT_ALLOWED')
+  }
+
+  return {
+    tokenPayload: encryptTokenPair({
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token,
+    }, config.key),
+    tokenKeyVersion: config.keyVersion,
   }
 }
 

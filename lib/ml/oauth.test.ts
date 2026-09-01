@@ -4,7 +4,7 @@ const { from } = vi.hoisted(() => ({ from: vi.fn() }))
 
 vi.mock('../db-admin', () => ({ supabaseAdmin: { from } }))
 
-import { exchangeCodeForTokens, saveTokens } from './oauth'
+import { exchangeCodeForTokens, refreshTokens, saveTokens } from './oauth'
 
 describe('Mercado Livre OAuth', () => {
   beforeEach(() => {
@@ -49,5 +49,15 @@ describe('Mercado Livre OAuth', () => {
 
     await expect(exchangeCodeForTokens('authorization-code'))
       .rejects.toThrowError('ML_OAUTH_REQUEST_FAILED_401')
+  })
+
+  it('classifies invalid_grant without exposing the provider payload', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      error: 'invalid_grant',
+      message: 'refresh-secret-must-not-leak',
+    }), { status: 400 })))
+
+    await expect(refreshTokens('single-use-refresh'))
+      .rejects.toThrowError('ML_OAUTH_INVALID_GRANT')
   })
 })

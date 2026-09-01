@@ -3,72 +3,14 @@
 import { useMemo, useState } from 'react'
 import { Truck, ShieldCheck, MapPin, ArrowDownAZ } from 'lucide-react'
 import { formatBRL, pricePerDose, type Offer } from '@/lib/products'
-
-type SortBy = 'featured' | 'total' | 'discount'
-
-type Loja = {
-  offerId: number
-  avatar: string
-  avatarColor: string
-  nome: string
-  isOfficial: boolean
-  freeShipping: boolean
-  isFulfillment: boolean
-  parcelas: string
-  preco: number
-  originalPrice: number | null
-  total: number
-  entrega: string
-  estoque: string
-  estoqueColor: string
-  city: string | null
-  state: string | null
-  url: string
-}
-
-const AVATAR_COLORS = [
-  'bg-gray-500',
-  'bg-orange-500',
-  'bg-purple-600',
-  'bg-blue-600',
-  'bg-pink-600',
-  'bg-cyan-600',
-]
-
-function derivaEntrega(logisticType: string | undefined): string {
-  if (logisticType === 'fulfillment')   return '1–2 dias (Full)'
-  if (logisticType === 'cross_docking') return '2–4 dias'
-  if (logisticType === 'xd_drop_off')   return '3–5 dias'
-  if (logisticType === 'drop_off')      return '4–7 dias'
-  return '3–7 dias'
-}
-
-function offerToLoja(offer: Offer): Loja {
-  const isOfficial   = !!offer.raw?.official_store_id
-  const freeShipping = !!offer.raw?.shipping?.free_shipping
-  const sellerId     = offer.raw?.seller_id ?? 0
-  const city         = offer.raw?.seller_address?.city?.name ?? null
-  const state        = offer.raw?.seller_address?.state?.name ?? null
-  return {
-    offerId: offer.id,
-    avatar: isOfficial ? 'OF' : (city?.slice(0, 2).toUpperCase() ?? 'V'),
-    avatarColor: isOfficial ? 'bg-green-600' : AVATAR_COLORS[sellerId % AVATAR_COLORS.length],
-    nome: isOfficial ? 'Loja Oficial' : (city ? `Vendedor em ${city}` : `Vendedor #${sellerId}`),
-    isOfficial,
-    freeShipping,
-    isFulfillment: offer.raw?.shipping?.logistic_type === 'fulfillment',
-    parcelas: '12× sem juros',
-    preco: offer.price,
-    originalPrice: offer.raw?.original_price ?? null,
-    total: offer.price,
-    entrega: derivaEntrega(offer.raw?.shipping?.logistic_type),
-    estoque: 'Em estoque',
-    estoqueColor: 'text-green-600',
-    city,
-    state,
-    url: offer.url,
-  }
-}
+import {
+  filtrarRows,
+  menorPrecoRow,
+  offerToRow,
+  ordenarRows,
+  rotuloFrete,
+  type SortBy,
+} from '@/lib/offers-table'
 
 export function OffersSection({
   offers,
@@ -82,38 +24,18 @@ export function OffersSection({
   const [onlyFull, setOnlyFull] = useState(false)
   const [sortBy, setSortBy] = useState<SortBy>('featured')
 
-  const allLojas = useMemo(() => offers.map(offerToLoja), [offers])
+  const allLojas = useMemo(() => offers.map(offerToRow), [offers])
 
-  const filteredLojas = useMemo(() => {
-    let list = allLojas
-    if (onlyFreeShipping) list = list.filter(l => l.freeShipping)
-    if (onlyOfficial)     list = list.filter(l => l.isOfficial)
-    if (onlyFull)         list = list.filter(l => l.isFulfillment)
-    if (sortBy === 'featured') return list   // server já entregou em ordem: oficial → preço
-    return [...list].sort((a, b) => {
-      if (sortBy === 'discount') {
-        const dA = a.originalPrice ? (1 - a.preco / a.originalPrice) : 0
-        const dB = b.originalPrice ? (1 - b.preco / b.originalPrice) : 0
-        return dB - dA
-      }
-      return a.total - b.total
-    })
-  }, [allLojas, onlyFreeShipping, onlyOfficial, onlyFull, sortBy])
+  const filteredLojas = useMemo(
+    () => ordenarRows(
+      filtrarRows(allLojas, { onlyFreeShipping, onlyOfficial, onlyFull }),
+      sortBy,
+    ),
+    [allLojas, onlyFreeShipping, onlyOfficial, onlyFull, sortBy],
+  )
 
-  /*
-   * O selo de menor preço vinha de `i === 0`, ou seja, da primeira linha da
-   * ORDENAÇÃO escolhida. Com "Destaque" selecionado — que é o padrão — ele ia
-   * para a oferta que o ML promove, mesmo quando havia outra mais barata na
-   * tabela. O EP02-06 exige que esse selo independa da ordenação.
-   *
-   * Calculado sobre as linhas visíveis: filtrar é uma escolha legítima do
-   * usuário sobre QUAIS ofertas comparar; ordenar não deveria mudar qual é a
-   * mais barata.
-   */
-  const cheapestLoja = filteredLojas.length
-    ? filteredLojas.reduce((menor, l) => (l.total < menor.total ? l : menor))
-    : null
-  const cheapestTotal = cheapestLoja?.total ?? 0
+  const cheapestLoja = menorPrecoRow(filteredLojas)
+  const cheapestPreco = cheapestLoja?.preco ?? 0
   const activeFiltersCount = [onlyFreeShipping, onlyOfficial, onlyFull].filter(Boolean).length
 
   return (
@@ -187,10 +109,10 @@ export function OffersSection({
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[680px]">
+          <table className="w-full min-w-[600px]">
             <thead>
               <tr className="border-b border-gray-100">
-                {['LOJA', 'PREÇO', 'R$/DOSE', 'ENTREGA', 'TOTAL', 'AÇÃO'].map(col => (
+                {['LOJA', 'PREÇO', 'R$/DOSE', 'ENTREGA', 'AÇÃO'].map(col => (
                   <th
                     key={col}
                     className="px-4 py-3 text-left text-[10px] font-bold tracking-widest text-gray-400 uppercase"
@@ -204,7 +126,7 @@ export function OffersSection({
               {filteredLojas.map(loja => {
                 const isCheapest = loja.offerId === cheapestLoja?.offerId
                 const perDose = pricePerDose(loja.preco, servings)
-                const diff = isCheapest ? null : loja.total - cheapestTotal
+                const diff = isCheapest ? null : loja.preco - cheapestPreco
                 return (
                   <tr
                     key={loja.offerId}
@@ -255,7 +177,7 @@ export function OffersSection({
                       </div>
                     </td>
 
-                    {/* Preço */}
+                    {/* Preço — do item. O frete depende do CEP e não é calculado aqui. */}
                     <td className="px-4 py-3">
                       <p className="text-sm font-semibold text-gray-800">
                         {formatBRL(loja.preco)}
@@ -263,6 +185,14 @@ export function OffersSection({
                       {loja.originalPrice && loja.originalPrice > loja.preco && (
                         <p className="text-[10px] text-gray-400 line-through">
                           {formatBRL(loja.originalPrice)}
+                        </p>
+                      )}
+                      <p className="text-[10px] text-gray-400">
+                        {rotuloFrete(loja)}
+                      </p>
+                      {diff !== null && diff > 0 && (
+                        <p className="text-[10px] text-gray-400">
+                          +{formatBRL(diff)} vs. menor preço
                         </p>
                       )}
                     </td>
@@ -284,18 +214,6 @@ export function OffersSection({
                       <p className={`text-[10px] font-semibold ${loja.estoqueColor}`}>
                         {loja.estoque}
                       </p>
-                    </td>
-
-                    {/* Total */}
-                    <td className="px-4 py-3">
-                      <p className="text-sm font-bold text-gray-800">
-                        {formatBRL(loja.total)}
-                      </p>
-                      {diff !== null && diff > 0 && (
-                        <p className="text-[10px] text-gray-400">
-                          +{formatBRL(diff)}
-                        </p>
-                      )}
                     </td>
 
                     {/* Ação */}
@@ -328,6 +246,11 @@ export function OffersSection({
           O ML decide qual seller destacar baseado em <strong>frete, CEP, estoque e reputação</strong> —
           pode mostrar uma oferta diferente da que você clicou (geralmente a loja oficial).
           Os preços acima refletem as ofertas ativas via API; o ML pode atualizar a qualquer momento.
+        </p>
+        <p className="mt-1.5">
+          Os valores são <strong>o preço do item</strong>. O frete depende do seu CEP e não
+          está somado aqui — consulte na loja antes de fechar. Onde a oferta tem frete grátis,
+          isso vem indicado na linha.
         </p>
         <p className="mt-1.5">
           ComparaSuple recebe comissão de afiliado nas vendas, sem custo extra para você.
@@ -372,7 +295,7 @@ function SortDropdown({
 }) {
   const labels: Record<SortBy, string> = {
     featured: 'Destaque (loja oficial primeiro)',
-    total: 'Menor preço',
+    preco: 'Menor preço',
     discount: 'Maior desconto',
   }
   return (

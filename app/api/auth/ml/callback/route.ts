@@ -1,52 +1,74 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { exchangeCodeForTokens, saveTokens } from '@/lib/ml/oauth'
+import { exchangeCodeForTokens } from '@/lib/ml/oauth'
+import { consumeOAuthAttempt } from '@/lib/ml/oauth-attempt'
+import { persistEncryptedTokens } from '@/lib/ml/token-vault'
 
 export const runtime = 'nodejs'
 
-/**
- * GET /api/auth/ml/callback?code=...&state=...
- *
- * Endpoint que o ML chama de volta após o usuário autorizar.
- * Valida CSRF state, troca code por tokens, salva no Supabase.
- */
 export async function GET(req: NextRequest) {
   const url = new URL(req.url)
   const code  = url.searchParams.get('code')
   const state = url.searchParams.get('state')
-  const cookieState = req.cookies.get('ml_oauth_state')?.value
 
-  if (!code) {
-    const mlError = url.searchParams.get('error') ?? 'desconhecido'
+  if (!state) {
     return NextResponse.json(
-      { ok: false, error: 'code ausente', ml_error: mlError },
+      { ok: false, error: 'invalid_state' },
       { status: 400 },
     )
   }
 
-  if (!state || !cookieState || state !== cookieState) {
+  let validAttempt: boolean
+  try {
+    validAttempt = await consumeOAuthAttempt(state)
+  } catch {
+    console.error('ml_oauth_event', { event: 'attempt_consume_failed' })
     return NextResponse.json(
-      { ok: false, error: 'state inválido (possível CSRF)' },
+      { ok: false, error: 'authorization_failed' },
+      { status: 500 },
+    )
+  }
+  if (!validAttempt) {
+    return NextResponse.json(
+      { ok: false, error: 'invalid_state' },
+      { status: 400 },
+    )
+  }
+  if (!code) {
+    return NextResponse.json(
+      { ok: false, error: 'authorization_denied' },
       { status: 400 },
     )
   }
 
   try {
     const tokens = await exchangeCodeForTokens(code)
-    await saveTokens(tokens)
-    const res = NextResponse.json({
+    await persistEncryptedTokens(tokens)
+    console.info('ml_oauth_event', { event: 'connected' })
+    return NextResponse.json({
       ok: true,
-      message: 'OAuth concluído. Tokens salvos no Supabase. Pode rodar a ingestão agora.',
       ml_user_id: tokens.ml_user_id,
       expires_at: tokens.expires_at.toISOString(),
     })
-    res.cookies.delete('ml_oauth_state')
-    return res
   } catch (e) {
-    console.error('OAuth callback error:', e)
-    const errMsg =
-      e instanceof Error ? e.message
-      : typeof e === 'object' && e !== null ? JSON.stringify(e)
-      : String(e)
-    return NextResponse.json({ ok: false, error: errMsg }, { status: 500 })
+    const message = e instanceof Error ? e.message : String(e)
+    if (message === 'ML_OAUTH_USER_NOT_ALLOWED') {
+      console.info('ml_oauth_event', { event: 'authorization_rejected' })
+      return NextResponse.json(
+        { ok: false, error: 'account_not_allowed' },
+        { status: 403 },
+      )
+    }
+    if (message === 'ML_OAUTH_SECURITY_CONFIGURATION_INVALID') {
+      console.error('ml_oauth_event', { event: 'configuration_error' })
+      return NextResponse.json(
+        { ok: false, error: 'configuration_error' },
+        { status: 503 },
+      )
+    }
+    console.error('ml_oauth_event', { event: 'authorization_failed' })
+    return NextResponse.json(
+      { ok: false, error: 'authorization_failed' },
+      { status: 500 },
+    )
   }
 }

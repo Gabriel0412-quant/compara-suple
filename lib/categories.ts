@@ -169,8 +169,10 @@ function rowToCard(p: RawProduct): CategoryProduct {
   // Mesma lógica do PDP: respeitar ordem do ML (ml_rank), fallback oficial → preço.
   // Sem isto, card mostrava o seller mais barato (que ML não destaca), causando
   // dissonância entre preço listado e preço cobrado no clique.
-  const featured = featuredOffer(allOffers)
-  const lowest = lowestPriceOffer(allOffers)
+  // Mesma regra de flattenOffers: indisponível não conta em lugar nenhum.
+  const ofertasVivas = allOffers.filter(o => o.available)
+  const featured = featuredOffer(ofertasVivas)
+  const lowest = lowestPriceOffer(ofertasVivas)
   const primaryVariant = p.variants?.[0]
   const servings = primaryVariant?.servings ?? null
   const sizeGrams = primaryVariant?.size_grams ?? null
@@ -182,7 +184,7 @@ function rowToCard(p: RawProduct): CategoryProduct {
     name: p.name,
     brand: brand?.name ?? null,
     thumbnail: featured?.raw?.thumbnail ?? null,
-    offerCount: allOffers.length,
+    offerCount: ofertasVivas.length,
     featuredPrice: featured?.price ?? 0,
     featuredOriginalPrice: featured?.raw?.original_price ?? null,
     featuredOfferId: featured?.id ?? null,

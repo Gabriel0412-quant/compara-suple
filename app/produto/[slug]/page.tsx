@@ -17,6 +17,41 @@ import {
 
 export const dynamic = 'force-dynamic'
 
+/** Produto sem nenhuma oferta ativa: identidade preservada, comércio ausente. */
+function SemOfertasAtivas({ product }: { product: { name: string } }) {
+  return (
+    <div className="min-h-screen bg-gray-50 text-gray-800">
+      <Header />
+      <nav className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-1 text-xs text-gray-500 flex-wrap">
+        <Link href="/" className="hover:text-green-600 transition-colors">Suplementos</Link>
+        <ChevronRight className="w-3 h-3 shrink-0" />
+        <Link href="/produtos" className="hover:text-green-600 transition-colors">Produtos</Link>
+        <ChevronRight className="w-3 h-3 shrink-0" />
+        <span className="text-gray-800 font-medium truncate max-w-md">{product.name}</span>
+      </nav>
+      <main className="max-w-7xl mx-auto px-4 pb-16">
+        <h1 className="text-2xl md:text-3xl font-bold mb-3">{product.name}</h1>
+        <div className="bg-white border border-gray-100 rounded-2xl p-8 text-center shadow-sm">
+          <p className="text-lg font-semibold text-gray-800 mb-1">
+            Sem ofertas disponíveis no momento
+          </p>
+          <p className="text-sm text-gray-500 max-w-md mx-auto">
+            Nenhum vendedor deste produto estava ativo na última coleta. Não
+            exibimos o último preço conhecido porque ele não representa mais o
+            que você pagaria hoje.
+          </p>
+          <Link
+            href="/produtos"
+            className="inline-block mt-5 px-5 py-2.5 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition-colors"
+          >
+            Ver produtos com oferta ativa
+          </Link>
+        </div>
+      </main>
+    </div>
+  )
+}
+
 type Props = { params: Promise<{ slug: string }> }
 
 // ─── Mock fallbacks (sections sem dado real ainda) ─────────────────────────────
@@ -101,7 +136,10 @@ export default async function ProductPage({ params }: Props) {
   if (!product) notFound()
 
   const offers = flattenOffers(product)
-  if (offers.length === 0) notFound()
+  // Produto existe, mas nenhuma oferta está ativa. `notFound()` seria mentira —
+  // a página existe e deve continuar indexável. O EP02-05 pede estado explícito:
+  // sem preço, sem economia e sem botão de compra apontando para anúncio morto.
+  if (offers.length === 0) return <SemOfertasAtivas product={product} />
 
   const featured        = featuredOffer(offers) ?? offers[0]
   const lowest          = lowestPriceOffer(offers)
@@ -221,7 +259,7 @@ export default async function ProductPage({ params }: Props) {
 
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-500">
-                Menor preço entre {offers.length} {offers.length === 1 ? 'loja' : 'lojas'}
+                Destaque entre {offers.length} {offers.length === 1 ? 'oferta' : 'ofertas'}
               </span>
               <span className="text-xs font-semibold text-gray-700 truncate max-w-[60%]">
                 {featuredSellerLabel}

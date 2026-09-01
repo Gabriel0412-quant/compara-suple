@@ -110,8 +110,24 @@ export async function getProductBySlug(slug: string): Promise<ProductDetail | nu
  * Helper — todas ofertas de todas variantes, ordenadas exatamente como o ML
  * mostra (via ml_rank). Fallback heurístico pra ofertas legadas sem rank.
  */
+/**
+ * Todas as ofertas DISPONÍVEIS do produto, na ordem de destaque do ML.
+ *
+ * O filtro de disponibilidade mora aqui, e só aqui, para as leituras públicas.
+ * Uma oferta marcada indisponível não pode participar de preço, contagem,
+ * destaque, comparação nem botão de compra — ela não existe mais na loja, e
+ * exibi-la manda o usuário para um anúncio morto contando como conversão.
+ *
+ * Medido em 31/08, logo após a primeira coleta em 99 dias: 239 das 1.204
+ * ofertas do banco não voltaram no snapshot do dia. Enquanto a reconciliação
+ * do EP02-03 não as desativa, este filtro não tem o que remover — mas no dia
+ * em que passar a desativar, é ele que impede o preço morto de chegar à tela.
+ */
 export function flattenOffers(product: ProductDetail): Offer[] {
-  return product.variants.flatMap(v => v.offers).sort(compareOffers)
+  return product.variants
+    .flatMap(v => v.offers)
+    .filter(o => o.available)
+    .sort(compareOffers)
 }
 
 /**

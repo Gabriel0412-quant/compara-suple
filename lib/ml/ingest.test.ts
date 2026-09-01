@@ -27,6 +27,7 @@ vi.mock('@/lib/db-admin', () => {
 import { runCuratedIngest } from './ingest'
 
 const contadores = {
+  simulado: false,
   recebidas: 2,
   criadas: 1,
   atualizadas: 1,
@@ -179,6 +180,33 @@ describe('runCuratedIngest', () => {
       offers_ingested: 4,
     })
     expect(resultado.per_catalog[0].reconciliacao).toEqual(contadores)
+  })
+
+  it('propaga a simulação para todos os catálogos e marca o resultado', async () => {
+    rpc.mockResolvedValue({ data: { ...contadores, simulado: true }, error: null })
+
+    const resultado = await runCuratedIngest({ simular: true })
+
+    expect(resultado.simulado).toBe(true)
+    expect(chamadasRpc().every(c => c.args.p_simular === true)).toBe(true)
+    expect(resultado.per_catalog[0].reconciliacao?.simulado).toBe(true)
+  })
+
+  it('não simula quando ninguém pediu', async () => {
+    const resultado = await runCuratedIngest()
+
+    expect(resultado.simulado).toBe(false)
+    expect(chamadasRpc().every(c => c.args.p_simular === false)).toBe(true)
+  })
+
+  it('simula com o mesmo payload que enviaria de verdade', async () => {
+    await runCuratedIngest()
+    const real = JSON.stringify(chamadasRpc()[0].args.p_items)
+    rpc.mockClear()
+
+    await runCuratedIngest({ simular: true })
+
+    expect(JSON.stringify(chamadasRpc()[0].args.p_items)).toBe(real)
   })
 
   it('isola a falha de um catálogo sem derrubar os outros', async () => {

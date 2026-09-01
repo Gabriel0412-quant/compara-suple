@@ -1,0 +1,65 @@
+name: CI
+
+# Roda em todo PR e em todo push para main. Até aqui nada validava mudança
+# nenhuma: lint, tipos, testes e build só aconteciam se alguém lembrasse de
+# rodar na própria máquina, e o resultado não ficava registrado em lugar nenhum.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Um PR que recebe vários pushes seguidos cancela as execuções antigas —
+# só o último commit interessa.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Lint, tipos, testes e build
+    runs-on: ubuntu-latest
+
+    # O build não precisa de credenciais reais: todas as rotas são
+    # `force-dynamic`, então nenhuma consulta o Supabase em tempo de build.
+    # Valores falsos só evitam que `createClient` estoure na carga do módulo.
+    # Se um dia alguma página passar a ser pré-renderizada, este job passa a
+    # falhar — e é o aviso certo, porque aí o build vira dependente de dados.
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://exemplo.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: chave-falsa-de-ci
+      SUPABASE_SERVICE_ROLE_KEY: chave-falsa-de-ci
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # --frozen-lockfile: falha se o pnpm-lock.yaml estiver fora de sincronia
+      # com o package.json, em vez de resolver silenciosamente outra versão.
+      - name: Instalar dependências
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      # Os passos seguem mesmo se o lint falhar: um PR deve mostrar todos os
+      # problemas de uma vez, não um por execução.
+      - name: Tipos
+        if: '!cancelled()'
+        run: pnpm exec tsc --noEmit
+
+      - name: Testes
+        if: '!cancelled()'
+        run: pnpm test
+
+      - name: Build
+        if: '!cancelled()'
+        run: pnpm build

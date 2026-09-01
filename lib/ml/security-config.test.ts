@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { loadMlTokenSecurityConfig } from './security-config'
 
 const completeEnv: NodeJS.ProcessEnv = {
+  NODE_ENV: 'test',
   ML_ALLOWED_USER_ID: '437089518',
   ML_TOKEN_ENCRYPTION_KEY: randomBytes(32).toString('base64'),
   ML_TOKEN_ENCRYPTION_KEY_VERSION: '1',

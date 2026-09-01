@@ -17,8 +17,12 @@ const requiredEnv = {
   CRON_SECRET: 'cron-secret',
 }
 
-function request(method: 'GET' | 'POST', authorization?: string): NextRequest {
-  return new NextRequest('https://example.com/api/cron/ml-ingest', {
+function request(
+  method: 'GET' | 'POST',
+  authorization?: string,
+  query = '',
+): NextRequest {
+  return new NextRequest(`https://example.com/api/cron/ml-ingest${query}`, {
     method,
     headers: authorization ? { authorization } : undefined,
   })
@@ -83,6 +87,27 @@ describe('/api/cron/ml-ingest', () => {
       ok: true,
       result: { catalogs_ingested: 16, offers_ingested: 451 },
     })
+  })
+
+  it.each([
+    ['?simular=1', true],
+    ['?simular=true', true],
+    ['', false],
+    ['?simular=0', false],
+    ['?simular=talvez', false],
+  ] as const)('reads %s as simular=%s', async (query, esperado) => {
+    runCuratedIngest.mockResolvedValue({ simulado: esperado })
+
+    await GET(request('GET', 'Bearer cron-secret', query))
+
+    expect(runCuratedIngest).toHaveBeenCalledWith({ simular: esperado })
+  })
+
+  it('does not let an unauthorized caller simulate', async () => {
+    const response = await GET(request('GET', undefined, '?simular=1'))
+
+    expect(response.status).toBe(401)
+    expect(runCuratedIngest).not.toHaveBeenCalled()
   })
 
   it('returns a stable error code when authorization must be recovered', async () => {

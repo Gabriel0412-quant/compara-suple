@@ -35,6 +35,17 @@ function authorize(req: NextRequest): NextResponse | null {
 }
 
 /**
+ * `?simular=1` executa a reconciliação e desfaz o efeito, devolvendo os
+ * mesmos contadores. Serve para ver o que a coleta faria antes que ela faça —
+ * e fica atrás da mesma autorização, porque a simulação bate no Mercado Livre
+ * e no banco como a execução real.
+ */
+function querSimular(req: NextRequest): boolean {
+  const valor = req.nextUrl.searchParams.get('simular')
+  return valor === '1' || valor === 'true'
+}
+
+/**
  * POST /api/cron/ml-ingest
  *
  * Roda a ingestão de todos os IDs em data/items.json.
@@ -43,12 +54,12 @@ function authorize(req: NextRequest): NextResponse | null {
 export async function POST(req: NextRequest) {
   const rejection = authorize(req)
   if (rejection) return rejection
-  return runIngest()
+  return runIngest(querSimular(req))
 }
 
-async function runIngest() {
+async function runIngest(simular: boolean) {
   try {
-    const result = await runCuratedIngest()
+    const result = await runCuratedIngest({ simular })
     return NextResponse.json({ ok: true, result })
   } catch (e) {
     const error = classifyMlIngestError(e)
@@ -63,5 +74,5 @@ async function runIngest() {
 export async function GET(req: NextRequest) {
   const rejection = authorize(req)
   if (rejection) return rejection
-  return runIngest()
+  return runIngest(querSimular(req))
 }

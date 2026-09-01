@@ -170,6 +170,8 @@ async function upsertVariant(opts: {
 }
 
 export type ReconciliacaoContadores = {
+  /** true quando o efeito foi desfeito: os números são previsão, não fato. */
+  simulado: boolean
   recebidas: number
   criadas: number
   atualizadas: number
@@ -187,6 +189,7 @@ type OfertaParaReconciliar = {
 }
 
 const CONTADORES_ZERADOS: ReconciliacaoContadores = {
+  simulado: false,
   recebidas: 0,
   criadas: 0,
   atualizadas: 0,
@@ -207,12 +210,14 @@ async function reconciliarCatalogo(opts: {
   catalogId: string
   variantId: number | null
   ofertas: OfertaParaReconciliar[]
+  simular: boolean
 }): Promise<ReconciliacaoContadores> {
   const { data, error } = await supabaseAdmin.rpc('reconciliar_catalogo', {
     p_store_id: opts.storeId,
     p_catalog_id: opts.catalogId,
     p_variant_id: opts.variantId,
     p_items: opts.ofertas,
+    p_simular: opts.simular,
   })
   if (error) throw error
   return { ...CONTADORES_ZERADOS, ...(data as Partial<ReconciliacaoContadores>) }
@@ -263,6 +268,7 @@ async function ingestCatalog(
   catalogId: string,
   storeId: number,
   manualByItemId: Record<string, string>,
+  simular: boolean,
 ): Promise<CatalogResult> {
   let product: MlCatalogProduct
   try {
@@ -292,8 +298,9 @@ async function ingestCatalog(
       catalogId,
       variantId: null,
       ofertas: [],
+      simular,
     })
-    logReconciliacao(catalogId, 'success_empty', reconciliacao)
+      logReconciliacao(catalogId, 'success_empty', reconciliacao)
     return {
       ok: true,
       status: 'success_empty',
@@ -363,6 +370,7 @@ async function ingestCatalog(
     catalogId,
     variantId,
     ofertas,
+    simular,
   })
   logReconciliacao(catalogId, 'success', reconciliacao)
   // Só contadores: a URL afiliada completa carrega o token de rastreio e nunca
@@ -385,6 +393,8 @@ async function ingestCatalog(
 // ---------- entry points ----------
 
 export type IngestResult = {
+  /** true quando nada foi persistido: o resultado é previsão. */
+  simulado: boolean
   startedAt: string
   durationMs: number
   catalogIds: number
@@ -408,7 +418,21 @@ export type IngestResult = {
   }>
 }
 
-export async function runCuratedIngest(): Promise<IngestResult> {
+export type IngestOptions = {
+  /**
+   * Executa a reconciliação e desfaz o efeito, devolvendo os contadores.
+   *
+   * O que ela NÃO desfaz: os upserts de brand/product/variant, que acontecem
+   * antes da reconciliação e são idempotentes. Nenhuma oferta e nenhum
+   * histórico é alterado.
+   */
+  simular?: boolean
+}
+
+export async function runCuratedIngest(
+  options: IngestOptions = {},
+): Promise<IngestResult> {
+  const simular = options.simular ?? false
   const startedAt = new Date().toISOString()
   const t0 = Date.now()
   const storeId = await getStoreId()
@@ -423,6 +447,7 @@ export async function runCuratedIngest(): Promise<IngestResult> {
   }
 
   const result: IngestResult = {
+    simulado: simular,
     startedAt,
     durationMs: 0,
     catalogIds: items.length,
@@ -439,7 +464,7 @@ export async function runCuratedIngest(): Promise<IngestResult> {
   for (const item of items) {
     const catalogId = item.catalogId
     try {
-      const r = await ingestCatalog(catalogId, storeId, item.manualByItemId)
+      const r = await ingestCatalog(catalogId, storeId, item.manualByItemId, simular)
       if (r.ok) {
         result.catalogs_ingested++
         result.offers_ingested += r.offers_ingested

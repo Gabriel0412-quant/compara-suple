@@ -48,9 +48,9 @@ describe('ML token vault', () => {
       ml_user_id: 437089518,
       token_key_version: 1,
       connection_state: 'connected',
-      access_token: null,
-      refresh_token: null,
     })
+    expect(written).not.toHaveProperty('access_token')
+    expect(written).not.toHaveProperty('refresh_token')
     expect(written?.token_payload).not.toContain(tokens.access_token)
     expect(written?.token_payload).not.toContain(tokens.refresh_token)
   })

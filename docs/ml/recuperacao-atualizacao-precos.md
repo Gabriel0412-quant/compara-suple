@@ -34,9 +34,12 @@ Valores nunca devem ser copiados para issue, PR, resposta HTTP ou log. A valida�
 - `GET /api/health` é o healthcheck público e não consulta integrações.
 - `GET /api/cron/ml-ingest` é chamado pelo Vercel Cron e exige `Authorization: Bearer ${CRON_SECRET}`.
 - `POST /api/cron/ml-ingest` permite recuperação manual com a mesma autenticação.
+- `GET /api/auth/ml/connection` devolve somente estado, expiração e códigos operacionais usando `ML_ADMIN_SECRET`.
+- `DELETE /api/auth/ml/connection` apaga atomicamente o payload criptografado usando `ML_ADMIN_SECRET`.
 - Ausência de configuração retorna `503 configuration_error`.
 - Ausência ou divergência de autorização retorna `401 unauthorized`.
 - Token ausente, expirado sem refresh ou resposta OAuth incompleta retorna `503 auth_required`.
+- Uma execução em que todos os catálogos falham retorna `500 ingestion_failed`; nunca `200` com zero trabalho.
 
 ## Procedimento de recuperação
 
@@ -68,6 +71,10 @@ Valores nunca devem ser copiados para issue, PR, resposta HTTP ou log. A valida�
 10. Conferir pelo menos três produtos contra as respostas atuais do Mercado Livre.
 11. Depois que o primeiro access token vencer, repetir a coleta sem novo login e confirmar atualização da expiração. Isso prova a rotação do refresh token.
 12. Observar a próxima execução das 09:00 UTC e registrar apenas horário, duração, totais e código de resultado.
+
+## Limite de catálogo curado
+
+`data/items.json` contém somente IDs de Catalog Product no formato `MLB` numérico. IDs `MLBU` são User Products vinculados a um vendedor e usam `/user-products`, com regras de acesso e descoberta de anúncios diferentes. Eles não podem ser enviados silenciosamente ao endpoint `/products`; precisam de um fluxo próprio antes de entrarem na lista diária.
 
 ## Diagnóstico por código
 

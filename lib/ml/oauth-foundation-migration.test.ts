@@ -3,7 +3,7 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const migration = readFileSync(
-  resolve(process.cwd(), 'supabase/migrations/0007_secure_ml_oauth_foundation.sql'),
+  resolve(process.cwd(), 'supabase/migrations/0008_secure_ml_oauth_foundation.sql'),
   'utf8',
 ).toLowerCase()
 

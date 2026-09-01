@@ -4,11 +4,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { checkMlAdminAuthorization } from '@/lib/ml/admin-auth'
 import { buildAuthUrl } from '@/lib/ml/oauth'
 import { createOAuthAttempt } from '@/lib/ml/oauth-attempt'
+import { logMlOAuthEvent } from '@/lib/ml/operational-event'
 import { loadMlTokenSecurityConfig } from '@/lib/ml/security-config'
 
 export const runtime = 'nodejs'
 
 export async function POST(req: NextRequest) {
+  const startedAt = Date.now()
   const authorization = checkMlAdminAuthorization(
     req.headers.get('authorization') ?? undefined,
   )
@@ -30,7 +32,11 @@ export async function POST(req: NextRequest) {
     const state = randomBytes(32).toString('base64url')
     const authUrl = buildAuthUrl(state)
     await createOAuthAttempt(state)
-    console.info('ml_oauth_event', { event: 'authorization_started' })
+    logMlOAuthEvent({
+      event: 'authorization',
+      result: 'started',
+      durationMs: Date.now() - startedAt,
+    })
     return NextResponse.json(
       { ok: true, authorization_url: authUrl },
       { status: 201 },
@@ -43,7 +49,12 @@ export async function POST(req: NextRequest) {
     const error = configurationError
       ? 'configuration_error'
       : 'authorization_start_failed'
-    console.error('ml_oauth_event', { event: error })
+    logMlOAuthEvent({
+      event: 'authorization',
+      result: 'failure',
+      durationMs: Date.now() - startedAt,
+      code: error,
+    })
     return NextResponse.json(
       { ok: false, error },
       { status: configurationError ? 503 : 500 },

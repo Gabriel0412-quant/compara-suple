@@ -224,4 +224,13 @@ describe('runCuratedIngest', () => {
     expect(resultado.catalogs_ingested).toBe(1)
     expect(resultado.offers_indisponibilizadas).toBe(3)
   })
+
+  it('propaga falhas de conexão em vez de escondê-las por catálogo', async () => {
+    getProduct.mockRejectedValue(new Error('ML_TOKEN_KEY_VERSION_UNAVAILABLE'))
+
+    await expect(runCuratedIngest())
+      .rejects.toThrowError('ML_TOKEN_KEY_VERSION_UNAVAILABLE')
+    expect(getProduct).toHaveBeenCalledOnce()
+    expect(rpc).not.toHaveBeenCalled()
+  })
 })

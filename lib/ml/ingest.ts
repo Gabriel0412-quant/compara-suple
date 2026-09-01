@@ -246,6 +246,13 @@ type CatalogResult =
       rejected_by_reason?: MlProductItemsSnapshot['rejectedByReason']
     }
 
+function isConnectionFailure(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return message.startsWith('ML_OAUTH_')
+    || message.startsWith('ML_TOKEN_')
+    || message.startsWith('ML_REFRESH_')
+}
+
 function logSnapshot(catalogId: string, snapshot: MlProductItemsSnapshot): void {
   console.info('ml_snapshot', {
     catalogId,
@@ -273,7 +280,8 @@ async function ingestCatalog(
   let product: MlCatalogProduct
   try {
     product = await getProduct(catalogId)
-  } catch {
+  } catch (error) {
+    if (isConnectionFailure(error)) throw error
     return { ok: false, status: 'product_error', reason: 'product_request_failed' }
   }
 
@@ -495,7 +503,8 @@ export async function runCuratedIngest(
           rejected_by_reason: r.rejected_by_reason,
         })
       }
-    } catch {
+    } catch (error) {
+      if (isConnectionFailure(error)) throw error
       result.per_catalog.push({
         catalog_id: catalogId,
         status: 'product_error',

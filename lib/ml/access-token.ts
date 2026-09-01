@@ -10,6 +10,7 @@ import {
   sealTokens,
   type SealedMlTokens,
 } from './token-vault'
+import { logMlOAuthEvent } from './operational-event'
 import type { MlTokens } from './token-response'
 
 const REFRESH_MARGIN_MS = 5 * 60 * 1000
@@ -91,8 +92,13 @@ export async function getEncryptedAccessToken(
     return waitForLeaseOwner(deps)
   }
 
+  const startedAt = deps.now()
   try {
-    console.info('ml_oauth_event', { event: 'refresh_started' })
+    logMlOAuthEvent({
+      event: 'refresh',
+      result: 'started',
+      durationMs: 0,
+    })
     const fresh = await deps.refreshTokens(current.refresh_token)
     const sealed = deps.sealTokens(fresh)
     const completed = await deps.completeLease({
@@ -105,7 +111,11 @@ export async function getEncryptedAccessToken(
     if (!completed) {
       throw new Error('ML_OAUTH_REFRESH_LEASE_LOST')
     }
-    console.info('ml_oauth_event', { event: 'refresh_succeeded' })
+    logMlOAuthEvent({
+      event: 'refresh',
+      result: 'success',
+      durationMs: deps.now() - startedAt,
+    })
     return fresh.access_token
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
@@ -118,10 +128,18 @@ export async function getEncryptedAccessToken(
         reconnectRequired,
       })
     } catch {
-      console.error('ml_oauth_event', { event: 'refresh_lease_release_failed' })
+      logMlOAuthEvent({
+        event: 'refresh_lease_release',
+        result: 'failure',
+        durationMs: deps.now() - startedAt,
+        code: 'release_failed',
+      })
     }
-    console.error('ml_oauth_event', {
-      event: reconnectRequired ? 'reconnect_required' : 'refresh_failed',
+    logMlOAuthEvent({
+      event: 'refresh',
+      result: 'failure',
+      durationMs: deps.now() - startedAt,
+      code: reconnectRequired ? 'invalid_grant' : 'refresh_failed',
     })
     if (reconnectRequired) {
       throw new Error('ML_OAUTH_RECONNECT_REQUIRED')

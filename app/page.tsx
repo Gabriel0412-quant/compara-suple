@@ -1,6 +1,7 @@
 import Link from 'next/link'
-import { Search, Flame, TrendingDown, Trophy } from 'lucide-react'
+import { Flame, TrendingDown, Trophy } from 'lucide-react'
 
+import CampoBusca from '@/components/CampoBusca'
 import Header from '@/components/Header'
 import { getProductsOnSale, type CategoryProduct } from '@/lib/categories'
 import { formatBRL } from '@/lib/products'
@@ -42,22 +43,18 @@ export default async function Home() {
               quilo lado a lado.
             </p>
 
-            <div className="flex flex-col sm:flex-row gap-2 mb-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Ex: whey protein, creatina..."
-                  className="w-full pl-10 pr-3 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
-                />
-              </div>
-              <Link
-                href="/comparar"
-                className="px-5 py-3 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition-colors whitespace-nowrap text-center"
-              >
-                Abrir comparador →
-              </Link>
-            </div>
+            <CampoBusca className="mb-3" />
+
+            <p className="text-sm text-gray-500 mb-4">
+              Ou{' '}
+              <Link href="/comparar" className="text-green-700 font-medium underline hover:text-green-800">
+                abra o comparador
+              </Link>{' '}
+              para ver produtos lado a lado, ou{' '}
+              <Link href="/ofertas" className="text-green-700 font-medium underline hover:text-green-800">
+                veja as ofertas do dia
+              </Link>.
+            </p>
 
             <div className="flex flex-wrap gap-2">
               {searchTags.map(tag => (
@@ -120,11 +117,22 @@ export default async function Home() {
               Alguns links são de afiliados. O preço que você paga é o mesmo.
             </p>
           </div>
-          <nav className="flex flex-wrap gap-x-6 gap-y-2 text-sm justify-center md:justify-end">
-            {['Sobre', 'Blog', 'Afiliados', 'Privacidade', 'Termos', 'Contato'].map(link => (
-              <a key={link} href="#" className="text-gray-400 hover:text-white transition-colors">
-                {link}
-              </a>
+          {/* Só destinos que existem. Os links institucionais (Sobre, Blog,
+              Privacidade, Termos, Contato) apontavam todos para "#": pareciam
+              navegação e não levavam a lugar nenhum. Voltam quando as páginas
+              existirem. */}
+          <nav
+            aria-label="Navegação do rodapé"
+            className="flex flex-wrap gap-x-6 gap-y-2 text-sm justify-center md:justify-end"
+          >
+            {[
+              { rotulo: 'Produtos', href: '/produtos' },
+              { rotulo: 'Ofertas', href: '/ofertas' },
+              { rotulo: 'Comparador', href: '/comparar' },
+            ].map(({ rotulo, href }) => (
+              <Link key={href} href={href} className="text-gray-400 hover:text-white transition-colors">
+                {rotulo}
+              </Link>
             ))}
           </nav>
         </div>

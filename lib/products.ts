@@ -145,6 +145,51 @@ export function compareOffers(a: OfferSortable, b: OfferSortable): number {
   return a.price - b.price
 }
 
+/**
+ * Seletores comerciais. São DOIS conceitos distintos, e confundi-los foi a
+ * origem do bug que este módulo passa a impedir: o card anunciava
+ * "menor preço entre N ofertas" exibindo o preço da oferta destacada, que em
+ * 7 de 13 variantes era mais cara que a mais barata — em um caso, R$ 59,50
+ * contra R$ 35,91.
+ *
+ * `featuredOffer` responde "qual oferta o ML coloca na frente" e é a que o
+ * usuário encontra ao chegar na loja.
+ * `lowestPriceOffer` responde "qual custa menos" — e é a única que pode
+ * sustentar as palavras "menor preço", "a partir de" e "economia".
+ *
+ * Ambas ignoram ofertas indisponíveis: uma oferta que saiu do ar não é
+ * comparável nem clicável.
+ */
+type OfferSelectable = OfferSortable & { available?: boolean; id?: number }
+
+const disponiveis = <T extends OfferSelectable>(offers: readonly T[]): T[] =>
+  offers.filter(o => o.available !== false)
+
+/** A oferta que o ML destaca. null quando não há oferta disponível. */
+export function featuredOffer<T extends OfferSelectable>(offers: readonly T[]): T | null {
+  const live = disponiveis(offers)
+  if (live.length === 0) return null
+  return [...live].sort(compareOffers)[0]
+}
+
+/**
+ * A oferta de menor preço entre as disponíveis.
+ *
+ * Desempate determinístico e documentado, como pede o EP02-06: preço, depois
+ * ml_rank (o ML já sinalizou preferência), depois id. Sem isso, dois preços
+ * iguais alternariam entre renderizações conforme a ordem do banco.
+ */
+export function lowestPriceOffer<T extends OfferSelectable>(offers: readonly T[]): T | null {
+  const live = disponiveis(offers)
+  if (live.length === 0) return null
+  return live.reduce((melhor, o) => {
+    if (o.price !== melhor.price) return o.price < melhor.price ? o : melhor
+    const rank = (o.ml_rank ?? Number.MAX_SAFE_INTEGER) - (melhor.ml_rank ?? Number.MAX_SAFE_INTEGER)
+    if (rank !== 0) return rank < 0 ? o : melhor
+    return (o.id ?? 0) < (melhor.id ?? 0) ? o : melhor
+  })
+}
+
 /** Helper — formata número em BRL. */
 export function formatBRL(value: number): string {
   return new Intl.NumberFormat('pt-BR', {
@@ -230,7 +275,10 @@ export type ProductLite = {
   name: string
   brand: string | null
   thumbnail: string | null
-  cheapestPrice: number | null
+  /** Preço da oferta destacada pelo ML. */
+  featuredPrice: number | null
+  /** Menor preço disponível. Pode diferir do destacado. */
+  lowestPrice: number | null
 }
 
 export async function getAllProductsLite(): Promise<ProductLite[]> {
@@ -239,7 +287,7 @@ export async function getAllProductsLite(): Promise<ProductLite[]> {
     .select(`
       id, slug, name,
       brand:brand_id ( name ),
-      variants:variant ( offers:offer ( price, ml_rank, raw ) )
+      variants:variant ( offers:offer ( id, price, available, ml_rank, raw ) )
     `)
     .order('id', { ascending: true })
 
@@ -254,7 +302,9 @@ export async function getAllProductsLite(): Promise<ProductLite[]> {
     brand: { name: string } | { name: string }[] | null
     variants: Array<{
       offers: Array<{
+        id: number
         price: number
+        available: boolean
         ml_rank: number | null
         raw: { thumbnail?: string; official_store_id?: number | null } | null
       }> | null
@@ -263,8 +313,8 @@ export async function getAllProductsLite(): Promise<ProductLite[]> {
 
   return (data as unknown as LiteRow[]).map(p => {
     const offers = (p.variants ?? []).flatMap(v => v.offers ?? [])
-    const sorted = [...offers].sort(compareOffers)
-    const featured = sorted[0]
+    const featured = featuredOffer(offers)
+    const lowest = lowestPriceOffer(offers)
     const brand = Array.isArray(p.brand) ? p.brand[0] : p.brand
     return {
       id: p.id,
@@ -272,7 +322,8 @@ export async function getAllProductsLite(): Promise<ProductLite[]> {
       name: p.name,
       brand: brand?.name ?? null,
       thumbnail: featured?.raw?.thumbnail ?? null,
-      cheapestPrice: featured?.price ?? null,
+      featuredPrice: featured?.price ?? null,
+      lowestPrice: lowest?.price ?? null,
     }
   })
 }

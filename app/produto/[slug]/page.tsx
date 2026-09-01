@@ -8,6 +8,8 @@ import { OffersSection } from '@/components/product/OffersSection'
 import {
   getProductBySlug,
   flattenOffers,
+  featuredOffer,
+  lowestPriceOffer,
   formatBRL,
   pricePerKg,
   pricePerDose,
@@ -50,8 +52,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!product) return { title: 'Produto não encontrado · ComparaSuple' }
 
   const offers = flattenOffers(product)
-  const cheapest = offers[0]
-  const priceTxt = cheapest ? ` a partir de ${formatBRL(cheapest.price)}` : ''
+  // "a partir de" é uma promessa de que não há nada mais barato. Só o menor
+  // preço pode sustentá-la — o destaque do ML costuma ser mais caro.
+  const lowest = lowestPriceOffer(offers)
+  const priceTxt = lowest ? ` a partir de ${formatBRL(lowest.price)}` : ''
 
   return {
     title: `${product.name} — Comparar preços${priceTxt} · ComparaSuple`,
@@ -99,34 +103,37 @@ export default async function ProductPage({ params }: Props) {
   const offers = flattenOffers(product)
   if (offers.length === 0) notFound()
 
-  const cheapest        = offers[0]
+  const featured        = featuredOffer(offers) ?? offers[0]
+  const lowest          = lowestPriceOffer(offers)
+  // Só contradiz o destaque quando existe algo realmente mais barato.
+  const temMaisBarata   = !!lowest && lowest.id !== featured.id && lowest.price < featured.price
   const primaryVariant  = product.variants[0]
   const sizeGrams       = primaryVariant?.size_grams ?? null
   const servings        = primaryVariant?.servings ?? null
-  const thumbnail       = cheapest.raw?.thumbnail ?? null
-  const originalPrice   = cheapest.raw?.original_price ?? null
-  const hasDiscount     = !!originalPrice && originalPrice > cheapest.price
+  const thumbnail       = featured.raw?.thumbnail ?? null
+  const originalPrice   = featured.raw?.original_price ?? null
+  const hasDiscount     = !!originalPrice && originalPrice > featured.price
   const descontoPct     = hasDiscount
-    ? Math.round((1 - cheapest.price / originalPrice) * 100)
+    ? Math.round((1 - featured.price / originalPrice) * 100)
     : 0
-  const perKgStr        = pricePerKg(cheapest.price, sizeGrams) ?? '—'
-  const perDoseStr      = pricePerDose(cheapest.price, servings)
+  const perKgStr        = pricePerKg(featured.price, sizeGrams) ?? '—'
+  const perDoseStr      = pricePerDose(featured.price, servings)
   const pesoTxt         = sizeGrams
     ? sizeGrams >= 1000 ? `${sizeGrams / 1000} kg` : `${sizeGrams} g`
     : '—'
-  const cheapestFreeShipping = !!cheapest.raw?.shipping?.free_shipping
-  const cheapestSellerLabel  = cheapest.raw?.official_store_id
+  const featuredFreeShipping = !!featured.raw?.shipping?.free_shipping
+  const featuredSellerLabel  = featured.raw?.official_store_id
     ? 'Loja Oficial'
-    : (cheapest.raw?.seller_address?.city?.name
-        ? `Vendedor em ${cheapest.raw.seller_address.city.name}`
+    : (featured.raw?.seller_address?.city?.name
+        ? `Vendedor em ${featured.raw.seller_address.city.name}`
         : 'Mercado Livre')
 
   // Chart mock — TODO: trocar quando tivermos histórico real (>30 dias)
   const chartPoints: Array<[number, number]> = [
-    [0,  cheapest.price * 1.10],
-    [30, cheapest.price * 1.05],
-    [60, cheapest.price * 1.02],
-    [90, cheapest.price],
+    [0,  featured.price * 1.10],
+    [30, featured.price * 1.05],
+    [60, featured.price * 1.02],
+    [90, featured.price],
   ]
   const linePts = chartPoints.map(([d, p]) => toSvg(d, p).join(',')).join(' ')
   const areaPts = [
@@ -217,7 +224,7 @@ export default async function ProductPage({ params }: Props) {
                 Menor preço entre {offers.length} {offers.length === 1 ? 'loja' : 'lojas'}
               </span>
               <span className="text-xs font-semibold text-gray-700 truncate max-w-[60%]">
-                {cheapestSellerLabel}
+                {featuredSellerLabel}
               </span>
             </div>
 
@@ -233,10 +240,20 @@ export default async function ProductPage({ params }: Props) {
                 </div>
               )}
               <p className="text-4xl font-bold text-green-600">
-                {formatBRL(cheapest.price)}
+                {formatBRL(featured.price)}
               </p>
+              {temMaisBarata && (
+                <a
+                  href={`/go/${lowest!.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer sponsored"
+                  className="inline-block text-sm font-semibold text-green-700 mt-1 hover:underline"
+                >
+                  Menor preço: {formatBRL(lowest!.price)} →
+                </a>
+              )}
               <p className="text-sm text-gray-400 mt-1">
-                {cheapestFreeShipping ? 'frete grátis na melhor oferta' : 'consulte frete na loja'}
+                {featuredFreeShipping ? 'frete grátis nesta oferta' : 'consulte frete na loja'}
                 {perDoseStr && (
                   <>
                     {' · '}
@@ -248,7 +265,7 @@ export default async function ProductPage({ params }: Props) {
 
             <div className="flex gap-2">
               <a
-                href={`/go/${cheapest.id}`}
+                href={`/go/${featured.id}`}
                 target="_blank"
                 rel="noopener noreferrer sponsored"
                 className="flex-1 py-3.5 bg-green-600 text-white rounded-xl font-semibold text-sm hover:bg-green-700 transition-colors text-center"
@@ -329,7 +346,7 @@ export default async function ProductPage({ params }: Props) {
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
               {[
-                { label: 'Atual',         value: formatBRL(cheapest.price), color: 'text-green-600' },
+                { label: 'Atual',         value: formatBRL(featured.price), color: 'text-green-600' },
                 { label: 'Mínimo 90d',    value: '—',                       color: 'text-gray-400' },
                 { label: 'Máximo 90d',    value: '—',                       color: 'text-gray-400' },
                 { label: 'Variação 30d',  value: '—',                       color: 'text-gray-400' },
@@ -358,7 +375,7 @@ export default async function ProductPage({ params }: Props) {
                   strokeLinecap="round"
                   strokeDasharray="5,5"
                 />
-                <circle cx={CHART_W} cy={toSvg(90, cheapest.price)[1]} r="5" fill="#16a34a" />
+                <circle cx={CHART_W} cy={toSvg(90, featured.price)[1]} r="5" fill="#16a34a" />
               </svg>
             </div>
 

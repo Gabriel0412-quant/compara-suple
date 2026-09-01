@@ -4,11 +4,17 @@ import type { CategoryProduct } from '@/lib/categories'
 
 export function ProductGridCard({ product }: { product: CategoryProduct }) {
   const hasDiscount =
-    product.cheapestOriginalPrice !== null &&
-    product.cheapestOriginalPrice > product.cheapestPrice
+    product.featuredOriginalPrice !== null &&
+    product.featuredOriginalPrice > product.featuredPrice
   const discountPct = hasDiscount
-    ? Math.round((1 - product.cheapestPrice / product.cheapestOriginalPrice!) * 100)
+    ? Math.round((1 - product.featuredPrice / product.featuredOriginalPrice!) * 100)
     : 0
+
+  // Só vale mostrar a linha de menor preço quando ela contradiz o destaque.
+  const temMaisBarata =
+    product.lowestPrice !== null &&
+    product.lowestOfferId !== null &&
+    product.lowestPrice < product.featuredPrice
 
   return (
     <article className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col">
@@ -61,23 +67,40 @@ export function ProductGridCard({ product }: { product: CategoryProduct }) {
           <div className="mb-3">
             <div className="flex items-baseline gap-2">
               <span className="text-2xl font-bold text-green-600">
-                {formatBRL(product.cheapestPrice)}
+                {formatBRL(product.featuredPrice)}
               </span>
-              {product.cheapestPerDose && (
+              {product.featuredPerDose && (
                 <span className="text-xs font-semibold text-green-700">
-                  {formatBRL(product.cheapestPerDose)}/dose
+                  {formatBRL(product.featuredPerDose)}/dose
                 </span>
               )}
             </div>
             {hasDiscount && (
               <span className="text-xs text-gray-400 line-through">
-                {formatBRL(product.cheapestOriginalPrice!)}
+                {formatBRL(product.featuredOriginalPrice!)}
               </span>
             )}
             <p className="text-[11px] text-gray-400 mt-1">
-              Menor preço entre {product.offerCount}{' '}
+              Destaque entre {product.offerCount}{' '}
               {product.offerCount === 1 ? 'oferta' : 'ofertas'}
             </p>
+
+            {/*
+              O preço acima é o da oferta destacada pelo Mercado Livre, que nem
+              sempre é a mais barata. Quando houver uma menor, ela aparece aqui
+              com link próprio — em vez de a legenda chamar o destaque de
+              "menor preço", que era falso em 7 de 13 variantes.
+            */}
+            {temMaisBarata && (
+              <a
+                href={`/go/${product.lowestOfferId}`}
+                target="_blank"
+                rel="noopener noreferrer sponsored"
+                className="inline-block text-[11px] font-semibold text-green-700 mt-1 hover:underline"
+              >
+                Menor preço: {formatBRL(product.lowestPrice!)} →
+              </a>
+            )}
           </div>
 
           <div className="flex gap-2">
@@ -88,7 +111,7 @@ export function ProductGridCard({ product }: { product: CategoryProduct }) {
               Comparar
             </Link>
             <a
-              href={product.cheapestOfferId ? `/go/${product.cheapestOfferId}` : '#'}
+              href={product.featuredOfferId ? `/go/${product.featuredOfferId}` : '#'}
               target="_blank"
               rel="noopener noreferrer sponsored"
               className="flex-1 text-center py-2.5 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition-colors"

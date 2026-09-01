@@ -1,5 +1,5 @@
 import { supabase } from './db'
-import { compareOffers, type Offer } from './products'
+import { featuredOffer, lowestPriceOffer, type Offer } from './products'
 
 /**
  * Categorias suportadas — slug → metadata + keywords pra matching.
@@ -131,14 +131,21 @@ export type CategoryProduct = {
   brand: string | null
   thumbnail: string | null
   offerCount: number
-  cheapestPrice: number
-  cheapestOriginalPrice: number | null
-  cheapestUrl: string
+  /** Oferta que o ML destaca: o preço grande do card e o destino do CTA. */
+  featuredPrice: number
+  featuredOriginalPrice: number | null
+  /**
+   * Menor preço entre as ofertas disponíveis. Pode ser MENOR que featuredPrice
+   * — em 7 de 13 variantes ele é. Só este número sustenta as palavras
+   * "menor preço" e "a partir de".
+   */
+  lowestPrice: number | null
+  lowestOfferId: number | null
   /** Oferta destacada, para o link /go de tracking. */
-  cheapestOfferId: number | null
+  featuredOfferId: number | null
   servings: number | null
   sizeGrams: number | null
-  cheapestPerDose: number | null
+  featuredPerDose: number | null
 }
 
 type RawVariant = {
@@ -162,8 +169,8 @@ function rowToCard(p: RawProduct): CategoryProduct {
   // Mesma lógica do PDP: respeitar ordem do ML (ml_rank), fallback oficial → preço.
   // Sem isto, card mostrava o seller mais barato (que ML não destaca), causando
   // dissonância entre preço listado e preço cobrado no clique.
-  const sortedOffers = [...allOffers].sort(compareOffers)
-  const featured = sortedOffers[0]
+  const featured = featuredOffer(allOffers)
+  const lowest = lowestPriceOffer(allOffers)
   const primaryVariant = p.variants?.[0]
   const servings = primaryVariant?.servings ?? null
   const sizeGrams = primaryVariant?.size_grams ?? null
@@ -176,13 +183,14 @@ function rowToCard(p: RawProduct): CategoryProduct {
     brand: brand?.name ?? null,
     thumbnail: featured?.raw?.thumbnail ?? null,
     offerCount: allOffers.length,
-    cheapestPrice: featured?.price ?? 0,
-    cheapestOriginalPrice: featured?.raw?.original_price ?? null,
-    cheapestUrl: featured?.url ?? '#',
-    cheapestOfferId: featured?.id ?? null,
+    featuredPrice: featured?.price ?? 0,
+    featuredOriginalPrice: featured?.raw?.original_price ?? null,
+    featuredOfferId: featured?.id ?? null,
+    lowestPrice: lowest?.price ?? null,
+    lowestOfferId: lowest?.id ?? null,
     servings,
     sizeGrams,
-    cheapestPerDose: servings && featured ? featured.price / servings : null,
+    featuredPerDose: servings && featured ? featured.price / servings : null,
   }
 }
 
@@ -211,7 +219,7 @@ export async function getProductsByCategory(
   return matching
     .map(rowToCard)
     .filter(p => p.offerCount > 0)
-    .sort((a, b) => a.cheapestPrice - b.cheapestPrice)
+    .sort((a, b) => a.featuredPrice - b.featuredPrice)
 }
 
 /** Lista produtos com pelo menos uma oferta em desconto (original_price > price). */
@@ -233,12 +241,12 @@ export async function getProductsOnSale(): Promise<CategoryProduct[]> {
     .map(rowToCard)
     .filter(p => {
       if (p.offerCount === 0) return false
-      if (!p.cheapestOriginalPrice) return false
-      return p.cheapestOriginalPrice > p.cheapestPrice
+      if (!p.featuredOriginalPrice) return false
+      return p.featuredOriginalPrice > p.featuredPrice
     })
     .sort((a, b) => {
-      const dA = (a.cheapestOriginalPrice ?? a.cheapestPrice) - a.cheapestPrice
-      const dB = (b.cheapestOriginalPrice ?? b.cheapestPrice) - b.cheapestPrice
+      const dA = (a.featuredOriginalPrice ?? a.featuredPrice) - a.featuredPrice
+      const dB = (b.featuredOriginalPrice ?? b.featuredPrice) - b.featuredPrice
       // sort by absolute discount, descending
       return dB - dA
     })

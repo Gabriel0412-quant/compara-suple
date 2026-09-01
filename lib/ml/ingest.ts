@@ -144,50 +144,53 @@ async function upsertVariant(opts: {
   return data!.id as number
 }
 
-async function upsertOfferAndHistory(opts: {
-  variantId: number
-  storeId: number
-  externalId: string
+export type ReconciliacaoContadores = {
+  recebidas: number
+  criadas: number
+  atualizadas: number
+  reativadas: number
+  indisponibilizadas: number
+  observado_em: string
+}
+
+type OfertaParaReconciliar = {
+  external_id: string
   url: string
   price: number
-  available: boolean
-  mlRank: number
+  ml_rank: number
   raw: unknown
-}): Promise<void> {
-  const { data: offer, error: offerErr } = await supabaseAdmin
-    .from('offer')
-    .upsert(
-      {
-        variant_id: opts.variantId,
-        store_id: opts.storeId,
-        external_id: opts.externalId,
-        url: opts.url,
-        price: opts.price,
-        available: opts.available,
-        ml_rank: opts.mlRank,
-        raw: opts.raw,
-        fetched_at: new Date().toISOString(),
-      },
-      { onConflict: 'store_id,external_id' },
-    )
-    .select('id')
-    .single()
-  if (offerErr || !offer) throw offerErr ?? new Error('upsert offer sem retorno')
-  const offerId = offer.id as number
+}
 
-  const today = new Date().toISOString().slice(0, 10)
-  const { error: histErr } = await supabaseAdmin
-    .from('price_history')
-    .upsert(
-      {
-        offer_id: offerId,
-        price: opts.price,
-        available: opts.available,
-        observed_at: today,
-      },
-      { onConflict: 'offer_id,observed_at' },
-    )
-  if (histErr) throw histErr
+const CONTADORES_ZERADOS: ReconciliacaoContadores = {
+  recebidas: 0,
+  criadas: 0,
+  atualizadas: 0,
+  reativadas: 0,
+  indisponibilizadas: 0,
+  observado_em: '',
+}
+
+/**
+ * Aplica o snapshot como o estado comercial completo do catálogo.
+ *
+ * Toda a escrita acontece dentro de reconciliar_catalogo: upsert das ofertas
+ * presentes, indisponibilização das ausentes e histórico do dia saem juntos ou
+ * não saem. Um array vazio é um snapshot válido e desativa o catálogo inteiro.
+ */
+async function reconciliarCatalogo(opts: {
+  storeId: number
+  catalogId: string
+  variantId: number | null
+  ofertas: OfertaParaReconciliar[]
+}): Promise<ReconciliacaoContadores> {
+  const { data, error } = await supabaseAdmin.rpc('reconciliar_catalogo', {
+    p_store_id: opts.storeId,
+    p_catalog_id: opts.catalogId,
+    p_variant_id: opts.variantId,
+    p_items: opts.ofertas,
+  })
+  if (error) throw error
+  return { ...CONTADORES_ZERADOS, ...(data as Partial<ReconciliacaoContadores>) }
 }
 
 // ---------- processamento de um catalog product ----------
@@ -198,6 +201,7 @@ type CatalogResult =
       status: 'success' | 'success_empty'
       offers_ingested: number
       offers_total: number
+      reconciliacao: ReconciliacaoContadores
       total_received: number
       pages_fetched: number
       rejected_by_reason: MlProductItemsSnapshot['rejectedByReason']
@@ -219,6 +223,14 @@ function logSnapshot(catalogId: string, snapshot: MlProductItemsSnapshot): void 
     pagesFetched: snapshot.pagesFetched,
     rejectedByReason: snapshot.rejectedByReason,
   })
+}
+
+function logReconciliacao(
+  catalogId: string,
+  status: 'success' | 'success_empty',
+  contadores: ReconciliacaoContadores,
+): void {
+  console.info('ml_reconciliacao', { catalogId, status, ...contadores })
 }
 
 async function ingestCatalog(
@@ -246,12 +258,22 @@ async function ingestCatalog(
     }
   }
 
+  // Snapshot válido e vazio é informação, não ausência de informação: o catálogo
+  // não tem mais oferta ativa, então todas as anteriores precisam cair.
   if (snapshot.status === 'success_empty') {
+    const reconciliacao = await reconciliarCatalogo({
+      storeId,
+      catalogId,
+      variantId: null,
+      ofertas: [],
+    })
+    logReconciliacao(catalogId, 'success_empty', reconciliacao)
     return {
       ok: true,
       status: 'success_empty',
       offers_ingested: 0,
       offers_total: 0,
+      reconciliacao,
       total_received: snapshot.totalReceived,
       pages_fetched: snapshot.pagesFetched,
       rejected_by_reason: snapshot.rejectedByReason,
@@ -281,19 +303,15 @@ async function ingestCatalog(
   //
   // IMPORTANTE: items vem em ordem específica do ML — primeiro = buy box winner.
   // Salvamos essa posição em ml_rank pra preservar o destaque do ML.
-  let ingested = 0
+  const ofertas: OfertaParaReconciliar[] = []
   for (const snapshotItem of snapshot.items) {
     if (snapshotItem.kind === 'invalid') continue
     const offer = snapshotItem.item
-    const url = affiliateUrl ?? buildMlCatalogLink(catalogId, offer.item_id)
-    await upsertOfferAndHistory({
-      variantId,
-      storeId,
-      externalId: offer.item_id,
-      url,
+    ofertas.push({
+      external_id: offer.item_id,
+      url: affiliateUrl ?? buildMlCatalogLink(catalogId, offer.item_id),
       price: offer.price,
-      available: true,  // /products/{id}/items só devolve ofertas ativas
-      mlRank: snapshotItem.mlRank,
+      ml_rank: snapshotItem.mlRank,
       raw: {
         ...offer,
         // enriquecemos com info do catalog product (não vem na oferta individual)
@@ -302,13 +320,21 @@ async function ingestCatalog(
         catalog_id: catalogId,
       },
     })
-    ingested++
   }
+
+  const reconciliacao = await reconciliarCatalogo({
+    storeId,
+    catalogId,
+    variantId,
+    ofertas,
+  })
+  logReconciliacao(catalogId, 'success', reconciliacao)
 
   return {
     ok: true,
     status: 'success',
-    offers_ingested: ingested,
+    offers_ingested: reconciliacao.criadas + reconciliacao.atualizadas + reconciliacao.reativadas,
+    reconciliacao,
     offers_total: snapshot.totalReceived,
     total_received: snapshot.totalReceived,
     pages_fetched: snapshot.pagesFetched,
@@ -324,10 +350,15 @@ export type IngestResult = {
   catalogIds: number
   catalogs_ingested: number
   offers_ingested: number
+  offers_criadas: number
+  offers_atualizadas: number
+  offers_reativadas: number
+  offers_indisponibilizadas: number
   per_catalog: Array<{
     catalog_id: string
     status: 'success' | 'success_empty' | 'upstream_error' | 'snapshot_invalid' | 'product_error'
     offers?: number
+    reconciliacao?: ReconciliacaoContadores
     reason?: string
     total_received?: number
     pages_fetched?: number
@@ -347,6 +378,10 @@ export async function runCuratedIngest(): Promise<IngestResult> {
     catalogIds: items.length,
     catalogs_ingested: 0,
     offers_ingested: 0,
+    offers_criadas: 0,
+    offers_atualizadas: 0,
+    offers_reativadas: 0,
+    offers_indisponibilizadas: 0,
     per_catalog: [],
   }
 
@@ -357,10 +392,15 @@ export async function runCuratedIngest(): Promise<IngestResult> {
       if (r.ok) {
         result.catalogs_ingested++
         result.offers_ingested += r.offers_ingested
+        result.offers_criadas += r.reconciliacao.criadas
+        result.offers_atualizadas += r.reconciliacao.atualizadas
+        result.offers_reativadas += r.reconciliacao.reativadas
+        result.offers_indisponibilizadas += r.reconciliacao.indisponibilizadas
         result.per_catalog.push({
           catalog_id: catalogId,
           status: r.status,
           offers: r.offers_ingested,
+          reconciliacao: r.reconciliacao,
           total_received: r.total_received,
           pages_fetched: r.pages_fetched,
           rejected_by_reason: r.rejected_by_reason,

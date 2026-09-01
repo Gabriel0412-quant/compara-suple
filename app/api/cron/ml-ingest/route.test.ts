@@ -14,6 +14,9 @@ const requiredEnv = {
   SUPABASE_SERVICE_ROLE_KEY: 'service-role',
   ML_APP_ID: 'app-id',
   ML_CLIENT_SECRET: 'client-secret',
+  ML_ALLOWED_USER_ID: '437089518',
+  ML_TOKEN_ENCRYPTION_KEY: Buffer.alloc(32, 1).toString('base64'),
+  ML_TOKEN_ENCRYPTION_KEY_VERSION: '1',
   CRON_SECRET: 'cron-secret',
 }
 

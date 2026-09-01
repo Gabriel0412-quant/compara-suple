@@ -136,6 +136,27 @@ describe('runCuratedIngest', () => {
       .toEqual(['MLB1', 'MLB3'])
   })
 
+  it('dá a cada oferta o link do seu próprio anúncio', async () => {
+    await runCuratedIngest()
+
+    const urls = chamadasRpc()[0].args.p_items.map((o: { url: string }) => o.url)
+    expect(new Set(urls).size).toBe(2)
+    expect(new URL(urls[0]).searchParams.get('wid')).toBe('MLB1')
+    expect(new URL(urls[1]).searchParams.get('wid')).toBe('MLB2')
+  })
+
+  it('conta o motivo de cada link e o total sem tag de afiliado', async () => {
+    const resultado = await runCuratedIngest()
+
+    expect(resultado.urls).toMatchObject({
+      manual: 0,
+      fallback_sem_manual: 4,
+      fallback_wid: 0,
+      sem_tag_de_afiliado: 4,
+    })
+    expect(resultado.per_catalog[0].urls?.fallback_sem_manual).toBe(2)
+  })
+
   it('repetir o mesmo snapshot produz exatamente o mesmo payload', async () => {
     await runCuratedIngest()
     const primeira = JSON.stringify(chamadasRpc()[0].args.p_items)

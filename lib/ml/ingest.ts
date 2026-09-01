@@ -1,8 +1,12 @@
 import { getProduct, getProductItems } from './client'
-import { buildMlCatalogLink } from '../affiliate'
 import { supabaseAdmin } from '../db-admin'
 import type { MlAttribute, MlCatalogProduct } from './types'
 import type { MlProductItemsSnapshot } from './snapshot'
+import {
+  newOfferUrlCounters,
+  resolveOfferUrl,
+  type OfferUrlCounters,
+} from './offer-url'
 import itemsData from '@/data/items.json'
 
 const ML_STORE_SLUG = 'mercado-livre'
@@ -11,25 +15,46 @@ const ML_STORE_SLUG = 'mercado-livre'
 
 type RawCatalog =
   | string
-  | { catalog_id?: string; id?: string; nota?: string; affiliate_url?: string }
+  | {
+      catalog_id?: string
+      id?: string
+      nota?: string
+      /** URLs curadas por item_id. Uma por anúncio — nunca uma para o catálogo. */
+      affiliate_urls?: Record<string, string>
+      /** Formato antigo: uma URL para o catálogo inteiro. Rejeitado. */
+      affiliate_url?: string
+    }
 
 export type CuratedItem = {
   catalogId: string
-  affiliateUrl?: string
+  /** item_id -> URL curada. Vazio quando o catálogo não tem link manual. */
+  manualByItemId: Record<string, string>
 }
 
 function loadCuratedItems(): CuratedItem[] {
   const raw = (itemsData as { items: RawCatalog[] }).items
   const items: CuratedItem[] = []
+  let compartilhadas = 0
   for (const entry of raw) {
     if (typeof entry === 'string') {
-      if (/^MLB(U)?[A-Z0-9]+$/i.test(entry)) items.push({ catalogId: entry })
+      if (/^MLB(U)?[A-Z0-9]+$/i.test(entry)) {
+        items.push({ catalogId: entry, manualByItemId: {} })
+      }
       continue
     }
     const id = entry.catalog_id ?? entry.id
-    if (typeof id === 'string' && /^MLB(U)?[A-Z0-9]+$/i.test(id)) {
-      items.push({ catalogId: id, affiliateUrl: entry.affiliate_url })
+    if (typeof id !== 'string' || !/^MLB(U)?[A-Z0-9]+$/i.test(id)) continue
+    // Uma URL no nível do catálogo iria para todas as ofertas dele e mandaria
+    // o comprador para o anúncio de outro vendedor. Nunca é aproveitável.
+    if (entry.affiliate_url) compartilhadas++
+    const manual: Record<string, string> = {}
+    for (const [itemId, url] of Object.entries(entry.affiliate_urls ?? {})) {
+      if (typeof url === 'string' && url) manual[itemId] = url
     }
+    items.push({ catalogId: id, manualByItemId: manual })
+  }
+  if (compartilhadas > 0) {
+    console.warn('ml_affiliate_url_compartilhada_ignorada', { catalogos: compartilhadas })
   }
   return items
 }
@@ -202,6 +227,7 @@ type CatalogResult =
       offers_ingested: number
       offers_total: number
       reconciliacao: ReconciliacaoContadores
+      urls: OfferUrlCounters
       total_received: number
       pages_fetched: number
       rejected_by_reason: MlProductItemsSnapshot['rejectedByReason']
@@ -236,7 +262,7 @@ function logReconciliacao(
 async function ingestCatalog(
   catalogId: string,
   storeId: number,
-  affiliateUrl?: string,
+  manualByItemId: Record<string, string>,
 ): Promise<CatalogResult> {
   let product: MlCatalogProduct
   try {
@@ -274,6 +300,7 @@ async function ingestCatalog(
       offers_ingested: 0,
       offers_total: 0,
       reconciliacao,
+      urls: newOfferUrlCounters(),
       total_received: snapshot.totalReceived,
       pages_fetched: snapshot.pagesFetched,
       rejected_by_reason: snapshot.rejectedByReason,
@@ -298,18 +325,27 @@ async function ingestCatalog(
   const productId = await upsertProduct({ catalogId, name: product.name, brandId })
   const variantId = await upsertVariant({ productId, flavor, sizeGrams, servings })
 
-  // Ofertas — usa affiliate_url do JSON quando presente (URL oficial do portal
-  // ML Afiliados, tracking garantido). Fallback constrói via tag do env.
+  // Ofertas — cada uma recebe a URL do seu próprio anúncio. A URL curada só
+  // vale quando o `wid` dela bate com o item_id; senão, construímos o link a
+  // partir de catalogId + item_id.
   //
   // IMPORTANTE: items vem em ordem específica do ML — primeiro = buy box winner.
   // Salvamos essa posição em ml_rank pra preservar o destaque do ML.
+  const urlCounters = newOfferUrlCounters()
   const ofertas: OfertaParaReconciliar[] = []
   for (const snapshotItem of snapshot.items) {
     if (snapshotItem.kind === 'invalid') continue
     const offer = snapshotItem.item
+    const link = resolveOfferUrl({
+      catalogId,
+      externalId: offer.item_id,
+      manualByItemId,
+    })
+    urlCounters[link.reason]++
+    if (!link.tracked) urlCounters.sem_tag_de_afiliado++
     ofertas.push({
       external_id: offer.item_id,
-      url: affiliateUrl ?? buildMlCatalogLink(catalogId, offer.item_id),
+      url: link.url,
       price: offer.price,
       ml_rank: snapshotItem.mlRank,
       raw: {
@@ -329,12 +365,16 @@ async function ingestCatalog(
     ofertas,
   })
   logReconciliacao(catalogId, 'success', reconciliacao)
+  // Só contadores: a URL afiliada completa carrega o token de rastreio e nunca
+  // entra em log.
+  console.info('ml_url_afiliada', { catalogId, ...urlCounters })
 
   return {
     ok: true,
     status: 'success',
     offers_ingested: reconciliacao.criadas + reconciliacao.atualizadas + reconciliacao.reativadas,
     reconciliacao,
+    urls: urlCounters,
     offers_total: snapshot.totalReceived,
     total_received: snapshot.totalReceived,
     pages_fetched: snapshot.pagesFetched,
@@ -354,11 +394,13 @@ export type IngestResult = {
   offers_atualizadas: number
   offers_reativadas: number
   offers_indisponibilizadas: number
+  urls: OfferUrlCounters
   per_catalog: Array<{
     catalog_id: string
     status: 'success' | 'success_empty' | 'upstream_error' | 'snapshot_invalid' | 'product_error'
     offers?: number
     reconciliacao?: ReconciliacaoContadores
+    urls?: OfferUrlCounters
     reason?: string
     total_received?: number
     pages_fetched?: number
@@ -372,6 +414,14 @@ export async function runCuratedIngest(): Promise<IngestResult> {
   const storeId = await getStoreId()
   const items = loadCuratedItems()
 
+  // Sem a tag, todo link sai válido mas sem atribuição: o clique acontece e a
+  // comissão não. É silencioso demais para não avisar.
+  if (!process.env.ML_AFFILIATE_TAG) {
+    console.warn('ml_affiliate_tag_ausente', {
+      efeito: 'links serao gerados sem atribuicao de afiliado',
+    })
+  }
+
   const result: IngestResult = {
     startedAt,
     durationMs: 0,
@@ -382,13 +432,14 @@ export async function runCuratedIngest(): Promise<IngestResult> {
     offers_atualizadas: 0,
     offers_reativadas: 0,
     offers_indisponibilizadas: 0,
+    urls: newOfferUrlCounters(),
     per_catalog: [],
   }
 
   for (const item of items) {
     const catalogId = item.catalogId
     try {
-      const r = await ingestCatalog(catalogId, storeId, item.affiliateUrl)
+      const r = await ingestCatalog(catalogId, storeId, item.manualByItemId)
       if (r.ok) {
         result.catalogs_ingested++
         result.offers_ingested += r.offers_ingested
@@ -396,11 +447,15 @@ export async function runCuratedIngest(): Promise<IngestResult> {
         result.offers_atualizadas += r.reconciliacao.atualizadas
         result.offers_reativadas += r.reconciliacao.reativadas
         result.offers_indisponibilizadas += r.reconciliacao.indisponibilizadas
+        for (const [motivo, n] of Object.entries(r.urls)) {
+          result.urls[motivo as keyof OfferUrlCounters] += n
+        }
         result.per_catalog.push({
           catalog_id: catalogId,
           status: r.status,
           offers: r.offers_ingested,
           reconciliacao: r.reconciliacao,
+          urls: r.urls,
           total_received: r.total_received,
           pages_fetched: r.pages_fetched,
           rejected_by_reason: r.rejected_by_reason,

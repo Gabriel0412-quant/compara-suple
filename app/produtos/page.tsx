@@ -3,6 +3,7 @@ import { headers } from 'next/headers'
 import Link from 'next/link'
 import { after } from 'next/server'
 
+import { Breadcrumb } from '@/components/Breadcrumb'
 import CampoBusca from '@/components/CampoBusca'
 import { ComoComparamos } from '@/components/ComoComparamos'
 import Header from '@/components/Header'
@@ -73,7 +74,14 @@ export default async function ProdutosPage({ searchParams }: Props) {
       <Header />
 
       <main className="max-w-7xl mx-auto px-4 py-10">
-        <div className="mb-8">
+        <Breadcrumb
+          items={[
+            { label: 'Início', href: '/' },
+            { label: termo ? `Busca: ${termo}` : 'Produtos' },
+          ]}
+        />
+
+        <div className="mb-8 mt-4">
           <h1 className="text-3xl font-bold text-gray-800 mb-2">
             {termo ? `Resultados para "${termo}"` : 'Produtos no comparador'}
           </h1>

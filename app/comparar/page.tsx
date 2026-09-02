@@ -31,14 +31,34 @@ import {
 } from '@/lib/products'
 
 export const dynamic = 'force-dynamic'
-export const metadata: Metadata = {
-  title: 'Comparador lado a lado · ComparaSuple',
-  description:
-    'Compare até 3 suplementos lado a lado: preço, R$/dose, R$/kg e ofertas. Escolha o melhor e veja onde comprar.',
-}
-
 type Props = {
   searchParams: Promise<{ ids?: string; selected?: string; q?: string }>
+}
+
+export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
+  const sp = await searchParams
+  const ids = parseIdsComparados(sp.ids)
+
+  if (ids.length === 0) {
+    return {
+      title: 'Comparador lado a lado · ComparaSuple',
+      description:
+        'Compare até 3 suplementos lado a lado: preço, R$/dose, R$/kg e ofertas. Escolha o melhor e veja onde comprar.',
+    }
+  }
+
+  /*
+    Cada seleção de produtos é uma URL distinta, e o catálogo gera muito mais
+    combinações do que páginas de conteúdo — todas mostrando o mesmo catálogo
+    rearranjado. Indexá-las produziria exatamente o que o #16 proíbe:
+    combinações ilimitadas e conteúdo duplicado concorrendo consigo. A raiz
+    `/comparar` continua indexável, porque é a página de verdade; as seleções
+    são estado, não conteúdo.
+  */
+  return {
+    title: `Comparação de ${ids.length} ${ids.length === 1 ? 'suplemento' : 'suplementos'} · ComparaSuple`,
+    robots: { index: false, follow: true },
+  }
 }
 
 // ---------- main page ----------

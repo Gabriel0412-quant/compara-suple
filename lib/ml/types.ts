@@ -1,7 +1,7 @@
 // Tipos da API do Mercado Livre que usamos.
 //
 // Estratégia em produção:
-//   1. data/items.json lista CATALOG product IDs (formato MLB ou MLBU)
+//   1. data/items.json lista IDs de catalog product (MLB) e user product (MLBU)
 //   2. Para cada catalog_id:
 //      - GET /products/{cat_id}            → metadata (nome, marca, atributos, fotos)
 //      - GET /products/{cat_id}/items      → lista de OFERTAS (N sellers, com preços)
@@ -39,6 +39,54 @@ export type MlCatalogProduct = {
   pictures?: MlPicture[]
   attributes: MlAttribute[]
   buy_box_winner: null | { item_id: string; price: number; permalink: string }
+}
+
+// ---------- /user-products/{id} ----------
+
+export type MlUserProduct = {
+  id: string
+  name: string
+  user_id: number
+  domain_id: string
+  family_id?: string | null
+  family_name?: string | null
+  status?: string
+  pictures?: MlPicture[]
+  attributes: MlAttribute[]
+}
+
+// ---------- /users/{sellerId}/items/search ----------
+
+export type MlSellerItemsSearchResponse = {
+  seller_id: number
+  paging: { total: number; offset: number; limit: number }
+  results: string[]
+}
+
+// ---------- /items/{id} ----------
+
+export type MlItemDetail = {
+  id: string
+  site_id: string
+  seller_id: number
+  price: number
+  original_price?: number | null
+  currency_id: string
+  category_id: string
+  condition: 'new' | 'used' | string
+  warranty?: string
+  listing_type_id: string
+  tags?: string[]
+  official_store_id?: number | null
+  accepts_mercadopago?: boolean
+  shipping?: MlProductItem['shipping']
+  seller_address?: MlProductItem['seller_address']
+  sale_terms?: MlProductItem['sale_terms']
+  user_product_id?: string
+  min_purchase_unit?: number
+  international_delivery_mode?: string
+  status?: string
+  available_quantity?: number
 }
 
 // ---------- /products/{id}/items ----------

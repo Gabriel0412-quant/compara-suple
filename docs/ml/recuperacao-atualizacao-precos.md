@@ -74,7 +74,13 @@ Valores nunca devem ser copiados para issue, PR, resposta HTTP ou log. A valida�
 
 ## Limite de catálogo curado
 
-`data/items.json` contém somente IDs de Catalog Product no formato `MLB` numérico. IDs `MLBU` são User Products vinculados a um vendedor e usam `/user-products`, com regras de acesso e descoberta de anúncios diferentes. Eles não podem ser enviados silenciosamente ao endpoint `/products`; precisam de um fluxo próprio antes de entrarem na lista diária.
+`data/items.json` aceita IDs de Catalog Product (`MLB`) e User Product (`MLBU`).
+Catalog products usam `/products/{id}/items`. User products usam
+`/user-products/{id}` para obter o vendedor,
+`/users/{seller_id}/items/search?user_product_id={id}` para descobrir os
+anúncios e `/items/{item_id}` para normalizar cada oferta. A classificação do
+identificador acontece antes da chamada externa, impedindo que um `MLBU` seja
+enviado silenciosamente ao endpoint `/products`.
 
 ## Diagnóstico por código
 

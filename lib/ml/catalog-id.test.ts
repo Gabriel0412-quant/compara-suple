@@ -44,8 +44,8 @@ describe('classificarIdCatalogo', () => {
 })
 
 describe('motivoDeRecusa', () => {
-  it('nomeia a recusa de user product', () => {
-    expect(motivoDeRecusa('user_product')).toBe('user_product_nao_suportado')
+  it('user product não é mais recusado', () => {
+    expect(motivoDeRecusa('user_product')).toBeNull()
   })
 
   it('nomeia a recusa de id inválido', () => {
@@ -59,34 +59,37 @@ describe('motivoDeRecusa', () => {
 })
 
 describe('loadCuratedItems separa o que dá para coletar', () => {
-  it('recusa user product e mantém os catalog products', () => {
+  it('mantém catalog products e user products', () => {
     const { items, recusados } = loadCuratedItems([
       { catalog_id: 'MLB19049048' },
       { catalog_id: 'MLBU3907661448' },
       { catalog_id: 'MLB6204289' },
     ])
-    expect(items.map(i => i.catalogId)).toEqual(['MLB19049048', 'MLB6204289'])
-    expect(recusados).toEqual([
-      { catalogId: 'MLBU3907661448', motivo: 'user_product_nao_suportado' },
+    expect(items.map(i => i.catalogId)).toEqual([
+      'MLB19049048',
+      'MLBU3907661448',
+      'MLB6204289',
     ])
+    expect(recusados).toEqual([])
   })
 
-  it('id inválido some sem virar recusa nomeada', () => {
-    // Lixo na lista não é a mesma coisa que um tipo que existe e não sabemos
-    // coletar: só o segundo merece linha no relatório.
+  it('id inválido vira recusa nomeada', () => {
     const { items, recusados } = loadCuratedItems([
       { catalog_id: 'MLA123' },
       { catalog_id: '' },
       { catalog_id: 'MLB1' },
     ])
     expect(items.map(i => i.catalogId)).toEqual(['MLB1'])
-    expect(recusados).toEqual([])
+    expect(recusados).toEqual([
+      { catalogId: 'MLA123', motivo: 'id_invalido' },
+      { catalogId: '', motivo: 'id_invalido' },
+    ])
   })
 
   it('aceita a forma de string simples', () => {
     const { items, recusados } = loadCuratedItems(['MLB1', 'MLBU2'])
-    expect(items.map(i => i.catalogId)).toEqual(['MLB1'])
-    expect(recusados.map(r => r.catalogId)).toEqual(['MLBU2'])
+    expect(items.map(i => i.catalogId)).toEqual(['MLB1', 'MLBU2'])
+    expect(recusados).toEqual([])
   })
 
   it('preserva as URLs curadas por item', () => {

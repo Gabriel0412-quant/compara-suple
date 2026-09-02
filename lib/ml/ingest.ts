@@ -1,4 +1,9 @@
-import { getProduct, getProductItems } from './client'
+import {
+  getProduct,
+  getProductItems,
+  getUserProduct,
+  getUserProductItems,
+} from './client'
 import { supabaseAdmin } from '../db-admin'
 import type { MlAttribute, MlCatalogProduct } from './types'
 import type { MlProductItemsSnapshot } from './snapshot'
@@ -44,19 +49,15 @@ export function loadCuratedItems(
   const recusados: ItemRecusado[] = []
   let compartilhadas = 0
 
-  /*
-    Um id que a ingestão não sabe coletar é recusado aqui, com o motivo, em vez
-    de seguir para `/products` e voltar como `product_error` — a mesma marca de
-    um catálogo fora do ar. Era o que acontecia com `MLBU3907661448`: a coleta
-    dizia 15 de 16 sem dizer que o 16º nunca teve chance.
-  */
+  // IDs inválidos são recusados antes de qualquer chamada externa. MLB e MLBU
+  // seguem para fluxos distintos dentro de ingestCatalog.
   const classificar = (id: unknown): id is string => {
     const tipo = classificarIdCatalogo(id)
     const motivo = motivoDeRecusa(tipo)
-    if (motivo === 'user_product_nao_suportado') {
+    if (motivo) {
       recusados.push({ catalogId: String(id).trim(), motivo })
     }
-    return tipo === 'catalog_product'
+    return tipo === 'catalog_product' || tipo === 'user_product'
   }
 
   for (const entry of raw) {
@@ -308,14 +309,31 @@ async function ingestCatalog(
   simular: boolean,
 ): Promise<CatalogResult> {
   let product: MlCatalogProduct
+  let snapshot: MlProductItemsSnapshot
   try {
-    product = await getProduct(catalogId)
+    if (classificarIdCatalogo(catalogId) === 'user_product') {
+      const userProduct = await getUserProduct(catalogId)
+      product = {
+        id: userProduct.id,
+        catalog_product_id: userProduct.id,
+        status: userProduct.status ?? 'active',
+        domain_id: userProduct.domain_id,
+        name: userProduct.name,
+        family_name: userProduct.family_name ?? undefined,
+        pictures: userProduct.pictures,
+        attributes: userProduct.attributes,
+        buy_box_winner: null,
+      }
+      snapshot = await getUserProductItems(catalogId, userProduct.user_id)
+    } else {
+      product = await getProduct(catalogId)
+      snapshot = await getProductItems(catalogId)
+    }
   } catch (error) {
     if (isConnectionFailure(error)) throw error
     return { ok: false, status: 'product_error', reason: 'product_request_failed' }
   }
 
-  const snapshot = await getProductItems(catalogId)
   logSnapshot(catalogId, snapshot)
   if (snapshot.status === 'upstream_error' || snapshot.status === 'snapshot_invalid') {
     return {

@@ -2,10 +2,12 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 
 import CampoBusca from '@/components/CampoBusca'
+import { ComoComparamos } from '@/components/ComoComparamos'
 import Header from '@/components/Header'
 import { ProductGridCard } from '@/components/category/ProductGridCard'
 import { filtrarPorTermo, parseTermoBusca } from '@/lib/busca'
 import { getAllProductCards } from '@/lib/categories'
+import { getCatalogStats } from '@/lib/stats'
 
 // Server component: consulta o Supabase a cada render, sem cache.
 export const dynamic = 'force-dynamic'
@@ -31,7 +33,10 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
 
 export default async function ProdutosPage({ searchParams }: Props) {
   const termo = parseTermoBusca((await searchParams).q)
-  const catalogo = await getAllProductCards()
+  const [catalogo, { lastUpdated }] = await Promise.all([
+    getAllProductCards(),
+    getCatalogStats(),
+  ])
 
   const resultados = filtrarPorTermo(catalogo, termo, produto => [
     produto.name,
@@ -58,6 +63,8 @@ export default async function ProdutosPage({ searchParams }: Props) {
 
           <CampoBusca termoInicial={termo} className="max-w-xl" />
         </div>
+
+        <ComoComparamos ultimaColeta={lastUpdated} className="mb-6 max-w-3xl" />
 
         {catalogoVazio && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-yellow-800 text-sm">

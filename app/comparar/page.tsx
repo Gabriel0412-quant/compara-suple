@@ -2,8 +2,10 @@ import Link from 'next/link'
 import type { Metadata } from 'next'
 import { Plus, X, Check, Trophy } from 'lucide-react'
 
+import { ComoComparamos } from '@/components/ComoComparamos'
 import Header from '@/components/Header'
 import { filtrarPorTermo, parseTermoBusca } from '@/lib/busca'
+import { getCatalogStats } from '@/lib/stats'
 import {
   MAX_SLOTS,
   buildCompararUrl,
@@ -60,7 +62,10 @@ export default async function CompararPage({ searchParams }: Props) {
   const selectedId = products.find(p => p.id === requestedSelected)?.id ?? products[0]?.id ?? null
   const selectedProduct = products.find(p => p.id === selectedId) ?? null
 
-  const allProducts = await getAllProductsLite()
+  const [allProducts, { lastUpdated }] = await Promise.all([
+    getAllProductsLite(),
+    getCatalogStats(),
+  ])
   /*
     Fora os que já estão na comparação, e fora os que a matriz recusaria.
     `lowestPrice` só é null quando nenhuma oferta do produto está disponível —
@@ -131,6 +136,8 @@ export default async function CompararPage({ searchParams }: Props) {
             hasAny={products.length > 0}
           />
         )}
+
+        <ComoComparamos ultimaColeta={lastUpdated} className="mb-4" />
 
         {selectedProduct && (
           <SellersOfSelected product={selectedProduct} />

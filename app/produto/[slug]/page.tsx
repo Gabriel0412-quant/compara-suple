@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 
+import { ComoComparamos } from '@/components/ComoComparamos'
 import Header from '@/components/Header'
 import { OffersSection } from '@/components/product/OffersSection'
 import {
@@ -136,6 +137,17 @@ export default async function ProductPage({ params }: Props) {
   if (!product) notFound()
 
   const offers = flattenOffers(product)
+
+  /*
+    A recência sai da própria oferta mais fresca deste produto, não de uma
+    consulta ao catálogo inteiro: é o dado que descreve o que está nesta tela, e
+    evita uma query a mais por página.
+  */
+  const ultimaColeta = offers.reduce<Date | null>((maisNova, o) => {
+    const d = new Date(o.fetched_at)
+    if (Number.isNaN(d.getTime())) return maisNova
+    return !maisNova || d > maisNova ? d : maisNova
+  }, null)
   // Produto existe, mas nenhuma oferta está ativa. `notFound()` seria mentira —
   // a página existe e deve continuar indexável. O EP02-05 pede estado explícito:
   // sem preço, sem economia e sem botão de compra apontando para anúncio morto.
@@ -365,6 +377,8 @@ export default async function ProductPage({ params }: Props) {
         {/* ── Offers table (client component com filtros) ──────────────────── */}
         <div className="mb-10">
           <OffersSection offers={offers} servings={servings} />
+
+          <ComoComparamos ultimaColeta={ultimaColeta} className="mt-4" />
         </div>
 
         {/* ── Lower section ────────────────────────────────────────────────── */}

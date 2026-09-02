@@ -8,6 +8,7 @@ import {
   type OfferUrlCounters,
 } from './offer-url'
 import itemsData from '@/data/items.json'
+import { classificarIdCatalogo, motivoDeRecusa, type MotivoNaoColetado } from './catalog-id'
 
 const ML_STORE_SLUG = 'mercado-livre'
 
@@ -31,19 +32,42 @@ export type CuratedItem = {
   manualByItemId: Record<string, string>
 }
 
-function loadCuratedItems(): CuratedItem[] {
-  const raw = (itemsData as { items: RawCatalog[] }).items
+/** Item da lista curada que a ingestão reconhece mas não sabe coletar. */
+export type ItemRecusado = { catalogId: string; motivo: MotivoNaoColetado }
+
+export type ListaCurada = { items: CuratedItem[]; recusados: ItemRecusado[] }
+
+export function loadCuratedItems(
+  raw: RawCatalog[] = (itemsData as { items: RawCatalog[] }).items,
+): ListaCurada {
   const items: CuratedItem[] = []
+  const recusados: ItemRecusado[] = []
   let compartilhadas = 0
+
+  /*
+    Um id que a ingestão não sabe coletar é recusado aqui, com o motivo, em vez
+    de seguir para `/products` e voltar como `product_error` — a mesma marca de
+    um catálogo fora do ar. Era o que acontecia com `MLBU3907661448`: a coleta
+    dizia 15 de 16 sem dizer que o 16º nunca teve chance.
+  */
+  const classificar = (id: unknown): id is string => {
+    const tipo = classificarIdCatalogo(id)
+    const motivo = motivoDeRecusa(tipo)
+    if (motivo === 'user_product_nao_suportado') {
+      recusados.push({ catalogId: String(id).trim(), motivo })
+    }
+    return tipo === 'catalog_product'
+  }
+
   for (const entry of raw) {
     if (typeof entry === 'string') {
-      if (/^MLB(U)?[A-Z0-9]+$/i.test(entry)) {
-        items.push({ catalogId: entry, manualByItemId: {} })
+      if (classificar(entry)) {
+        items.push({ catalogId: entry.trim(), manualByItemId: {} })
       }
       continue
     }
     const id = entry.catalog_id ?? entry.id
-    if (typeof id !== 'string' || !/^MLB(U)?[A-Z0-9]+$/i.test(id)) continue
+    if (!classificar(id)) continue
     // Uma URL no nível do catálogo iria para todas as ofertas dele e mandaria
     // o comprador para o anúncio de outro vendedor. Nunca é aproveitável.
     if (entry.affiliate_url) compartilhadas++
@@ -56,7 +80,13 @@ function loadCuratedItems(): CuratedItem[] {
   if (compartilhadas > 0) {
     console.warn('ml_affiliate_url_compartilhada_ignorada', { catalogos: compartilhadas })
   }
-  return items
+  if (recusados.length > 0) {
+    console.warn('ml_itens_nao_coletaveis', {
+      total: recusados.length,
+      motivos: recusados.map(r => r.motivo),
+    })
+  }
+  return { items, recusados }
 }
 
 // ---------- helpers ----------
@@ -415,7 +445,14 @@ export type IngestResult = {
   urls: OfferUrlCounters
   per_catalog: Array<{
     catalog_id: string
-    status: 'success' | 'success_empty' | 'upstream_error' | 'snapshot_invalid' | 'product_error'
+    status:
+      | 'success'
+      | 'success_empty'
+      | 'upstream_error'
+      | 'snapshot_invalid'
+      | 'product_error'
+      /** Reconhecido, mas a ingestão não sabe coletar este tipo de id. */
+      | 'nao_coletavel'
     offers?: number
     reconciliacao?: ReconciliacaoContadores
     urls?: OfferUrlCounters
@@ -444,7 +481,7 @@ export async function runCuratedIngest(
   const startedAt = new Date().toISOString()
   const t0 = Date.now()
   const storeId = await getStoreId()
-  const items = loadCuratedItems()
+  const { items, recusados } = loadCuratedItems()
 
   // Sem a tag, todo link sai válido mas sem atribuição: o clique acontece e a
   // comissão não. É silencioso demais para não avisar.
@@ -458,7 +495,7 @@ export async function runCuratedIngest(
     simulado: simular,
     startedAt,
     durationMs: 0,
-    catalogIds: items.length,
+    catalogIds: items.length + recusados.length,
     catalogs_ingested: 0,
     offers_ingested: 0,
     offers_criadas: 0,
@@ -467,6 +504,19 @@ export async function runCuratedIngest(
     offers_indisponibilizadas: 0,
     urls: newOfferUrlCounters(),
     per_catalog: [],
+  }
+
+  /*
+    Os recusados entram no relatório com o motivo. Sem isto, `catalogIds` e
+    `catalogs_ingested` fechariam a conta em silêncio e ninguém saberia que um
+    item da lista curada nunca foi tentado.
+  */
+  for (const recusado of recusados) {
+    result.per_catalog.push({
+      catalog_id: recusado.catalogId,
+      status: 'nao_coletavel',
+      reason: recusado.motivo,
+    })
   }
 
   for (const item of items) {

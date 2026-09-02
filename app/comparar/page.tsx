@@ -9,6 +9,7 @@ import {
   buildCompararUrl,
   destacarMelhor,
   parseIdsComparados,
+  separarComparaveis,
 } from '@/lib/comparador'
 import { Breadcrumb } from '@/components/Breadcrumb'
 import { OffersSection } from '@/components/product/OffersSection'
@@ -41,15 +42,33 @@ export default async function CompararPage({ searchParams }: Props) {
   const sp = await searchParams
   const ids = parseIdsComparados(sp.ids)
   const requestedSelected = parseInt(sp.selected ?? '', 10)
-  const products = await getProductsByIds(ids)
+  const encontrados = await getProductsByIds(ids)
+
+  /*
+    Produto sem nenhuma oferta comprável não entra na matriz: ocuparia um slot
+    para mostrar uma coluna de "não informado" e um botão que leva a uma lista
+    de lojas vazia. Mesmo critério que as listagens já aplicam.
+  */
+  const { comparaveis: products, descartados: semOferta } = separarComparaveis(
+    encontrados,
+    p => flattenOffers(p).length > 0,
+  )
+  // A partir daqui, só os ids que sobraram — para que os links não recriem a URL descartada.
+  const idsAtivos = products.map(p => p.id)
 
   // valida 'selected' contra ids reais; default = primeiro produto
   const selectedId = products.find(p => p.id === requestedSelected)?.id ?? products[0]?.id ?? null
   const selectedProduct = products.find(p => p.id === selectedId) ?? null
 
   const allProducts = await getAllProductsLite()
-  // Fora os que já estão na comparação — nunca oferecer duplicata no seletor.
-  const naoComparados = allProducts.filter(p => !ids.includes(p.id))
+  /*
+    Fora os que já estão na comparação, e fora os que a matriz recusaria.
+    `lowestPrice` só é null quando nenhuma oferta do produto está disponível —
+    `lowestPriceOffer` filtra por disponibilidade antes de escolher.
+  */
+  const naoComparados = allProducts.filter(
+    p => !idsAtivos.includes(p.id) && p.lowestPrice != null,
+  )
   const termo = parseTermoBusca(sp.q)
   const available = filtrarPorTermo(naoComparados, termo, p => [p.name, p.brand])
 
@@ -70,11 +89,27 @@ export default async function CompararPage({ searchParams }: Props) {
                 <span className="text-gray-500 font-normal text-sm">até 3 produtos lado a lado</span>
               </h1>
               <p className="text-[11px] text-gray-500 mt-0.5">
-                {ids.length}/{MAX_SLOTS} selecionados · ordem reflete o destaque do ML
+                {idsAtivos.length}/{MAX_SLOTS} selecionados · ordem reflete o destaque do ML
               </p>
             </div>
           </div>
         </header>
+
+        {/*
+          Dizer que um item saiu, e por quê. Sumir em silêncio faria o visitante
+          que salvou o link achar que o comparador perdeu a seleção dele.
+        */}
+        {semOferta > 0 && (
+          <p
+            role="status"
+            className="mb-4 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5"
+          >
+            {semOferta === 1
+              ? '1 produto saiu da comparação por não ter nenhuma oferta disponível agora.'
+              : `${semOferta} produtos saíram da comparação por não terem nenhuma oferta disponível agora.`}{' '}
+            Ofertas somem quando o anúncio sai do ar no Mercado Livre.
+          </p>
+        )}
 
         {products.length === 0 ? (
           <EmptyState />
@@ -82,16 +117,16 @@ export default async function CompararPage({ searchParams }: Props) {
           <ComparisonGrid
             products={products}
             selectedId={selectedId}
-            allIds={ids}
+            allIds={idsAtivos}
           />
         )}
 
-        {ids.length < MAX_SLOTS && (
+        {idsAtivos.length < MAX_SLOTS && (
           <AddProductPicker
             available={available}
             totalDisponivel={naoComparados.length}
             termo={termo}
-            currentIds={ids}
+            currentIds={idsAtivos}
             selectedId={selectedId}
             hasAny={products.length > 0}
           />

@@ -4,6 +4,7 @@ import {
   buildCompararUrl,
   destacarMelhor,
   parseIdsComparados,
+  separarComparaveis,
 } from './comparador'
 
 describe('parseIdsComparados', () => {
@@ -117,5 +118,39 @@ describe('destacarMelhor', () => {
 
   it('lista vazia não quebra', () => {
     expect(destacarMelhor([])).toEqual({ indices: [], motivo: 'sem-comparacao' })
+  })
+})
+
+describe('separarComparaveis', () => {
+  const temOferta = (p: { ofertas: number }) => p.ofertas > 0
+
+  it('mantém quem tem oferta e conta quem não tem', () => {
+    const r = separarComparaveis([{ ofertas: 3 }, { ofertas: 0 }, { ofertas: 1 }], temOferta)
+    expect(r.comparaveis).toEqual([{ ofertas: 3 }, { ofertas: 1 }])
+    expect(r.descartados).toBe(1)
+  })
+
+  it('todos sem oferta esvazia a comparação', () => {
+    const r = separarComparaveis([{ ofertas: 0 }, { ofertas: 0 }], temOferta)
+    expect(r.comparaveis).toEqual([])
+    expect(r.descartados).toBe(2)
+  })
+
+  it('todos com oferta não descarta ninguém', () => {
+    const r = separarComparaveis([{ ofertas: 1 }, { ofertas: 2 }], temOferta)
+    expect(r.comparaveis).toHaveLength(2)
+    expect(r.descartados).toBe(0)
+  })
+
+  it('lista vazia não descarta nada', () => {
+    expect(separarComparaveis([], temOferta)).toEqual({ comparaveis: [], descartados: 0 })
+  })
+
+  it('preserva a ordem dos que restam', () => {
+    const r = separarComparaveis(
+      [{ ofertas: 1 }, { ofertas: 0 }, { ofertas: 2 }, { ofertas: 3 }],
+      temOferta,
+    )
+    expect(r.comparaveis.map(p => p.ofertas)).toEqual([1, 2, 3])
   })
 })

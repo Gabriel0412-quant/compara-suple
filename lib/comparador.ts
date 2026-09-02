@@ -84,3 +84,23 @@ export function destacarMelhor(
 
   return { indices, motivo: null }
 }
+
+/**
+ * Separa o que dá para comparar do que não dá.
+ *
+ * Produto sem nenhuma oferta comprável ocupava um dos três slots e rendia uma
+ * coluna inteira de "não informado", com um botão "Escolher" que levava a uma
+ * lista de lojas vazia. Era invisível enquanto a reconciliação nunca tinha
+ * rodado — sem oferta marcada como indisponível, todo produto tinha o que
+ * mostrar. A coleta de 01/09 tirou 250 ofertas do ar e criou a condição.
+ *
+ * O critério é o mesmo que `/produtos`, `/categoria` e `/ofertas` já aplicam:
+ * sem oferta comprável, o produto não entra na listagem.
+ */
+export function separarComparaveis<T>(
+  itens: readonly T[],
+  temOfertaComprável: (item: T) => boolean,
+): { comparaveis: T[]; descartados: number } {
+  const comparaveis = itens.filter(temOfertaComprável)
+  return { comparaveis, descartados: itens.length - comparaveis.length }
+}

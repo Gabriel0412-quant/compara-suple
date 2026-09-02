@@ -1,17 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MlProductItemsSnapshot } from './snapshot'
 
-const { rpc, getProduct, getProductItems } = vi.hoisted(() => ({
+const { rpc, getProduct, getProductItems, getUserProduct, getUserProductItems } = vi.hoisted(() => ({
   rpc: vi.fn(),
   getProduct: vi.fn(),
   getProductItems: vi.fn(),
+  getUserProduct: vi.fn(),
+  getUserProductItems: vi.fn(),
 }))
 
 // Os upserts de brand/product/variant não são o objeto do teste: devolvemos ids
 // fixos e olhamos só para o que chega em reconciliar_catalogo.
-vi.mock('./client', () => ({ getProduct, getProductItems }))
+vi.mock('./client', () => ({
+  getProduct,
+  getProductItems,
+  getUserProduct,
+  getUserProductItems,
+}))
 vi.mock('@/data/items.json', () => ({
-  default: { items: ['MLB111', 'MLB222'] },
+  default: { items: ['MLB111', 'MLB222', 'MLBU333'] },
 }))
 vi.mock('@/lib/db-admin', () => {
   const single = () => Promise.resolve({ data: { id: 1 }, error: null })
@@ -72,6 +79,8 @@ describe('runCuratedIngest', () => {
     rpc.mockReset()
     getProduct.mockReset()
     getProductItems.mockReset()
+    getUserProduct.mockReset()
+    getUserProductItems.mockReset()
     rpc.mockResolvedValue({ data: contadores, error: null })
     getProduct.mockResolvedValue({
       name: 'Whey Isolado 900g',
@@ -79,13 +88,22 @@ describe('runCuratedIngest', () => {
       pictures: [{ url: 'https://img/1.jpg' }],
     })
     getProductItems.mockResolvedValue(snapshotOk(item('MLB1', 50, 0), item('MLB2', 60, 1)))
+    getUserProduct.mockResolvedValue({
+      id: 'MLBU333',
+      name: 'Daily Whey 800g',
+      user_id: 437089518,
+      domain_id: 'MLB-SUPPLEMENTS',
+      attributes: [{ id: 'BRAND', value_name: 'Growth' }],
+      pictures: [{ url: 'https://img/up.jpg' }],
+    })
+    getUserProductItems.mockResolvedValue(snapshotOk(item('MLB3', 70, 0), item('MLB4', 80, 1)))
   })
 
   it('envia o snapshot inteiro numa única chamada por catálogo', async () => {
     await runCuratedIngest()
 
     const calls = chamadasRpc()
-    expect(calls).toHaveLength(2)
+    expect(calls).toHaveLength(3)
     expect(calls[0].fn).toBe('reconciliar_catalogo')
     expect(calls[0].args.p_catalog_id).toBe('MLB111')
     expect(calls[0].args.p_items.map((o: { external_id: string }) => o.external_id))
@@ -95,6 +113,7 @@ describe('runCuratedIngest', () => {
 
   it('reconcilia com lista vazia quando o catálogo não tem mais ofertas', async () => {
     getProductItems.mockResolvedValue(snapshotVazio())
+    getUserProductItems.mockResolvedValue(snapshotVazio())
     rpc.mockResolvedValue({ data: contadoresVazios, error: null })
 
     const resultado = await runCuratedIngest()
@@ -102,7 +121,7 @@ describe('runCuratedIngest', () => {
     expect(chamadasRpc()[0].args.p_items).toEqual([])
     expect(chamadasRpc()[0].args.p_variant_id).toBeNull()
     expect(resultado.per_catalog[0].status).toBe('success_empty')
-    expect(resultado.offers_indisponibilizadas).toBe(10)
+    expect(resultado.offers_indisponibilizadas).toBe(15)
   })
 
   it.each([
@@ -110,6 +129,13 @@ describe('runCuratedIngest', () => {
     ['snapshot_invalid', 'incomplete_page'],
   ] as const)('não escreve nada quando o snapshot é %s', async (status, reason) => {
     getProductItems.mockResolvedValue({
+      status, reason, totalReceived: 0, pagesFetched: 1,
+      rejectedByReason: {
+        invalid_item_id: 0, invalid_seller_id: 0, invalid_price: 0,
+        invalid_currency: 0, invalid_condition: 0,
+      },
+    } as MlProductItemsSnapshot)
+    getUserProductItems.mockResolvedValue({
       status, reason, totalReceived: 0, pagesFetched: 1,
       rejectedByReason: {
         invalid_item_id: 0, invalid_seller_id: 0, invalid_price: 0,
@@ -151,9 +177,9 @@ describe('runCuratedIngest', () => {
 
     expect(resultado.urls).toMatchObject({
       manual: 0,
-      fallback_sem_manual: 4,
+      fallback_sem_manual: 6,
       fallback_wid: 0,
-      sem_tag_de_afiliado: 4,
+      sem_tag_de_afiliado: 6,
     })
     expect(resultado.per_catalog[0].urls?.fallback_sem_manual).toBe(2)
   })
@@ -172,12 +198,12 @@ describe('runCuratedIngest', () => {
     const resultado = await runCuratedIngest()
 
     expect(resultado).toMatchObject({
-      catalogs_ingested: 2,
-      offers_criadas: 2,
-      offers_atualizadas: 2,
+      catalogs_ingested: 3,
+      offers_criadas: 3,
+      offers_atualizadas: 3,
       offers_reativadas: 0,
-      offers_indisponibilizadas: 6,
-      offers_ingested: 4,
+      offers_indisponibilizadas: 9,
+      offers_ingested: 6,
     })
     expect(resultado.per_catalog[0].reconciliacao).toEqual(contadores)
   })
@@ -221,8 +247,8 @@ describe('runCuratedIngest', () => {
       reason: 'persistence_failed',
     })
     expect(resultado.per_catalog[1].status).toBe('success')
-    expect(resultado.catalogs_ingested).toBe(1)
-    expect(resultado.offers_indisponibilizadas).toBe(3)
+    expect(resultado.catalogs_ingested).toBe(2)
+    expect(resultado.offers_indisponibilizadas).toBe(6)
   })
 
   it('propaga falhas de conexão em vez de escondê-las por catálogo', async () => {
@@ -232,5 +258,18 @@ describe('runCuratedIngest', () => {
       .rejects.toThrowError('ML_TOKEN_KEY_VERSION_UNAVAILABLE')
     expect(getProduct).toHaveBeenCalledOnce()
     expect(rpc).not.toHaveBeenCalled()
+  })
+
+  it('usa o fluxo próprio para user product', async () => {
+    await runCuratedIngest()
+
+    expect(getUserProduct).toHaveBeenCalledWith('MLBU333')
+    expect(getUserProductItems).toHaveBeenCalledWith('MLBU333', 437089518)
+    expect(getProduct).not.toHaveBeenCalledWith('MLBU333')
+    expect(chamadasRpc()[2].args).toMatchObject({
+      p_catalog_id: 'MLBU333',
+    })
+    expect(chamadasRpc()[2].args.p_items.map((offer: { external_id: string }) => offer.external_id))
+      .toEqual(['MLB3', 'MLB4'])
   })
 })

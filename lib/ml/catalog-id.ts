@@ -5,8 +5,8 @@
  *
  * - **Catalog product** (`MLB` + dígitos) — `/products/{id}` e
  *   `/products/{id}/items`. É o que a ingestão sabe coletar.
- * - **User product** (`MLBU` + dígitos) — vinculado a um vendedor, atendido por
- *   `/user-products`, com regras próprias de acesso e de descoberta de anúncios.
+ * - **User product** (`MLBU` + dígitos) — `/user-products/{id}` e busca dos
+ *   anúncios do vendedor por `user_product_id`.
  *
  * A validação anterior era `/^MLB(U)?[A-Z0-9]+$/i`, que aceita os dois e trata
  * como iguais. Um `MLBU` entrava na lista curada e ia direto para `/products`,
@@ -15,15 +15,13 @@
  * Mercado Livre. Foi o que aconteceu com `MLBU3907661448`: a coleta relatava
  * 15 de 16 sem dizer que o item restante nunca teve chance.
  *
- * Distinguir aqui não faz a coleta de user products funcionar — isso depende do
- * endpoint `/user-products`, ainda não implementado. Faz a recusa ser explícita
- * e nomeada, em vez de silenciosa e confundida com erro de rede.
+ * A distinção escolhe o fluxo correto sem mandar um MLBU para `/products`.
  */
 
 export type TipoDeCatalogo =
   /** `/products/{id}` — o caminho que a ingestão implementa. */
   | 'catalog_product'
-  /** `/user-products` — reconhecido, ainda não coletado. */
+  /** `/user-products/{id}` — coletado pelo fluxo próprio do vendedor. */
   | 'user_product'
   /** Não é identificador de catálogo do Mercado Livre. */
   | 'desconhecido'
@@ -41,10 +39,9 @@ export function classificarIdCatalogo(id: unknown): TipoDeCatalogo {
 }
 
 /** Motivo pelo qual um item curado não chegou a ser coletado. */
-export type MotivoNaoColetado = 'user_product_nao_suportado' | 'id_invalido'
+export type MotivoNaoColetado = 'id_invalido'
 
 export function motivoDeRecusa(tipo: TipoDeCatalogo): MotivoNaoColetado | null {
-  if (tipo === 'user_product') return 'user_product_nao_suportado'
   if (tipo === 'desconhecido') return 'id_invalido'
   return null
 }

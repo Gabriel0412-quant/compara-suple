@@ -1,7 +1,10 @@
 import type {
   MlCatalogProduct,
+  MlItemDetail,
   MlProductItemsResponse,
   MlCatalogProductSearchResponse,
+  MlSellerItemsSearchResponse,
+  MlUserProduct,
 } from './types'
 import { getValidAccessToken } from './oauth'
 import {
@@ -90,6 +93,82 @@ async function getProductItemsPage(
 
 export function getProductItems(catalogId: string): Promise<MlProductItemsSnapshot> {
   return collectMlProductItemsSnapshot(catalogId, getProductItemsPage)
+}
+
+// ---------- user product + anúncios do vendedor ----------
+
+export async function getUserProduct(userProductId: string): Promise<MlUserProduct> {
+  return fetchJson<MlUserProduct>(
+    `${ML_BASE}/user-products/${encodeURIComponent(userProductId)}`,
+  )
+}
+
+function normalizeUserProductItem(
+  item: MlItemDetail,
+  userProductId: string,
+): MlProductItemsResponse['results'][number] {
+  return {
+    item_id: item.id,
+    site_id: item.site_id,
+    seller_id: item.seller_id,
+    price: item.price,
+    original_price: item.original_price ?? null,
+    currency_id: item.currency_id,
+    category_id: item.category_id,
+    condition: item.condition,
+    warranty: item.warranty,
+    listing_type_id: item.listing_type_id,
+    tags: item.tags,
+    official_store_id: item.official_store_id ?? null,
+    accepts_mercadopago: item.accepts_mercadopago,
+    shipping: item.shipping,
+    seller_address: item.seller_address,
+    sale_terms: item.sale_terms,
+    user_product_id: item.user_product_id ?? userProductId,
+    min_purchase_unit: item.min_purchase_unit,
+    international_delivery_mode: item.international_delivery_mode,
+  }
+}
+
+async function getUserProductItemsPage(
+  userProductId: string,
+  sellerId: number,
+  options: { offset: number; limit: number },
+): Promise<MlProductItemsResponse> {
+  const params = new URLSearchParams({
+    user_product_id: userProductId,
+    status: 'active',
+    offset: String(options.offset),
+    limit: String(options.limit),
+  })
+  const search = await fetchJson<MlSellerItemsSearchResponse>(
+    `${ML_BASE}/users/${sellerId}/items/search?${params.toString()}`,
+  )
+  const details: MlItemDetail[] = []
+  for (const itemId of search.results) {
+    const item = await fetchJson<MlItemDetail>(
+      `${ML_BASE}/items/${encodeURIComponent(itemId)}`,
+    )
+    details.push(item)
+  }
+  return {
+    paging: {
+      total: search.paging.total,
+      offset: search.paging.offset,
+      limit: search.paging.limit,
+    },
+    results: details.map(item => normalizeUserProductItem(item, userProductId)),
+  }
+}
+
+export function getUserProductItems(
+  userProductId: string,
+  sellerId: number,
+): Promise<MlProductItemsSnapshot> {
+  return collectMlProductItemsSnapshot(
+    userProductId,
+    (id, options) => getUserProductItemsPage(id, sellerId, options),
+  )
 }
 
 // ---------- descoberta (futuro, não usado pelo ingest atual) ----------

@@ -3,9 +3,11 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 
+import { Breadcrumb } from '@/components/Breadcrumb'
 import { ComoComparamos } from '@/components/ComoComparamos'
 import Header from '@/components/Header'
 import { OffersSection } from '@/components/product/OffersSection'
+import { categoriaDoProduto } from '@/lib/categories'
 import {
   getProductBySlug,
   flattenOffers,
@@ -143,6 +145,8 @@ export default async function ProductPage({ params }: Props) {
     consulta ao catálogo inteiro: é o dado que descreve o que está nesta tela, e
     evita uma query a mais por página.
   */
+  const categoria = categoriaDoProduto(product.name)
+
   const ultimaColeta = offers.reduce<Date | null>((maisNova, o) => {
     const d = new Date(o.fetched_at)
     if (Number.isNaN(d.getTime())) return maisNova
@@ -195,14 +199,22 @@ export default async function ProductPage({ params }: Props) {
     <div className="min-h-screen bg-gray-50 text-gray-800">
       <Header />
 
-      {/* Breadcrumb */}
-      <nav className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-1 text-xs text-gray-500 flex-wrap">
-        <Link href="/" className="hover:text-green-600 transition-colors">Suplementos</Link>
-        <ChevronRight className="w-3 h-3 shrink-0" />
-        <Link href="/produtos" className="hover:text-green-600 transition-colors">Produtos</Link>
-        <ChevronRight className="w-3 h-3 shrink-0" />
-        <span className="text-gray-800 font-medium truncate max-w-md">{product.name}</span>
-      </nav>
+      {/*
+        A trilha passa pela categoria, e não direto de "Produtos" para o
+        produto: é assim que a hierarquia do catálogo fica legível — para quem
+        quer subir um nível e para quem rastreia o site. Usa o mesmo componente
+        das outras páginas, que traz `aria-label` e `aria-current`; a versão
+        anterior era um <nav> sem rótulo, invisível para leitor de tela.
+      */}
+      <div className="max-w-7xl mx-auto px-4 py-3">
+        <Breadcrumb
+          items={[
+            { label: 'Início', href: '/' },
+            ...(categoria ? [{ label: categoria.name, href: `/categoria/${categoria.slug}` }] : []),
+            { label: product.name },
+          ]}
+        />
+      </div>
 
       <main className="max-w-7xl mx-auto px-4 pb-12">
 
@@ -377,6 +389,29 @@ export default async function ProductPage({ params }: Props) {
         {/* ── Offers table (client component com filtros) ──────────────────── */}
         <div className="mb-10">
           <OffersSection offers={offers} servings={servings} />
+
+          {/*
+            O caminho produto → comparação não existia: dava para chegar ao
+            comparador vazio pela home, nunca a partir do produto que se está
+            olhando. O link já leva este produto dentro, e a categoria dá o
+            passo lateral para alternativas.
+          */}
+          <nav className="mt-4 flex flex-wrap gap-2 text-sm">
+            <Link
+              href={`/comparar?ids=${product.id}`}
+              className="px-4 py-2 border border-green-600 text-green-700 rounded-xl font-semibold hover:bg-green-600 hover:text-white transition-colors"
+            >
+              Comparar com outros suplementos
+            </Link>
+            {categoria && (
+              <Link
+                href={`/categoria/${categoria.slug}`}
+                className="px-4 py-2 border border-gray-200 text-gray-700 rounded-xl font-semibold hover:border-green-600 hover:text-green-600 transition-colors"
+              >
+                Ver todos de {categoria.name}
+              </Link>
+            )}
+          </nav>
 
           <ComoComparamos ultimaColeta={ultimaColeta} className="mt-4" />
         </div>

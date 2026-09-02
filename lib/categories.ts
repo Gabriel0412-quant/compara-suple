@@ -232,9 +232,26 @@ export async function getAllProductCards(): Promise<CategoryProduct[]> {
 }
 
 /** Um produto pertence à categoria quando o nome contém alguma keyword dela. */
-function produtoCasaCategoria(nome: string, categoria: Category): boolean {
+export function produtoCasaCategoria(nome: string, categoria: Category): boolean {
   const nomeLower = nome.toLowerCase()
   return categoria.keywords.some(kw => nomeLower.includes(kw.toLowerCase()))
+}
+
+/**
+ * A categoria a que um produto pertence, ou null quando nenhuma casa.
+ *
+ * Existe para a página de produto conseguir montar a trilha
+ * início → categoria → produto. Sem ela, o Google chega ao produto sem nada
+ * dizendo onde ele fica na hierarquia, e o visitante não tem como subir um
+ * nível.
+ *
+ * Um produto pode casar com mais de uma categoria — "Whey Protein Isolado"
+ * casa com whey; um pré-treino com beta-alanina na fórmula casaria com os
+ * dois. Devolvemos a primeira da ordem declarada em CATEGORIES, que é a mais
+ * específica primeiro, para que a trilha seja estável entre renderizações.
+ */
+export function categoriaDoProduto(nome: string): Category | null {
+  return listCategories().find(c => produtoCasaCategoria(nome, c)) ?? null
 }
 
 /**

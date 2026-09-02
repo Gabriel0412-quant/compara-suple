@@ -211,9 +211,6 @@ export function OffersSection({
                     {/* Entrega */}
                     <td className="px-4 py-3">
                       <p className="text-xs text-gray-600">{loja.entrega}</p>
-                      <p className={`text-[10px] font-semibold ${loja.estoqueColor}`}>
-                        {loja.estoque}
-                      </p>
                     </td>
 
                     {/* Ação */}

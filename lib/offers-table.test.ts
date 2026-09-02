@@ -99,3 +99,29 @@ describe('offerToRow', () => {
     expect(offerToRow(MAIS_BARATA).nome).toBe('Vendedor em Curitiba')
   })
 })
+
+describe('a linha de oferta não afirma o que não sabe', () => {
+  it('não carrega estoque', () => {
+    // `offerToRow` devolvia `estoque: 'Em estoque'` fixo, em verde, para toda
+    // oferta — a tabela afirmava disponibilidade para 6 lojas sem nenhum campo
+    // por trás. A API do Mercado Livre não devolve esse dado no snapshot que
+    // coletamos; então a linha não deve ter onde guardá-lo.
+    const row = offerToRow(offer({ id: 1, price: 100 })) as Record<string, unknown>
+    expect(row).not.toHaveProperty('estoque')
+    expect(row).not.toHaveProperty('estoqueColor')
+  })
+
+  it('só marca frete grátis quando o campo diz isso', () => {
+    expect(offerToRow(offer({ id: 1, price: 100 })).freeShipping).toBe(false)
+    expect(
+      offerToRow(offer({ id: 2, price: 100, raw: { shipping: { free_shipping: true } } })).freeShipping,
+    ).toBe(true)
+  })
+
+  it('só marca loja oficial quando há official_store_id', () => {
+    expect(offerToRow(offer({ id: 1, price: 100 })).isOfficial).toBe(false)
+    expect(
+      offerToRow(offer({ id: 2, price: 100, raw: { official_store_id: 7 } })).isOfficial,
+    ).toBe(true)
+  })
+})

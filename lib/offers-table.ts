@@ -22,8 +22,6 @@ export type OfferRow = {
   preco: number
   originalPrice: number | null
   entrega: string
-  estoque: string
-  estoqueColor: string
   city: string | null
   state: string | null
   url: string
@@ -69,8 +67,6 @@ export function offerToRow(offer: Offer): OfferRow {
     preco: offer.price,
     originalPrice: offer.raw?.original_price ?? null,
     entrega: derivaEntrega(offer.raw?.shipping?.logistic_type),
-    estoque: 'Em estoque',
-    estoqueColor: 'text-green-600',
     city,
     state,
     url: offer.url,

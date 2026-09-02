@@ -1,4 +1,4 @@
-import { Star, Heart, Bell, ChevronRight } from 'lucide-react'
+import { Star, Bell, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
@@ -301,28 +301,37 @@ export default async function ProductPage({ params }: Props) {
               </p>
             </div>
 
-            <div className="flex gap-2">
-              <a
-                href={`/go/${featured.id}`}
-                target="_blank"
-                rel="noopener noreferrer sponsored"
-                className="flex-1 py-3.5 bg-green-600 text-white rounded-xl font-semibold text-sm hover:bg-green-700 transition-colors text-center"
-              >
-                Comprar agora →
-              </a>
-              <button className="w-12 h-12 rounded-xl border-2 border-gray-200 flex items-center justify-center text-gray-400 hover:border-red-300 hover:text-red-400 transition-colors">
-                <Heart className="w-5 h-5" />
-              </button>
-              <button className="w-12 h-12 rounded-xl border-2 border-gray-200 flex items-center justify-center text-gray-400 hover:border-green-600 hover:text-green-600 transition-colors">
-                <Bell className="w-5 h-5" />
-              </button>
-            </div>
+            {/*
+              O CTA diz para onde leva. "Comprar agora" sugeria que a compra
+              acontece aqui; ela acontece no Mercado Livre, e a página não tem
+              checkout nenhum. Os dois botões que ficavam ao lado — favoritar e
+              avisar — não tinham ação alguma: nem handler, nem `disabled`.
+              Pareciam funcionais e não eram. O aviso de preço honesto, marcado
+              como "em breve", continua mais abaixo.
+            */}
+            <a
+              href={`/go/${featured.id}`}
+              target="_blank"
+              rel="noopener noreferrer sponsored"
+              className="block w-full py-3.5 bg-green-600 text-white rounded-xl font-semibold text-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-600 focus:ring-offset-2 transition-colors text-center"
+            >
+              Ver oferta no Mercado Livre
+              <span className="font-normal opacity-90"> (abre em nova aba)</span>
+            </a>
 
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
-              <span>✓ Compra segura no ML</span>
-              <span>✓ Link de afiliado</span>
-              <span>✓ Atualizado diariamente</span>
-            </div>
+            {/*
+              Divulgação, não selo. "✓ Link de afiliado" usava a marca de item
+              verificado para o que é uma informação que devemos ao visitante, e
+              afirmava algo que hoje é falso: nenhuma das URLs coletadas carrega
+              tag de afiliado (ver #54). "Compra segura no ML" era promessa que
+              não temos como sustentar — não auditamos a segurança do Mercado
+              Livre. Sobra o que é verificável.
+            */}
+            <p className="text-xs text-gray-500">
+              Ganhamos comissão se você comprar por este link, sem custo extra
+              para você. Preços coletados do Mercado Livre e atualizados
+              diariamente.
+            </p>
 
             {/* Metrics grid — agora com R$/DOSE quando temos servings */}
             <div className="flex border border-gray-100 rounded-xl overflow-hidden">

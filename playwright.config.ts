@@ -46,6 +46,10 @@ export default defineConfig({
       env: {
         NEXT_PUBLIC_SUPABASE_URL: `http://127.0.0.1:${PORTA_STUB}`,
         NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'chave-de-teste-sem-valor',
+        // O build coleta as rotas de API, e as que usam `supabaseAdmin` estouram
+        // na carga do módulo sem esta chave. É falsa: nada aqui fala com o
+        // Supabase real.
+        SUPABASE_SERVICE_ROLE_KEY: 'chave-de-teste-sem-valor',
       },
     },
   ],

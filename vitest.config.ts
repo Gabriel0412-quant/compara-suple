@@ -8,6 +8,7 @@ export default defineConfig({
     },
   },
   test: {
+    setupFiles: ['./vitest.setup.ts'],
     // lib/db.ts constrói o cliente Supabase na carga do módulo, então qualquer
     // teste que importe algo daquela cadeia falha sem estas variáveis. São
     // falsas de propósito: nenhum teste faz rede.

@@ -30,6 +30,8 @@ No SQL Editor do Supabase, em ordem:
 As migrations OAuth seguem em `0008_secure_ml_oauth_foundation.sql` e `0009_finalize_ml_oauth_security.sql`. A numeração é única e preserva a ordem entre reconciliação e segurança OAuth.
 
 Os dois testes rodam dentro de `begin/rollback` e não deixam resíduo.
+O job `Migrações e reconciliação` do CI também cria um PostgreSQL isolado,
+aplica todas as migrations em ordem e executa esses dois arquivos em cada PR.
 
 ## 2. Simular antes de executar
 
@@ -87,6 +89,20 @@ select offer_id, count(distinct available) as estados
  group by offer_id
 having count(distinct available) > 1;
 ```
+
+### Evidência da ativação
+
+As duas coletas completas exigidas foram acompanhadas:
+
+| Execução | Catálogos | Snapshot | Resultado |
+| --- | ---: | ---: | --- |
+| 01/09/2026 | 15/15 | 961 ofertas | HTTP 200, zero catálogo com falha |
+| 02/09/2026 | 15/15 | 964 ofertas | 13 criadas, 949 atualizadas, 2 reativadas, 12 indisponibilizadas e zero falha |
+
+Após a segunda coleta, o banco continha 1.222 ofertas: 964 ativas e 258
+inativas. `offer.fetched_at` avançou para `2026-09-02T00:50:41Z`. Nenhuma
+oferta histórica foi apagada. A home, a listagem, o produto, o comparador e os
+links públicos responderam com HTTP 200 sobre esse estado.
 
 ## 4. Reverter
 

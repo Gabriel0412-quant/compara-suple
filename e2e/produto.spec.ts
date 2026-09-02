@@ -21,7 +21,8 @@ test.describe('saída para a loja', () => {
   test('a saída passa pela rota de tracking e abre em nova aba', async ({ page }) => {
     await page.goto(PRODUTO)
     const cta = page.getByRole('link', { name: /ver oferta no mercado livre/i })
-    await expect(cta).toHaveAttribute('href', /^\/go\/\d+$/)
+    // A query string carrega superfície e critério para a medição do #17.
+    await expect(cta).toHaveAttribute('href', /^\/go\/\d+\?de=produto&por=\w+$/)
     await expect(cta).toHaveAttribute('target', '_blank')
     await expect(cta).toHaveAttribute('rel', /noopener/)
     await expect(cta).toHaveAttribute('rel', /sponsored/)

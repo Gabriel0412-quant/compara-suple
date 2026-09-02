@@ -2,7 +2,14 @@ import Link from 'next/link'
 import { formatBRL } from '@/lib/products'
 import type { CategoryProduct } from '@/lib/categories'
 
-export function ProductGridCard({ product }: { product: CategoryProduct }) {
+export function ProductGridCard({
+  product,
+  superficie = 'lista',
+}: {
+  product: CategoryProduct
+  /** De onde o card está sendo exibido. Vai para a rota de saída. */
+  superficie?: 'home' | 'lista' | 'comparador' | 'produto'
+}) {
   const hasDiscount =
     product.featuredOriginalPrice !== null &&
     product.featuredOriginalPrice > product.featuredPrice
@@ -109,7 +116,7 @@ export function ProductGridCard({ product }: { product: CategoryProduct }) {
             */}
             {temMaisBarata && (
               <a
-                href={`/go/${product.lowestOfferId}`}
+                href={`/go/${product.lowestOfferId}?de=${superficie}&por=menor_preco`}
                 target="_blank"
                 rel="noopener noreferrer sponsored"
                 className="inline-block text-[11px] font-semibold text-green-700 mt-1 hover:underline"
@@ -132,7 +139,7 @@ export function ProductGridCard({ product }: { product: CategoryProduct }) {
             */}
             {product.featuredOfferId ? (
               <a
-                href={`/go/${product.featuredOfferId}`}
+                href={`/go/${product.featuredOfferId}?de=${superficie}&por=destaque`}
                 target="_blank"
                 rel="noopener noreferrer sponsored"
                 className="flex-1 text-center py-2.5 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition-colors"

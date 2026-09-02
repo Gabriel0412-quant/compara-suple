@@ -52,6 +52,12 @@ function filtrarProdutos(params: URLSearchParams): Linha[] {
 function filtrarOfertas(params: URLSearchParams): Linha[] {
   let linhas: Linha[] = [...OFERTAS]
 
+  // A rota /go busca uma oferta por id com `.maybeSingle()`: sem este filtro o
+  // stub devolveria o catálogo inteiro e a chamada falharia por trazer mais de
+  // uma linha — um erro do stub que pareceria erro da rota.
+  const id = parseEq(params.get('id'))
+  if (id !== null) linhas = linhas.filter(o => String(o.id) === id)
+
   const disponivel = parseEq(params.get('available'))
   if (disponivel !== null) {
     linhas = linhas.filter(o => String(o.available) === disponivel)

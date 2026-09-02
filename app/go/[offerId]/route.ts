@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/db'
 import { supabaseAdmin } from '@/lib/db-admin'
+import { ehBot, registrarEvento } from '@/lib/eventos'
 
 /**
  * Redirecionamento de saída com tracking de clique.
@@ -28,6 +29,23 @@ function isSafeRedirect(rawUrl: string): boolean {
   }
 }
 
+/*
+  De onde veio o clique e por qual critério a oferta estava em destaque. Chegam
+  pela URL porque o redirecionamento é a única coisa que a saída atravessa —
+  criar um segundo caminho de tracking só para carregar dois rótulos seria o que
+  a #17 pede para não fazer.
+
+  Vocabulário fechado nos dois: valor fora da lista é descartado, e não gravado.
+  Sem isso, qualquer pessoa poderia encher a tabela com texto arbitrário só
+  editando o link.
+*/
+const SUPERFICIES = ['home', 'lista', 'comparador', 'produto'] as const
+const CRITERIOS = ['destaque', 'menor_preco', 'menor_por_dose', 'menor_por_kg'] as const
+
+function valido<T extends string>(valor: string | null, aceitos: readonly T[]): T | null {
+  return aceitos.includes((valor ?? '') as T) ? (valor as T) : null
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ offerId: string }> },
@@ -35,6 +53,9 @@ export async function GET(
   const { offerId } = await params
   const id = Number(offerId)
   const home = new URL('/', request.url)
+  const query = new URL(request.url).searchParams
+  const superficie = valido(query.get('de'), SUPERFICIES)
+  const criterio = valido(query.get('por'), CRITERIOS)
 
   if (!Number.isInteger(id) || id <= 0) {
     return NextResponse.redirect(home)
@@ -65,6 +86,17 @@ export async function GET(
     })
   } catch (e) {
     console.error('[go] falha ao registrar clique da oferta', offer.id, e)
+  }
+
+  /*
+    O mesmo clique alimenta duas tabelas com propósitos diferentes:
+    `click_event` sustenta conferência de comissão e guarda referrer e
+    user-agent desde o #18; `ui_event` mede o funil e não guarda nenhum dos
+    dois. Não é contagem em dobro da mesma coisa — é o mesmo fato registrado
+    para duas perguntas.
+  */
+  if (superficie && !ehBot(request.headers.get('user-agent'))) {
+    await registrarEvento({ evento: 'saida_para_loja', superficie, criterio })
   }
 
   return NextResponse.redirect(offer.url, { status: 302 })

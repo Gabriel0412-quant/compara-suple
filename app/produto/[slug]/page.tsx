@@ -294,7 +294,7 @@ export default async function ProductPage({ params }: Props) {
               </p>
               {temMaisBarata && (
                 <a
-                  href={`/go/${lowest!.id}`}
+                  href={`/go/${lowest!.id}?de=produto&por=menor_preco`}
                   target="_blank"
                   rel="noopener noreferrer sponsored"
                   className="inline-block text-sm font-semibold text-green-700 mt-1 hover:underline"
@@ -322,7 +322,7 @@ export default async function ProductPage({ params }: Props) {
               como "em breve", continua mais abaixo.
             */}
             <a
-              href={`/go/${featured.id}`}
+              href={`/go/${featured.id}?de=produto&por=destaque`}
               target="_blank"
               rel="noopener noreferrer sponsored"
               className="block w-full py-3.5 bg-green-600 text-white rounded-xl font-semibold text-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-600 focus:ring-offset-2 transition-colors text-center"

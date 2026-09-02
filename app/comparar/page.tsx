@@ -1,10 +1,13 @@
 import Link from 'next/link'
 import type { Metadata } from 'next'
+import { headers } from 'next/headers'
+import { after } from 'next/server'
 import { Plus, X, Check, Trophy } from 'lucide-react'
 
 import { ComoComparamos } from '@/components/ComoComparamos'
 import Header from '@/components/Header'
 import { filtrarPorTermo, parseTermoBusca } from '@/lib/busca'
+import { ehBot, registrarEvento } from '@/lib/eventos'
 import { getCatalogStats } from '@/lib/stats'
 import {
   MAX_SLOTS,
@@ -76,6 +79,21 @@ export default async function CompararPage({ searchParams }: Props) {
   )
   const termo = parseTermoBusca(sp.q)
   const available = filtrarPorTermo(naoComparados, termo, p => [p.name, p.brand])
+
+  // Comparação de verdade começa com dois itens: um produto sozinho não compara
+  // nada, e contá-lo inflaria a métrica com quem só abriu a página.
+  if (products.length >= 2) {
+    const ua = (await headers()).get('user-agent')
+    const nProdutos = products.length
+    after(async () => {
+      if (ehBot(ua)) return
+      await registrarEvento({
+        evento: 'comparacao_montada',
+        superficie: 'comparador',
+        nProdutos,
+      })
+    })
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-800">

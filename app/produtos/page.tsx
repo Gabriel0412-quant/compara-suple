@@ -1,11 +1,14 @@
 import type { Metadata } from 'next'
+import { headers } from 'next/headers'
 import Link from 'next/link'
+import { after } from 'next/server'
 
 import CampoBusca from '@/components/CampoBusca'
 import { ComoComparamos } from '@/components/ComoComparamos'
 import Header from '@/components/Header'
 import { ProductGridCard } from '@/components/category/ProductGridCard'
 import { filtrarPorTermo, parseTermoBusca } from '@/lib/busca'
+import { ehBot, registrarEvento } from '@/lib/eventos'
 import { getAllProductCards } from '@/lib/categories'
 import { getCatalogStats } from '@/lib/stats'
 
@@ -42,6 +45,25 @@ export default async function ProdutosPage({ searchParams }: Props) {
     produto.name,
     produto.brand,
   ])
+
+  /*
+    Registrado depois da resposta: `after()` roda quando a página já foi
+    enviada, então medir não atrasa quem está lendo. Sem identificador, uma
+    recarga conta como busca nova — a leitura é agregada, e é assim que a #17
+    a define.
+  */
+  if (termo !== '') {
+    const ua = (await headers()).get('user-agent')
+    after(async () => {
+      if (ehBot(ua)) return
+      await registrarEvento({
+        evento: 'busca_enviada',
+        superficie: 'lista',
+        nResultados: resultados.length,
+        termo,
+      })
+    })
+  }
 
   const buscaSemResultado = termo !== '' && resultados.length === 0
   const catalogoVazio = termo === '' && catalogo.length === 0

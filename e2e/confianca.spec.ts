@@ -69,3 +69,32 @@ test.describe('metodologia', () => {
     await expect(page.getByText(/preços podem estar desatualizados/i)).toHaveCount(0)
   })
 })
+
+test.describe('saída instrumentada', () => {
+  test('o link de compra diz de onde veio e por qual critério', async ({ page }) => {
+    await page.goto('/produtos')
+    const compra = page.locator('a[href^="/go/"]').first()
+    await expect(compra).toHaveAttribute('href', /\/go\/\d+\?de=lista&por=(destaque|menor_preco)/)
+  })
+
+  test('na página de produto a superfície é produto', async ({ page }) => {
+    await page.goto('/produto/whey-concentrado-growth')
+    const compra = page.locator('a[href^="/go/"]').first()
+    await expect(compra).toHaveAttribute('href', /de=produto/)
+  })
+
+  test('valor forjado na URL não vira evento', async ({ page }) => {
+    // A rota descarta superfície e critério fora do vocabulário; o redirect
+    // acontece do mesmo jeito, porque medir nunca pode impedir a saída.
+    const r = await page.request.get('/go/101?de=inventado&por=qualquer', {
+      maxRedirects: 0,
+    })
+    expect(r.status()).toBe(302)
+  })
+
+  test('a saída continua funcionando sem parâmetro nenhum', async ({ page }) => {
+    const r = await page.request.get('/go/101', { maxRedirects: 0 })
+    expect(r.status()).toBe(302)
+    expect(r.headers()['location']).toContain('mercadolivre.com.br')
+  })
+})

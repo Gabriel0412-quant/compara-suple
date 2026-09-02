@@ -3,6 +3,13 @@ import type { Metadata } from 'next'
 import { Plus, X, Check, Trophy } from 'lucide-react'
 
 import Header from '@/components/Header'
+import { filtrarPorTermo, parseTermoBusca } from '@/lib/busca'
+import {
+  MAX_SLOTS,
+  buildCompararUrl,
+  destacarMelhor,
+  parseIdsComparados,
+} from '@/lib/comparador'
 import { Breadcrumb } from '@/components/Breadcrumb'
 import { OffersSection } from '@/components/product/OffersSection'
 import {
@@ -24,35 +31,15 @@ export const metadata: Metadata = {
     'Compare até 3 suplementos lado a lado: preço, R$/dose, R$/kg e ofertas. Escolha o melhor e veja onde comprar.',
 }
 
-const MAX_SLOTS = 3
-
 type Props = {
-  searchParams: Promise<{ ids?: string; selected?: string }>
-}
-
-// ---------- helpers de URL ----------
-
-function parseIds(raw: string | undefined): number[] {
-  return (raw ?? '')
-    .split(',')
-    .map(s => parseInt(s.trim(), 10))
-    .filter(n => Number.isFinite(n) && n > 0)
-    .slice(0, MAX_SLOTS)
-}
-
-function buildCompararUrl(ids: number[], selected?: number | null): string {
-  const params = new URLSearchParams()
-  if (ids.length > 0) params.set('ids', ids.join(','))
-  if (selected) params.set('selected', String(selected))
-  const qs = params.toString()
-  return qs ? `/comparar?${qs}` : '/comparar'
+  searchParams: Promise<{ ids?: string; selected?: string; q?: string }>
 }
 
 // ---------- main page ----------
 
 export default async function CompararPage({ searchParams }: Props) {
   const sp = await searchParams
-  const ids = parseIds(sp.ids)
+  const ids = parseIdsComparados(sp.ids)
   const requestedSelected = parseInt(sp.selected ?? '', 10)
   const products = await getProductsByIds(ids)
 
@@ -61,7 +48,10 @@ export default async function CompararPage({ searchParams }: Props) {
   const selectedProduct = products.find(p => p.id === selectedId) ?? null
 
   const allProducts = await getAllProductsLite()
-  const available = allProducts.filter(p => !ids.includes(p.id))
+  // Fora os que já estão na comparação — nunca oferecer duplicata no seletor.
+  const naoComparados = allProducts.filter(p => !ids.includes(p.id))
+  const termo = parseTermoBusca(sp.q)
+  const available = filtrarPorTermo(naoComparados, termo, p => [p.name, p.brand])
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-800">
@@ -99,6 +89,8 @@ export default async function CompararPage({ searchParams }: Props) {
         {ids.length < MAX_SLOTS && (
           <AddProductPicker
             available={available}
+            totalDisponivel={naoComparados.length}
+            termo={termo}
             currentIds={ids}
             selectedId={selectedId}
             hasAny={products.length > 0}
@@ -165,11 +157,16 @@ function ComparisonGrid({
     }
   })
 
-  // Winners (menor preço, menor R$/dose, menor R$/kg, mais ofertas)
-  const bestPrice = Math.min(...rows.map(r => r.lowestPrice ?? Infinity))
-  const lowestPerDose = Math.min(...rows.map(r => r.perDose ?? Infinity))
-  const lowestPerKg = Math.min(...rows.map(r => r.perKg ?? Infinity))
-  const mostOffers = Math.max(...rows.map(r => r.offerCount))
+  /*
+    Destaque por critério, e nunca um "melhor produto" geral: o mais barato por
+    quilo raramente é o mais barato por dose. `destacarMelhor` também se recusa
+    a coroar quem venceu sozinho — antes, um produto que era o único a informar
+    doses ganhava troféu por isso.
+  */
+  const destPreco = destacarMelhor(rows.map(r => r.lowestPrice))
+  const destPorDose = destacarMelhor(rows.map(r => r.perDose))
+  const destPorKg = destacarMelhor(rows.map(r => r.perKg))
+  const destOfertas = destacarMelhor(rows.map(r => r.offerCount), 'max')
 
   const cols = rows.length
 
@@ -180,16 +177,27 @@ function ComparisonGrid({
           Comparação <span className="text-gray-400 font-normal">({cols})</span>
         </h2>
         <p className="text-[11px] text-gray-500">
-          🏆 = vencedor · clique <strong>Escolher</strong> pra ver sellers
+          Destaque por critério, não um melhor geral · clique{' '}
+          <strong>Escolher</strong> pra ver as lojas
         </p>
       </div>
 
-      {/* Grid: mobile 1col, sm 2col, lg = cols (até 3) */}
+      {/*
+        Empilha em telas estreitas. Antes o número de colunas vinha de um
+        `style` inline com `repeat(${cols}, ...)`, que não tem media query: em
+        320 px três produtos viravam três colunas de ~100 px, com nome e preço
+        cortados. As classes abaixo são literais para sobreviverem ao purge.
+      */}
       <div
-        className="grid divide-x divide-gray-100"
-        style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+        className={`grid divide-y divide-gray-100 sm:divide-y-0 sm:divide-x ${
+          cols === 1
+            ? 'grid-cols-1'
+            : cols === 2
+              ? 'grid-cols-1 sm:grid-cols-2'
+              : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
+        }`}
       >
-        {rows.map(r => {
+        {rows.map((r, i) => {
           const isSelected = r.product.id === selectedId
           const remainingIds = allIds.filter(id => id !== r.product.id)
           const newSelectedId = selectedId === r.product.id
@@ -247,22 +255,25 @@ function ComparisonGrid({
               <div>
                 <div className="flex items-baseline gap-1 flex-wrap">
                   <span className={`text-lg font-bold ${
-                    r.lowestPrice === bestPrice && r.lowestPrice != null
-                      ? 'text-green-700' : 'text-green-600'
+                    destPreco.indices.includes(i) ? 'text-green-700' : 'text-green-600'
                   }`}>
-                    {r.lowestPrice != null ? formatBRL(r.lowestPrice) : '—'}
+                    {r.lowestPrice != null ? formatBRL(r.lowestPrice) : 'não informado'}
                   </span>
-                  {r.lowestPrice === bestPrice && r.lowestPrice != null && (
-                    <Trophy className="w-3 h-3 text-amber-500" />
-                  )}
                 </div>
-                {r.perDose != null && (
+                {destPreco.indices.includes(i) && (
+                  <Selo criterio="menor preço" />
+                )}
+                {r.perDose != null ? (
                   <p className={`text-[11px] font-semibold ${
-                    r.perDose === lowestPerDose ? 'text-green-700' : 'text-gray-500'
+                    destPorDose.indices.includes(i) ? 'text-green-700' : 'text-gray-500'
                   }`}>
                     {formatBRL(r.perDose)}/dose
-                    {r.perDose === lowestPerDose && <span className="ml-1">🏆</span>}
                   </p>
+                ) : (
+                  <p className="text-[11px] text-gray-400">R$/dose não informado</p>
+                )}
+                {destPorDose.indices.includes(i) && (
+                  <Selo criterio="menor R$/dose" />
                 )}
               </div>
 
@@ -272,21 +283,23 @@ function ComparisonGrid({
                   label="Peso"
                   value={r.sizeGrams != null
                     ? r.sizeGrams >= 1000 ? `${r.sizeGrams / 1000} kg` : `${r.sizeGrams}g`
-                    : '—'}
+                    : 'não informado'}
                 />
                 <CompactAttr
                   label="Doses"
-                  value={r.servings != null ? `${r.servings}` : '—'}
+                  value={r.servings != null ? `${r.servings}` : 'não informado'}
                 />
                 <CompactAttr
                   label="R$/kg"
-                  value={r.perKg != null ? formatBRL(r.perKg) : '—'}
-                  isWinner={r.perKg === lowestPerKg && r.perKg != null}
+                  value={r.perKg != null ? formatBRL(r.perKg) : 'não informado'}
+                  isWinner={destPorKg.indices.includes(i)}
+                  criterio="menor R$/kg"
                 />
                 <CompactAttr
                   label="Lojas"
                   value={`${r.offerCount}`}
-                  isWinner={r.offerCount === mostOffers && mostOffers > 1}
+                  isWinner={destOfertas.indices.includes(i)}
+                  criterio="mais ofertas"
                 />
                 {r.flavor && (
                   <CompactAttr label="Sabor" value={r.flavor} colSpan />
@@ -322,22 +335,44 @@ function ComparisonGrid({
   )
 }
 
+/**
+ * Selo de destaque de um critério.
+ *
+ * O troféu sozinho não dizia por que aquele produto estava marcado, e o mesmo
+ * ícone aparecia em quatro critérios diferentes. Nomear o critério é o que
+ * separa "este é o melhor" — que o comparador não afirma — de "este é o mais
+ * barato por dose", que ele consegue sustentar.
+ */
+function Selo({ criterio }: { criterio: string }) {
+  return (
+    <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5 mt-0.5">
+      <Trophy className="w-2.5 h-2.5" aria-hidden="true" />
+      {criterio}
+    </span>
+  )
+}
+
 function CompactAttr({
   label,
   value,
   isWinner = false,
+  criterio,
   colSpan = false,
 }: {
   label: string
   value: string
   isWinner?: boolean
+  criterio?: string
   colSpan?: boolean
 }) {
   return (
     <div className={`flex justify-between items-baseline gap-1 ${colSpan ? 'col-span-2' : ''}`}>
       <dt className="text-gray-400 shrink-0">{label}</dt>
       <dd className={`font-medium truncate ${isWinner ? 'text-green-700' : 'text-gray-700'}`}>
-        {isWinner && <Trophy className="w-2.5 h-2.5 text-amber-500 inline mr-0.5" />}
+        {isWinner && criterio && (
+          <span className="sr-only">{criterio}: </span>
+        )}
+        {isWinner && <Trophy className="w-2.5 h-2.5 text-amber-500 inline mr-0.5" aria-hidden="true" />}
         {value}
       </dd>
     </div>
@@ -348,16 +383,20 @@ function CompactAttr({
 
 function AddProductPicker({
   available,
+  totalDisponivel,
+  termo,
   currentIds,
   selectedId,
   hasAny,
 }: {
   available: ProductLite[]
+  totalDisponivel: number
+  termo: string
   currentIds: number[]
   selectedId: number | null
   hasAny: boolean
 }) {
-  if (available.length === 0) {
+  if (totalDisponivel === 0) {
     return (
       <div className="bg-white rounded-xl border border-gray-100 px-4 py-3 text-center text-xs text-gray-400 mb-4">
         Todos os produtos do catálogo já estão sendo comparados.
@@ -369,15 +408,61 @@ function AddProductPicker({
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 overflow-hidden mb-4 shadow-sm">
-      <div className="px-4 py-2 border-b border-gray-100 bg-gray-50 flex items-baseline justify-between gap-2">
+      <div className="px-4 py-2 border-b border-gray-100 bg-gray-50 flex items-baseline justify-between gap-2 flex-wrap">
         <h2 className="font-bold text-gray-800 text-sm flex items-center gap-1.5">
           <Plus className="w-3.5 h-3.5 text-green-600" />
           {hasAny ? 'Adicionar' : 'Escolha pra comparar'}
         </h2>
         <p className="text-[11px] text-gray-500">
-          {slotsLeft} {slotsLeft === 1 ? 'slot livre' : 'slots livres'} · {available.length} disponíveis
+          {slotsLeft} {slotsLeft === 1 ? 'slot livre' : 'slots livres'} ·{' '}
+          {termo ? `${available.length} de ${totalDisponivel}` : `${totalDisponivel} disponíveis`}
         </p>
       </div>
+
+      {/*
+        Filtrar pelo próprio comparador, sem sair dele. Os ids e o item ativo
+        viajam como campos ocultos para que a busca não descarte a comparação
+        em andamento — a URL continua restaurando tudo.
+      */}
+      <form action="/comparar" method="get" role="search" className="px-3 py-2 border-b border-gray-100 flex gap-2">
+        {currentIds.length > 0 && (
+          <input type="hidden" name="ids" value={currentIds.join(',')} />
+        )}
+        {selectedId != null && (
+          <input type="hidden" name="selected" value={String(selectedId)} />
+        )}
+        <label htmlFor="q-comparador" className="sr-only">
+          Filtrar produtos para comparar
+        </label>
+        <input
+          id="q-comparador"
+          name="q"
+          type="search"
+          defaultValue={termo}
+          maxLength={100}
+          placeholder="Filtrar por nome ou marca..."
+          className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-green-600"
+        />
+        <button
+          type="submit"
+          className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-semibold hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-600 focus:ring-offset-1 transition-colors"
+        >
+          Filtrar
+        </button>
+      </form>
+
+      {available.length === 0 && (
+        <div className="px-4 py-4 text-center text-xs text-gray-500">
+          Nenhum produto para &ldquo;{termo}&rdquo;.{' '}
+          <Link
+            href={buildCompararUrl(currentIds, selectedId)}
+            className="text-green-700 font-semibold underline"
+          >
+            Limpar filtro
+          </Link>
+        </div>
+      )}
+
       <ul className="divide-y divide-gray-100 max-h-80 overflow-y-auto">
         {available.map(p => {
           const newIds = [...currentIds, p.id]

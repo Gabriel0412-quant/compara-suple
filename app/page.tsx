@@ -3,19 +3,25 @@ import { Flame, TrendingDown, Trophy } from 'lucide-react'
 
 import CampoBusca from '@/components/CampoBusca'
 import Header from '@/components/Header'
-import { getProductsOnSale, type CategoryProduct } from '@/lib/categories'
+import {
+  getProductsOnSale,
+  listCategoriesWithProducts,
+  type CategoryProduct,
+} from '@/lib/categories'
 import { formatBRL } from '@/lib/products'
 import { getCatalogStats, formatCount, formatUpdatedAt } from '@/lib/stats'
 
 export const dynamic = 'force-dynamic'
 
-const searchTags = ['Whey Isolado', 'Creatina', 'Pré-treino', 'Hipercalórico', 'BCAA']
-
 // ---------- Home ----------
 
 export default async function Home() {
   // Busca os produtos em oferta (já vem ordenado por desconto absoluto)
-  const [onSale, stats] = await Promise.all([getProductsOnSale(), getCatalogStats()])
+  const [onSale, stats, categorias] = await Promise.all([
+    getProductsOnSale(),
+    getCatalogStats(),
+    listCategoriesWithProducts(),
+  ])
   const topOffers = onSale.slice(0, 2)        // hero
   const fallingProducts = onSale.slice(0, 6)  // "em queda agora"
 
@@ -57,13 +63,13 @@ export default async function Home() {
             </p>
 
             <div className="flex flex-wrap gap-2">
-              {searchTags.map(tag => (
+              {categorias.slice(0, 6).map(categoria => (
                 <Link
-                  key={tag}
-                  href={`/categoria/${tag.toLowerCase().replace(/\s+/g, '-').replace('pré', 'pre').replace('hipercalórico', 'hipercalorico')}`}
+                  key={categoria.slug}
+                  href={`/categoria/${categoria.slug}`}
                   className="px-3 py-1.5 text-xs font-medium border border-green-600 text-green-600 rounded-full hover:bg-green-600 hover:text-white transition-colors"
                 >
-                  {tag}
+                  {categoria.shortName}
                 </Link>
               ))}
             </div>

@@ -10,6 +10,20 @@ export function ProductGridCard({ product }: { product: CategoryProduct }) {
     ? Math.round((1 - product.featuredPrice / product.featuredOriginalPrice!) * 100)
     : 0
 
+  /*
+    Preço normalizado. Comparar suplemento por preço absoluto engana quando as
+    embalagens têm tamanhos diferentes, então o card sempre mostra a unidade
+    que der: dose quando o produto informa porções, quilo quando informa peso.
+    Sem nenhum dos dois, dizemos isso em vez de omitir em silêncio — a ausência
+    do número é informação, e some sem explicação parece bug.
+  */
+  const precoNormalizado =
+    product.featuredPerDose !== null
+      ? `${formatBRL(product.featuredPerDose)}/dose`
+      : product.sizeGrams && product.sizeGrams > 0
+        ? `${formatBRL((product.featuredPrice / product.sizeGrams) * 1000)}/kg`
+        : null
+
   // Só vale mostrar a linha de menor preço quando ela contradiz o destaque.
   const temMaisBarata =
     product.lowestPrice !== null &&
@@ -69,10 +83,12 @@ export function ProductGridCard({ product }: { product: CategoryProduct }) {
               <span className="text-2xl font-bold text-green-600">
                 {formatBRL(product.featuredPrice)}
               </span>
-              {product.featuredPerDose && (
+              {precoNormalizado ? (
                 <span className="text-xs font-semibold text-green-700">
-                  {formatBRL(product.featuredPerDose)}/dose
+                  {precoNormalizado}
                 </span>
+              ) : (
+                <span className="text-xs text-gray-400">sem dose ou peso informado</span>
               )}
             </div>
             {hasDiscount && (
@@ -110,14 +126,24 @@ export function ProductGridCard({ product }: { product: CategoryProduct }) {
             >
               Comparar
             </Link>
-            <a
-              href={product.featuredOfferId ? `/go/${product.featuredOfferId}` : '#'}
-              target="_blank"
-              rel="noopener noreferrer sponsored"
-              className="flex-1 text-center py-2.5 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition-colors"
-            >
-              Comprar →
-            </a>
+            {/*
+              Sem oferta destacada não há para onde mandar o clique. O botão
+              apontava para "#": parecia comprável e não levava a lugar nenhum.
+            */}
+            {product.featuredOfferId ? (
+              <a
+                href={`/go/${product.featuredOfferId}`}
+                target="_blank"
+                rel="noopener noreferrer sponsored"
+                className="flex-1 text-center py-2.5 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition-colors"
+              >
+                Comprar →
+              </a>
+            ) : (
+              <span className="flex-1 text-center py-2.5 bg-gray-100 text-gray-400 rounded-xl text-sm font-semibold">
+                Sem oferta ativa
+              </span>
+            )}
           </div>
         </div>
       </div>

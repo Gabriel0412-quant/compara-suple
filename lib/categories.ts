@@ -196,10 +196,14 @@ function rowToCard(p: RawProduct): CategoryProduct {
   }
 }
 
-/** Lista produtos cujo nome contém alguma das keywords da categoria. */
-export async function getProductsByCategory(
-  category: Category,
-): Promise<CategoryProduct[]> {
+/**
+ * Query única do catálogo com ofertas aninhadas.
+ *
+ * As três listagens — categoria, ofertas e o catálogo inteiro — partem das
+ * mesmas linhas e só diferem no filtro que aplicam depois. Manter a `select`
+ * escrita uma vez é o que garante que um campo novo chegue às três juntas.
+ */
+async function fetchProductRows(): Promise<RawProduct[]> {
   const { data, error } = await supabase
     .from('product')
     .select(`
@@ -212,11 +216,60 @@ export async function getProductsByCategory(
     .returns<RawProduct[]>()
 
   if (error || !data) return []
+  return data
+}
 
-  const matching = data.filter(p => {
-    const nameLower = p.name.toLowerCase()
-    return category.keywords.some(kw => nameLower.includes(kw.toLowerCase()))
-  })
+/**
+ * Catálogo inteiro como cards, na mesma forma que categoria e ofertas usam.
+ * Produto sem nenhuma oferta comprável fica de fora: um card sem preço e sem
+ * destino não ajuda a decidir nada.
+ */
+export async function getAllProductCards(): Promise<CategoryProduct[]> {
+  return (await fetchProductRows())
+    .map(rowToCard)
+    .filter(p => p.offerCount > 0)
+    .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+}
+
+/** Um produto pertence à categoria quando o nome contém alguma keyword dela. */
+function produtoCasaCategoria(nome: string, categoria: Category): boolean {
+  const nomeLower = nome.toLowerCase()
+  return categoria.keywords.some(kw => nomeLower.includes(kw.toLowerCase()))
+}
+
+/**
+ * Categorias que hoje têm ao menos um produto comprável, com a contagem.
+ *
+ * A home montava seus atalhos a partir de uma lista de rótulos, convertendo
+ * texto em slug com uma cadeia de `.replace()`. Adivinhar o slug funcionava por
+ * acaso em quatro dos cinco casos e mandava "Whey Isolado" para
+ * `/categoria/whey-isolado`, que é 404. Derivar da fonte de verdade elimina a
+ * classe inteira do erro, e a contagem evita oferecer atalho para categoria
+ * vazia.
+ */
+export async function listCategoriesWithProducts(): Promise<
+  Array<Category & { productCount: number }>
+> {
+  const rows = await fetchProductRows()
+  const compraveis = rows
+    .map(rowToCard)
+    .filter(p => p.offerCount > 0)
+
+  return listCategories()
+    .map(categoria => ({
+      ...categoria,
+      productCount: compraveis.filter(p => produtoCasaCategoria(p.name, categoria)).length,
+    }))
+    .filter(c => c.productCount > 0)
+}
+
+/** Lista produtos cujo nome contém alguma das keywords da categoria. */
+export async function getProductsByCategory(
+  category: Category,
+): Promise<CategoryProduct[]> {
+  const data = await fetchProductRows()
+
+  const matching = data.filter(p => produtoCasaCategoria(p.name, category))
 
   return matching
     .map(rowToCard)
@@ -226,18 +279,7 @@ export async function getProductsByCategory(
 
 /** Lista produtos com pelo menos uma oferta em desconto (original_price > price). */
 export async function getProductsOnSale(): Promise<CategoryProduct[]> {
-  const { data, error } = await supabase
-    .from('product')
-    .select(`
-      id, slug, name,
-      brand:brand_id ( name ),
-      variants:variant ( id, flavor, size_grams, servings,
-        offers:offer ( id, external_id, url, price, available, fetched_at, ml_rank, raw )
-      )
-    `)
-    .returns<RawProduct[]>()
-
-  if (error || !data) return []
+  const data = await fetchProductRows()
 
   return data
     .map(rowToCard)

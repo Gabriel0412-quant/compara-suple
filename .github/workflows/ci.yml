@@ -111,3 +111,48 @@ jobs:
           for test_file in supabase/tests/*.sql; do
             psql -v ON_ERROR_STOP=1 -f "$test_file"
           done
+
+  e2e:
+    name: Testes de ponta a ponta
+    runs-on: ubuntu-latest
+
+    # O app sobe contra o stub de dados de `e2e/stub-supabase.ts`, nunca contra
+    # o Supabase real: asserções sobre contagem de produtos não podem depender
+    # do catálogo do dia. O schema e o SQL de verdade são cobertos pelo job
+    # `database`; aqui o que se cobre é navegação e renderização.
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: chave-de-teste-sem-valor
+      SUPABASE_SERVICE_ROLE_KEY: chave-de-teste-sem-valor
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Instalar dependências
+        run: pnpm install --frozen-lockfile
+
+      # Só chromium: um navegador pega regressão de navegação e layout sem
+      # triplicar o tempo do job.
+      - name: Instalar navegador
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Testes de ponta a ponta
+        run: pnpm test:e2e
+
+      # O relatório só interessa quando algo falhou.
+      - name: Guardar relatório da falha
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

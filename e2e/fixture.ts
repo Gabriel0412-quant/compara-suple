@@ -18,7 +18,7 @@ type Oferta = {
   raw: Record<string, unknown> | null
 }
 
-const AGORA = '2026-09-01T12:00:00+00:00'
+const AGORA = new Date().toISOString()
 
 function oferta(
   id: number,

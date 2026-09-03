@@ -50,8 +50,8 @@ describe('classificarRecencia', () => {
   })
 
   it('a fronteira é exclusiva: exatamente no limite ainda está em dia', () => {
-    expect(classificarRecencia(horasAtras(36), AGORA, 36)).toBe('em-dia')
-    expect(classificarRecencia(horasAtras(36.1), AGORA, 36)).toBe('atrasado')
+    expect(classificarRecencia(horasAtras(30), AGORA, 30)).toBe('em-dia')
+    expect(classificarRecencia(horasAtras(30.1), AGORA, 30)).toBe('atrasado')
   })
 })
 

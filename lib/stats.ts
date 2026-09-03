@@ -12,7 +12,7 @@ export type CatalogStats = {
   products: number
   /** Ofertas disponíveis. Indisponíveis não entram: não são comparáveis. */
   offers: number
-  /** Data da coleta mais recente. null quando ainda não houve coleta. */
+  /** Data que confirma que todas as ofertas ativas foram atualizadas. */
   lastUpdated: Date | null
 }
 
@@ -26,7 +26,7 @@ async function countOf(table: string): Promise<number> {
 }
 
 export async function getCatalogStats(): Promise<CatalogStats> {
-  const [products, offersRes, freshest] = await Promise.all([
+  const [products, offersRes, oldestAvailableOffer] = await Promise.all([
     countOf('product'),
     supabase
       .from('offer')
@@ -35,15 +35,18 @@ export async function getCatalogStats(): Promise<CatalogStats> {
     supabase
       .from('offer')
       .select('fetched_at')
-      .order('fetched_at', { ascending: false })
+      .eq('available', true)
+      .order('fetched_at', { ascending: true })
       .limit(1)
       .maybeSingle(),
   ])
 
   if (offersRes.error) throw new Error(`getCatalogStats/offers: ${offersRes.error.message}`)
-  if (freshest.error) throw new Error(`getCatalogStats/fetched_at: ${freshest.error.message}`)
+  if (oldestAvailableOffer.error) {
+    throw new Error(`getCatalogStats/fetched_at: ${oldestAvailableOffer.error.message}`)
+  }
 
-  const raw = (freshest.data as { fetched_at?: string } | null)?.fetched_at
+  const raw = (oldestAvailableOffer.data as { fetched_at?: string } | null)?.fetched_at
   const lastUpdated = raw ? new Date(raw) : null
 
   return {

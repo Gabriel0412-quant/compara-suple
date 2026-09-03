@@ -1,3 +1,5 @@
+import { getReadinessThresholds } from './readiness-config'
+
 /**
  * Regra única de recência da coleta.
  *
@@ -13,12 +15,11 @@
 /**
  * Acima disto a coleta está atrasada.
  *
- * A coleta é diária, agendada para 09:00 UTC. O Vercel Cron tem janela de
- * tolerância — em 02/09/2026 a execução saiu às 09:46 —, então duas coletas
- * consecutivas podem ficar a mais de 24 h uma da outra sem que nada esteja
- * errado. 36 h acomoda esse atraso e ainda acusa uma coleta perdida.
+ * A coleta é diária. O limite é o mesmo usado pela readiness para que o aviso
+ * público e a monitoração não discordem sobre quando um preço está defasado.
  */
-export const LIMITE_ATRASO_HORAS = 36
+
+export const LIMITE_ATRASO_HORAS = getReadinessThresholds().degradedAfterHours
 
 export type Recencia =
   /** Coletado dentro do esperado. */

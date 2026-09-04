@@ -22,7 +22,7 @@ export const metadata: Metadata = {
   // Título simples, sem `template`. Cada página já escreve o próprio título
   // completo terminando em "· Preço Suplemento"; um template aqui duplicaria o
   // sufixo ("Ofertas em suplementos · Preço Suplemento | Preço Suplemento").
-  title: "Preço Suplemento — compare preços de suplementos",
+  title: "Preço Suplemento — compare e economize",
   description:
     "Compare ofertas de whey protein, creatina, pré-treino e mais no Mercado Livre. Preço por dose, preço por quilo e os vendedores lado a lado.",
   metadataBase: new URL(siteUrl),

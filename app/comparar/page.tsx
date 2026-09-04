@@ -41,7 +41,7 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
 
   if (ids.length === 0) {
     return {
-      title: 'Comparador lado a lado · ComparaSuple',
+      title: 'Comparador lado a lado · Preço Suplemento',
       description:
         'Compare até 3 suplementos lado a lado: preço, R$/dose, R$/kg e ofertas. Escolha o melhor e veja onde comprar.',
     }
@@ -56,7 +56,7 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
     são estado, não conteúdo.
   */
   return {
-    title: `Comparação de ${ids.length} ${ids.length === 1 ? 'suplemento' : 'suplementos'} · ComparaSuple`,
+    title: `Comparação de ${ids.length} ${ids.length === 1 ? 'suplemento' : 'suplementos'} · Preço Suplemento`,
     robots: { index: false, follow: true },
   }
 }

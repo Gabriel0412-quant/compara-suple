@@ -20,10 +20,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params
   const cat = getCategoryBySlug(slug)
   if (!cat) {
-    return { title: 'Categoria não encontrada · ComparaSuple' }
+    return { title: 'Categoria não encontrada · Preço Suplemento' }
   }
   return {
-    title: `${cat.name} — Comparar preços · ComparaSuple`,
+    title: `${cat.name} — Comparar preços · Preço Suplemento`,
     description: `${cat.description} Compare preços entre múltiplas lojas do Mercado Livre.`,
   }
 }

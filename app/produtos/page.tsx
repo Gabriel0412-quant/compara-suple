@@ -22,7 +22,7 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
   const termo = parseTermoBusca((await searchParams).q)
   if (!termo) {
     return {
-      title: 'Produtos no comparador · ComparaSuple',
+      title: 'Produtos no comparador · Preço Suplemento',
       description:
         'Catálogo curado de suplementos com preços do Mercado Livre, custo por dose e custo por quilo.',
     }
@@ -30,7 +30,7 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
   // Resultado de busca não entra no índice: são infinitas combinações do mesmo
   // catálogo, e indexá-las só geraria conteúdo duplicado concorrendo consigo.
   return {
-    title: `Busca por "${termo}" · ComparaSuple`,
+    title: `Busca por "${termo}" · Preço Suplemento`,
     robots: { index: false, follow: true },
   }
 }

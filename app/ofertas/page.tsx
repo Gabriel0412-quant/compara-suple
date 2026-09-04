@@ -10,7 +10,7 @@ import { getCatalogStats, formatUpdatedAt } from '@/lib/stats'
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
-  title: 'Ofertas em suplementos · ComparaSuple',
+  title: 'Ofertas em suplementos · Preço Suplemento',
   description:
     'Suplementos em promoção no Mercado Livre — wheys, creatina, pré-treino e mais com desconto.',
 }

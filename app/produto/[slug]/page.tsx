@@ -87,7 +87,7 @@ function toSvg(day: number, price: number): [number, number] {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params
   const product = await getProductBySlug(slug)
-  if (!product) return { title: 'Produto não encontrado · ComparaSuple' }
+  if (!product) return { title: 'Produto não encontrado · Preço Suplemento' }
 
   const offers = flattenOffers(product)
   // "a partir de" é uma promessa de que não há nada mais barato. Só o menor
@@ -96,7 +96,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const priceTxt = lowest ? ` a partir de ${formatBRL(lowest.price)}` : ''
 
   return {
-    title: `${product.name} — Comparar preços${priceTxt} · ComparaSuple`,
+    title: `${product.name} — Comparar preços${priceTxt} · Preço Suplemento`,
     description: `Compare ${offers.length} ofertas de ${product.name}${
       product.brand ? ` (${product.brand.name})` : ''
     } no Mercado Livre${priceTxt}.`,

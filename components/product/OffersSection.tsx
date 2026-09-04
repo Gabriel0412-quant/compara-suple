@@ -250,7 +250,7 @@ export function OffersSection({
           isso vem indicado na linha.
         </p>
         <p className="mt-1.5">
-          ComparaSuple recebe comissão de afiliado nas vendas, sem custo extra para você.
+          Preço Suplemento recebe comissão de afiliado nas vendas, sem custo extra para você.
         </p>
       </div>
     </div>

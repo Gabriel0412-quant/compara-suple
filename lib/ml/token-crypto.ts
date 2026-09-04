@@ -5,6 +5,19 @@ import {
 } from 'node:crypto'
 
 const ALGORITHM = 'aes-256-gcm'
+/*
+  Esta string NÃO acompanha o nome do produto, e não é um resquício do
+  rebranding de 04/09/2026.
+
+  Ela é o `additional authenticated data` do AES-GCM: entra no cálculo da tag
+  de autenticação de cada token já cifrado no banco. Trocá-la por
+  'preco-suplemento:...' faria toda decifragem existente falhar na verificação
+  da tag — o refresh token do Mercado Livre deixaria de abrir, e a ingestão
+  pararia em silêncio, porque o erro só aparece quando o token vence.
+
+  Se algum dia precisar mudar, o caminho é o sufixo de versão: aceitar `v1` na
+  leitura, escrever `v2`, e migrar os registros antes de remover o `v1`.
+*/
 const ADDITIONAL_DATA = Buffer.from('compara-suple:ml-oauth:v1', 'utf8')
 
 export type MlTokenPair = {

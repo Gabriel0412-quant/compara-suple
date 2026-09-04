@@ -14,7 +14,7 @@ test.describe('saída para a loja', () => {
 
     const cta = page.getByRole('link', { name: /ver oferta no mercado livre/i })
     await expect(cta).toBeVisible()
-    // "Comprar agora" sugeria que o checkout acontece no ComparaSuple.
+    // "Comprar agora" sugeria que o checkout acontece no Preço Suplemento.
     await expect(page.getByRole('link', { name: /^comprar agora/i })).toHaveCount(0)
   })
 

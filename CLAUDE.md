@@ -1,4 +1,4 @@
-# ComparaSuple — CLAUDE.md
+# Preço Suplemento — CLAUDE.md
 
 ## O que é este projeto
 Marketplace e comparador de suplementos para o Brasil. Os usuários buscam suplementos

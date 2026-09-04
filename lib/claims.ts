@@ -37,7 +37,7 @@ export const CLAIMS_PROIBIDOS: ClaimProibido[] = [
   },
   {
     padrao: /comprar agora/i,
-    porque: 'Sugere que o checkout acontece no ComparaSuple. Ele acontece na loja.',
+    porque: 'Sugere que o checkout acontece no Preço Suplemento. Ele acontece na loja.',
     alternativa: 'Ver oferta no {marketplace}, dizendo que abre em nova aba.',
   },
   {
@@ -57,7 +57,7 @@ export const CLAIMS_PROIBIDOS: ClaimProibido[] = [
   {
     padrao: /\b(cura|trata|previne|emagrece)\b/i,
     porque:
-      'Alegação de saúde. O ComparaSuple compara preço; não avalia eficácia, segurança ou adequação nutricional.',
+      'Alegação de saúde. Preço Suplemento compara preço; não avalia eficácia, segurança ou adequação nutricional.',
   },
   {
     padrao: /aprovado pela anvisa/i,

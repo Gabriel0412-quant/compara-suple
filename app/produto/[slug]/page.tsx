@@ -5,7 +5,6 @@ import type { Metadata } from 'next'
 
 import { Breadcrumb } from '@/components/Breadcrumb'
 import { ComoComparamos } from '@/components/ComoComparamos'
-import Header from '@/components/Header'
 import { OffersSection } from '@/components/product/OffersSection'
 import { categoriaDoProduto } from '@/lib/categories'
 import {
@@ -24,7 +23,6 @@ export const dynamic = 'force-dynamic'
 function SemOfertasAtivas({ product }: { product: { name: string } }) {
   return (
     <div className="min-h-screen bg-gray-50 text-gray-800">
-      <Header />
       <nav className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-1 text-xs text-gray-500 flex-wrap">
         <Link href="/" className="hover:text-green-600 transition-colors">Suplementos</Link>
         <ChevronRight className="w-3 h-3 shrink-0" />
@@ -197,8 +195,6 @@ export default async function ProductPage({ params }: Props) {
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-800">
-      <Header />
-
       {/*
         A trilha passa pela categoria, e não direto de "Produtos" para o
         produto: é assim que a hierarquia do catálogo fica legível — para quem

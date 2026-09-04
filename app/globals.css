@@ -2,14 +2,136 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:is(.dark *));
+/*
+  Paleta de Preço Suplemento.
+
+  Origem: projeto do Claude Design, home "1b" e logo "5d" (04/09/2026). O
+  desenho veio em hex; aqui está em oklch porque o resto do arquivo já estava,
+  e porque interpolação e clareamento se comportam melhor nesse espaço.
+
+  Os dois arquivos do design discordam no laranja: o logo 5d declara
+  `oklch(0.70 0.20 45)` (= #FE6A00) e a home 1b usa #F26A1B em todas as
+  seções, inclusive no lockup do próprio logo dentro do header. Adotado o
+  valor da home, que é a página que vai ao ar.
+
+  Uma cor só entra aqui. Hex literal da marca espalhado pelos componentes é
+  o que este arquivo existe para evitar, e há teste que falha se voltar.
+*/
+:root {
+  /* Laranja da marca. */
+  --brand: oklch(0.6823 0.186 44.8); /* #F26A1B */
+  --brand-strong: oklch(0.5804 0.155 44.4); /* #C2551A — link em fundo claro */
+  --brand-deep: oklch(0.464 0.1231 44.12); /* #8F3D12 — hover de link */
+  --brand-ink: oklch(0.5203 0.141 45.2); /* #A8480F — texto sobre realce quente */
+
+  /* Superfícies. A home alterna branco e creme entre seções. */
+  --surface: oklch(1 0 0); /* #FFFFFF */
+  --surface-muted: oklch(0.9596 0.0051 67.76); /* #F4F1EE */
+  --surface-sunken: oklch(0.9239 0.0069 67.74); /* #E9E5E1 — fundo da página */
+  --surface-raised: oklch(0.9856 0.0017 67.8); /* #FBFAF9 */
+  --surface-warm: oklch(0.9556 0.0237 59.39); /* #FDEDE1 — realce quente */
+  --surface-warm-soft: oklch(0.9832 0.01 58.22); /* #FFF8F3 */
+  --surface-dark: oklch(0.2565 0.0167 50.69); /* #2A211C — header */
+  --surface-darker: oklch(0.2151 0.0113 48.18); /* #1E1815 — rodapé */
+  --surface-dark-raised: oklch(0.2995 0.0195 50.22); /* #362B25 */
+
+  /* Texto. Cinco níveis, do mais forte ao mais apagado. */
+  --ink: oklch(0.2565 0.0167 50.69); /* #2A211C */
+  --ink-2: oklch(0.4337 0.0197 52.2); /* #5A4E47 */
+  --ink-3: oklch(0.4948 0.019 52.28); /* #6B5F58 */
+  --ink-4: oklch(0.6644 0.0158 50.7); /* #9C918B */
+  --ink-5: oklch(0.6788 0.0299 49.42); /* #A89388 */
+
+  /* Texto sobre fundo escuro. */
+  --ink-on-dark: oklch(0.9596 0.0051 67.76); /* #F4F1EE */
+  --ink-on-dark-2: oklch(0.893 0.012 59.55); /* #E2DAD4 */
+  --ink-on-dark-3: oklch(0.758 0.0161 54.86); /* #B9AEA7 */
+
+  /* Traços. */
+  --line: oklch(0.9335 0.0086 67.72); /* #EDE8E3 */
+  --line-strong: oklch(0.883 0.0113 63.34); /* #DED7D1 */
+  --line-dark: oklch(0.3548 0.0217 55.58); /* #453931 */
+
+  --radius: 0.75rem;
+
+  /*
+    Camada semântica do shadcn, apontada para a paleta acima. Existe para que
+    os componentes de `components/ui` continuem funcionando sem reescrita.
+  */
+  --background: var(--surface);
+  --foreground: var(--ink);
+  --card: var(--surface);
+  --card-foreground: var(--ink);
+  --popover: var(--surface);
+  --popover-foreground: var(--ink);
+  --primary: var(--brand);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: var(--surface-muted);
+  --secondary-foreground: var(--ink);
+  --muted: var(--surface-muted);
+  --muted-foreground: var(--ink-3);
+  --accent: var(--surface-warm);
+  --accent-foreground: var(--brand-ink);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: var(--line);
+  --input: var(--line-strong);
+  --ring: var(--brand);
+  --sidebar: var(--surface-muted);
+  --sidebar-foreground: var(--ink);
+  --sidebar-primary: var(--brand);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: var(--surface-warm);
+  --sidebar-accent-foreground: var(--brand-ink);
+  --sidebar-border: var(--line);
+  --sidebar-ring: var(--brand);
+}
+
+/*
+  Não existe tema escuro.
+
+  O design de Preço Suplemento não define um, e a classe `.dark` nunca foi
+  aplicada em nenhum lugar do código — o bloco anterior era o padrão cinza do
+  shadcn, morto desde sempre. Inventar uma paleta escura sem desenho produziria
+  contraste que ninguém validou, então aqui não há nenhuma. Quando houver
+  desenho, ela entra com os mesmos nomes de token definidos acima.
+*/
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+
+  --color-brand: var(--brand);
+  --color-brand-strong: var(--brand-strong);
+  --color-brand-deep: var(--brand-deep);
+  --color-brand-ink: var(--brand-ink);
+
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-warm: var(--surface-warm);
+  --color-surface-warm-soft: var(--surface-warm-soft);
+  --color-surface-dark: var(--surface-dark);
+  --color-surface-darker: var(--surface-darker);
+  --color-surface-dark-raised: var(--surface-dark-raised);
+
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-ink-4: var(--ink-4);
+  --color-ink-5: var(--ink-5);
+  --color-ink-on-dark: var(--ink-on-dark);
+  --color-ink-on-dark-2: var(--ink-on-dark-2);
+  --color-ink-on-dark-3: var(--ink-on-dark-3);
+
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-line-dark: var(--line-dark);
+
+  --font-sans: var(--font-familjen-grotesk);
+  --font-heading: var(--font-familjen-grotesk);
+  --font-mono: var(--font-ibm-plex-mono);
+
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -18,11 +140,6 @@
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -39,6 +156,7 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -46,75 +164,6 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
-}
-
-:root {
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-}
-
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
 }
 
 @layer base {
@@ -126,5 +175,14 @@
   }
   html {
     @apply font-sans;
+  }
+  /*
+    Preço em monoespaçada não é escolha estética: alinha dígito com dígito
+    quando os valores aparecem empilhados, que é o caso de toda comparação.
+    Os números tabulares evitam que "R$ 147,05" e "R$ 89,90" tenham larguras
+    diferentes na mesma coluna.
+  */
+  .font-mono {
+    font-variant-numeric: tabular-nums;
   }
 }

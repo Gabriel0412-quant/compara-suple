@@ -1,15 +1,30 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Familjen_Grotesk, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
+// Tipografia de Preço Suplemento, definida no Claude Design (logo 5d).
+//
+// Servidas pelo próprio domínio via next/font: a maquete carregava por <link>
+// para fonts.googleapis.com, o que em produção custa uma conexão externa e um
+// flash de fonte a cada navegação.
+//
+// `latin-ext` além de `latin` porque a marca depende de acentuação — "Preço"
+// tem ç e o catálogo está cheio de "Integralmédica", "pré-treino", "proteína".
+// Os fallbacks importam pelo mesmo motivo: precisam desenhar ç e til sem
+// substituir por caixa vazia enquanto a fonte carrega.
+const familjenGrotesk = Familjen_Grotesk({
+  variable: "--font-familjen-grotesk",
+  subsets: ["latin", "latin-ext"],
+  display: "swap",
+  fallback: ["Helvetica Neue", "Helvetica", "Arial", "sans-serif"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+const ibmPlexMono = IBM_Plex_Mono({
+  variable: "--font-ibm-plex-mono",
+  subsets: ["latin", "latin-ext"],
+  weight: ["400", "500", "600"],
+  display: "swap",
+  fallback: ["ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
 });
 
 // Sem NEXT_PUBLIC_SITE_URL o Next resolve as URLs de Open Graph contra
@@ -41,7 +56,7 @@ export default function RootLayout({
   return (
     <html
       lang="pt-BR"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${familjenGrotesk.variable} ${ibmPlexMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>

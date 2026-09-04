@@ -62,18 +62,75 @@ export function formatCount(n: number): string {
 }
 
 /**
+ * Fuso do leitor.
+ *
+ * Os `fetched_at` são gravados em UTC e a Vercel roda o servidor em UTC, mas
+ * quem lê está no Brasil. Sem fixar o fuso aqui, "hoje" é o hoje de Londres:
+ * entre 21h e meia-noite de Brasília o servidor já virou o dia, e a coleta da
+ * manhã aparecia como "ontem" para quem estava lendo à noite do mesmo dia.
+ */
+const FUSO = 'America/Sao_Paulo'
+
+/** Dia civil em São Paulo, como "2026-09-04", para comparar sem hora. */
+function diaEmSaoPaulo(d: Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: FUSO,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d)
+}
+
+function diferencaEmDias(alvo: Date, agora: Date): number {
+  const [a, b] = [diaEmSaoPaulo(agora), diaEmSaoPaulo(alvo)].map((iso) => Date.parse(`${iso}T00:00:00Z`))
+  return Math.round((a - b) / 86_400_000)
+}
+
+/**
  * Recência em linguagem de gente: "hoje", "ontem" ou a data.
  *
  * Compara por dia civil, não por diferença de horas — uma coleta das 6h de
  * ontem não deve virar "hoje" só porque faz menos de 24 horas.
+ *
+ * `agora` é injetável para o teste não depender do relógio da máquina. Sem
+ * isso as asserções passavam ou falhavam conforme o dia em que rodassem.
  */
-export function formatUpdatedAt(date: Date | null): string {
+export function formatUpdatedAt(date: Date | null, agora: Date = new Date()): string {
   if (!date) return 'sem coleta'
 
-  const day = (d: Date) => Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())
-  const diffDays = Math.round((day(new Date()) - day(date)) / 86_400_000)
+  const dias = diferencaEmDias(date, agora)
+  if (dias <= 0) return 'hoje'
+  if (dias === 1) return 'ontem'
+  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', timeZone: FUSO }).format(date)
+}
 
-  if (diffDays <= 0) return 'hoje'
-  if (diffDays === 1) return 'ontem'
-  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' }).format(date)
+/**
+ * A mesma recência, com a hora — para o hero da home, que diz
+ * "Última coleta hoje às 06:45".
+ *
+ * A hora importa aqui e não nas outras telas porque o hero é a promessa de
+ * frescor do produto inteiro: dizer só "hoje" às 23h esconde que o dado pode
+ * ter dezessete horas. E quando a coleta não é de hoje nem de ontem, a data
+ * aparece por extenso em vez de sumir — dado velho é informação, não algo a
+ * omitir.
+ */
+export function formatUltimaColeta(date: Date | null, agora: Date = new Date()): string {
+  if (!date) return 'sem coleta registrada'
+
+  const hora = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: FUSO,
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+
+  const dias = diferencaEmDias(date, agora)
+  if (dias <= 0) return `hoje às ${hora}`
+  if (dias === 1) return `ontem às ${hora}`
+
+  const data = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: FUSO,
+    day: '2-digit',
+    month: '2-digit',
+  }).format(date)
+  return `em ${data} às ${hora}`
 }

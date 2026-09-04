@@ -17,6 +17,13 @@ export default defineConfig({
     // teste que importe algo daquela cadeia falha sem estas variáveis. São
     // falsas de propósito: nenhum teste faz rede.
     env: {
+      // A Vercel roda o servidor em UTC; a máquina de quem desenvolve, quase
+      // sempre em America/Sao_Paulo. Sem fixar isso, teste de data passa aqui
+      // e falha em produção — ou pior, passa nos dois e esconde o bug, que foi
+      // o que aconteceu no #123: uma mutação que removia `timeZone` do
+      // formatador não foi acusada localmente, porque o fuso da máquina dava
+      // o mesmo resultado por acaso.
+      TZ: 'UTC',
       NEXT_PUBLIC_SUPABASE_URL: 'https://exemplo.supabase.co',
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'chave-de-teste',
       SUPABASE_SERVICE_ROLE_KEY: 'chave-de-teste',

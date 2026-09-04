@@ -44,6 +44,10 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       timeout: 180_000,
       env: {
+        // Mesmo motivo do vitest.config.ts: a Vercel serve em UTC. Sem isso,
+        // a home renderizada aqui usaria o fuso da máquina, e um teste sobre
+        // "última coleta às 06:45" passaria em São Paulo e falharia no CI.
+        TZ: 'UTC',
         NEXT_PUBLIC_SUPABASE_URL: `http://127.0.0.1:${PORTA_STUB}`,
         NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'chave-de-teste-sem-valor',
         // O build coleta as rotas de API, e as que usam `supabaseAdmin` estouram

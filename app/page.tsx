@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Flame, TrendingDown, Trophy } from 'lucide-react'
+import { Flame, TrendingDown } from 'lucide-react'
 
 import CampoBusca from '@/components/CampoBusca'
 import {
@@ -8,7 +8,7 @@ import {
   type CategoryProduct,
 } from '@/lib/categories'
 import { formatBRL } from '@/lib/products'
-import { getCatalogStats, formatCount, formatUpdatedAt } from '@/lib/stats'
+import { getCatalogStats, formatCount, formatUltimaColeta } from '@/lib/stats'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,8 +21,16 @@ export default async function Home() {
     getCatalogStats(),
     listCategoriesWithProducts(),
   ])
-  const topOffers = onSale.slice(0, 2)        // hero
-  const fallingProducts = onSale.slice(0, 6)  // "em queda agora"
+  /*
+    `TopOfferCard` e o `topOffers` saíram junto com a coluna direita do hero.
+
+    Não era perda de informação: `topOffers` era `onSale.slice(0, 2)` e
+    `fallingProducts` é `onSale.slice(0, 6)` — os dois primeiros produtos
+    apareciam duas vezes na mesma página, no hero e na faixa logo abaixo. O
+    card do hero da maquete 1b é outro (maior queda do dia), e nasce no #128
+    com o dado que o sustente.
+  */
+  const fallingProducts = onSale.slice(0, 6)
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-800">
@@ -35,178 +43,74 @@ export default async function Home() {
       */}
       <main>
 
-      {/* 3. Hero — text à esquerda + top 2 ofertas à direita */}
-      <section className="bg-white py-10 md:py-14 px-4">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
-          {/* Left column */}
-          <div>
-            <h1 className="text-3xl md:text-5xl font-bold leading-tight text-gray-800 mb-4">
-              O suplemento certo pelo{' '}
-              <span className="text-green-600 underline decoration-wavy decoration-green-600">
-                menor preço
-              </span>{' '}
-              do Brasil.
-            </h1>
-            <p className="text-gray-500 text-base md:text-lg mb-6 leading-relaxed">
-              Acompanhamos preço de whey, creatina, pré-treino e mais. Hoje são{' '}
-              <strong>{formatCount(stats.offers)} ofertas</strong> de{' '}
-              <strong>{formatCount(stats.products)} produtos</strong>, com preço por dose e por
-              quilo lado a lado.
-            </p>
+      {/*
+        Hero da maquete 1b: a busca é o centro da página, não um acessório do
+        header. O desenho tem uma segunda coluna à direita — o card de maior
+        queda do dia — que não entra aqui: ela afirma variação de preço no
+        tempo, e o histórico ainda não sustenta isso (#128). Por isso o hero
+        precisa ficar bem numa coluna só, e não com um buraco no grid.
+      */}
+      <section className="bg-surface px-4 py-12 md:px-10 md:py-16">
+        <div className="mx-auto max-w-3xl">
+          <h1 className="text-4xl font-bold leading-[1.02] tracking-[-0.035em] text-ink sm:text-5xl md:text-[52px]">
+            Quanto custa a sua dose hoje?
+          </h1>
 
-            <CampoBusca className="mb-3" />
+          {/*
+            Os três números saem de `lib/stats.ts`, que existe justamente porque
+            esta home já exibiu "1.482 produtos monitorados" e "R$4,2M
+            economizados" — nenhum dos dois com origem no banco.
+          */}
+          <p className="mt-4 max-w-xl text-base leading-relaxed text-ink-2 md:text-lg">
+            Acompanhamos <strong className="font-semibold text-ink">{formatCount(stats.offers)} ofertas</strong>{' '}
+            de <strong className="font-semibold text-ink">{formatCount(stats.products)} produtos</strong> e
+            mostramos o preço por dose e por quilo lado a lado. Última coleta{' '}
+            {formatUltimaColeta(stats.lastUpdated)}.
+          </p>
 
-            <p className="text-sm text-gray-500 mb-4">
-              Ou{' '}
-              <Link href="/comparar" className="text-green-700 font-medium underline hover:text-green-800">
-                abra o comparador
-              </Link>{' '}
-              para ver produtos lado a lado, ou{' '}
-              <Link href="/ofertas" className="text-green-700 font-medium underline hover:text-green-800">
-                veja as ofertas do dia
-              </Link>.
-            </p>
+          <CampoBusca tamanho="hero" className="mt-7 max-w-2xl" />
 
-            <div className="flex flex-wrap gap-2">
+          {categorias.length > 0 && (
+            <nav aria-label="Categorias em destaque" className="mt-5 flex flex-wrap gap-2">
               {categorias.slice(0, 6).map(categoria => (
                 <Link
                   key={categoria.slug}
                   href={`/categoria/${categoria.slug}`}
-                  className="px-3 py-1.5 text-xs font-medium border border-green-600 text-green-600 rounded-full hover:bg-green-600 hover:text-white transition-colors"
+                  className="rounded-full border-[1.5px] border-line-strong px-4 py-2 text-sm text-ink transition-colors hover:border-brand hover:text-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
                 >
-                  {categoria.shortName}
+                  {categoria.name}
                 </Link>
               ))}
-            </div>
-          </div>
+            </nav>
+          )}
 
-          {/* Right column — 2 top offers stacked */}
-          <div className="flex flex-col gap-3 w-full max-w-md mx-auto md:ml-auto md:mr-0">
-            {topOffers.length > 0 ? (
-              topOffers.map((p, i) => (
-                <TopOfferCard key={p.id} product={p} position={i + 1} />
-              ))
-            ) : (
-              <div className="bg-gray-50 border border-gray-200 rounded-2xl p-8 text-center text-sm text-gray-400">
-                Sem ofertas em destaque no momento — volte em breve.
-              </div>
-            )}
-          </div>
+          <p className="mt-5 text-sm text-ink-3">
+            Ou{' '}
+            <Link href="/comparar" className="font-medium text-brand-strong underline hover:text-brand-deep">
+              abra o comparador
+            </Link>{' '}
+            para ver produtos lado a lado, ou{' '}
+            <Link href="/ofertas" className="font-medium text-brand-strong underline hover:text-brand-deep">
+              veja as ofertas do dia
+            </Link>.
+          </p>
         </div>
       </section>
 
-      {/* 4. Stats bar */}
-      <section className="bg-gray-100 py-8 px-4">
-        <div className="max-w-4xl mx-auto grid grid-cols-3 gap-4 text-center">
-          <div>
-            <p className="text-xl sm:text-2xl font-bold text-green-600">{formatCount(stats.offers)}</p>
-            <p className="text-xs sm:text-sm text-gray-600 mt-1">ofertas comparadas</p>
-          </div>
-          <div>
-            <p className="text-xl sm:text-2xl font-bold text-green-600">{formatCount(stats.products)}</p>
-            <p className="text-xs sm:text-sm text-gray-600 mt-1">produtos monitorados</p>
-          </div>
-          <div>
-            <p className="text-xl sm:text-2xl font-bold text-green-600">{formatUpdatedAt(stats.lastUpdated)}</p>
-            <p className="text-xs sm:text-sm text-gray-600 mt-1">última coleta de preços</p>
-          </div>
-        </div>
-      </section>
+      {/*
+        A faixa de números saiu daqui.
 
+        Ela repetia ofertas, produtos e última coleta logo abaixo do parágrafo
+        do hero, que agora carrega os três. A maquete 1b não tem essa faixa
+        justamente por isso: o mesmo dado dito duas vezes na mesma dobra não
+        informa mais, só ocupa altura antes do conteúdo.
+      */}
       {/* 5. Em queda agora — REDESIGN: fundo claro, cards brancos, alta legibilidade */}
       <FallingProductsSection products={fallingProducts} />
 
       {/* 7. Footer */}
       </main>
     </div>
-  )
-}
-
-// ---------- Top Offer Card (hero direita) ----------
-// Horizontal compact card: thumbnail à esquerda + info + CTA
-
-function TopOfferCard({
-  product,
-  position,
-}: {
-  product: CategoryProduct
-  position: number
-}) {
-  const hasDiscount =
-    product.featuredOriginalPrice != null &&
-    product.featuredOriginalPrice > product.featuredPrice
-  const discountPct = hasDiscount
-    ? Math.round((1 - product.featuredPrice / product.featuredOriginalPrice!) * 100)
-    : 0
-
-  return (
-    <Link
-      href={`/produto/${product.slug}`}
-      className="group block bg-white border-2 border-gray-100 hover:border-green-600 hover:shadow-lg rounded-2xl p-4 transition-all"
-    >
-      <div className="flex gap-3 items-start">
-        {/* Thumbnail */}
-        <div className="relative w-24 h-24 shrink-0 bg-gray-50 rounded-xl flex items-center justify-center p-2">
-          {product.thumbnail ? (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img
-              src={product.thumbnail}
-              alt={product.name}
-              className="max-h-full max-w-full object-contain"
-            />
-          ) : (
-            <span className="text-gray-300 text-[10px]">sem img</span>
-          )}
-          {position === 1 && (
-            <span className="absolute -top-1.5 -left-1.5 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[9px] font-bold shadow-sm">
-              <Trophy className="w-2.5 h-2.5" />
-              TOP
-            </span>
-          )}
-        </div>
-
-        {/* Info */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-2 mb-1">
-            <span className="inline-block px-2 py-0.5 text-[10px] font-bold rounded-full bg-green-600 text-white">
-              Oferta {position}
-            </span>
-            {hasDiscount && (
-              <span className="inline-block px-2 py-0.5 text-[10px] font-bold rounded-full bg-orange-100 text-orange-700">
-                -{discountPct}%
-              </span>
-            )}
-          </div>
-          {product.brand && (
-            <p className="text-[10px] font-bold uppercase tracking-wide text-green-600 truncate">
-              {product.brand}
-            </p>
-          )}
-          <h3 className="text-sm font-bold text-gray-800 leading-tight line-clamp-2 mb-1.5 group-hover:text-green-700 transition-colors">
-            {product.name}
-          </h3>
-          <div className="flex items-baseline gap-1.5 flex-wrap">
-            <span className="text-xl font-bold text-green-600">
-              {formatBRL(product.featuredPrice)}
-            </span>
-            {hasDiscount && (
-              <span className="text-xs text-gray-400 line-through">
-                {formatBRL(product.featuredOriginalPrice!)}
-              </span>
-            )}
-            {product.featuredPerDose && (
-              <span className="text-[11px] font-semibold text-green-700 ml-1">
-                · {formatBRL(product.featuredPerDose)}/dose
-              </span>
-            )}
-          </div>
-          <p className="text-[11px] text-gray-400 mt-1">
-            Comparado em {product.offerCount}{' '}
-            {product.offerCount === 1 ? 'loja' : 'lojas'}
-          </p>
-        </div>
-      </div>
-    </Link>
   )
 }
 

@@ -59,6 +59,27 @@ function arquivosDeUi(): string[] {
 
 type Ocorrencia = { arquivo: string; linha: number; valor: string }
 
+/**
+ * Apaga comentários preservando a numeração das linhas.
+ *
+ * Precisa existir porque referência de issue é indistinguível de cor: `#129`
+ * casa com `#[0-9a-fA-F]{3}` tão bem quanto `#fff`. A primeira versão deste
+ * teste acusou o comentário "Volta no #129" do Header como se fosse laranja
+ * escrito à mão (#120).
+ *
+ * `lib/claims.ts` exporta `removerComentarios`, mas ele troca cada bloco por
+ * um único espaço — o que desloca as linhas seguintes, e este relatório cita
+ * linha. Aqui a substituição mantém as quebras.
+ *
+ * Cor dentro de comentário também não é cor de verdade, então apagar os dois
+ * casos de uma vez está certo pelos dois motivos.
+ */
+function semComentarios(codigo: string): string {
+  return codigo
+    .replace(/\/\*[\s\S]*?\*\//g, (bloco) => bloco.replace(/[^\n]/g, ' '))
+    .replace(/^([ \t]*)\/\/.*$/gm, (_linha, indentacao: string) => indentacao)
+}
+
 function coresLiterais(conteudo: string, arquivo: string): Ocorrencia[] {
   const permitidos = new Set(
     EXCECOES.filter((e) => e.arquivo === arquivo).flatMap((e) => e.valores.map((v) => v.toLowerCase())),
@@ -78,7 +99,7 @@ function coresLiterais(conteudo: string, arquivo: string): Ocorrencia[] {
 describe('cores da marca vivem só nos tokens', () => {
   it('nenhum literal de cor em app/ ou components/', () => {
     const ocorrencias = arquivosDeUi().flatMap((caminho) =>
-      coresLiterais(readFileSync(caminho, 'utf8'), relative(RAIZ, caminho)),
+      coresLiterais(semComentarios(readFileSync(caminho, 'utf8')), relative(RAIZ, caminho)),
     )
 
     const relatorio = ocorrencias.map((o) => `  ${o.arquivo}:${o.linha}  ${o.valor}`).join('\n')
@@ -96,6 +117,20 @@ describe('cores da marca vivem só nos tokens', () => {
   it('audita um conjunto de arquivos que não está vazio', () => {
     // Uma auditoria que não lê nada passa sempre. Mesma proteção do claims.test.ts.
     expect(arquivosDeUi().length).toBeGreaterThan(5)
+  })
+
+  it('referência de issue em comentário não é confundida com cor', () => {
+    // O caso real que quebrou o #120: "Volta no #129" acusado como hex.
+    const codigo = ['// Volta no #129, junto com o serviço.', 'const a = 1', '/* ver #114 e #fff */'].join('\n')
+    expect(coresLiterais(semComentarios(codigo), 'exemplo.tsx')).toEqual([])
+  })
+
+  it('mas cor fora de comentário continua sendo acusada, na linha certa', () => {
+    // A mutação que importa: o comentário some, e o que sobra mantém a linha.
+    const codigo = ['/* bloco\n de duas linhas */', 'const cor = "#F26A1B"'].join('\n')
+    const achados = coresLiterais(semComentarios(codigo), 'exemplo.tsx')
+    expect(achados).toHaveLength(1)
+    expect(achados[0]).toMatchObject({ valor: '#F26A1B', linha: 3 })
   })
 
   it('toda exceção aponta a issue que a remove', () => {

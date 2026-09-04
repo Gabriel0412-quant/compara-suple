@@ -1,4 +1,7 @@
 import type { Metadata } from "next";
+
+import Footer from "@/components/Footer";
+import Header from "@/components/Header";
 import { Familjen_Grotesk, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -58,7 +61,19 @@ export default function RootLayout({
       lang="pt-BR"
       className={`${familjenGrotesk.variable} ${ibmPlexMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      {/*
+        Header e rodapé vivem aqui, e não em cada página.
+
+        Antes o <Header /> era importado por oito arquivos, um a um, e o rodapé
+        existia só na home — o que significa que sete páginas públicas não
+        mostravam a divulgação de afiliado. Rota nova nascia sem nenhum dos
+        dois, e ninguém percebia até alguém reparar.
+      */}
+      <body className="min-h-full flex flex-col">
+        <Header />
+        {children}
+        <Footer />
+      </body>
     </html>
   );
 }

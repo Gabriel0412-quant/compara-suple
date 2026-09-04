@@ -1,9 +1,6 @@
-import Header from '@/components/Header'
-
 export default function Loading() {
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header />
       <main className="max-w-7xl mx-auto px-4 py-6 md:py-10 animate-pulse">
         <div className="h-4 bg-gray-200 rounded w-1/3 mb-6" />
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-6">

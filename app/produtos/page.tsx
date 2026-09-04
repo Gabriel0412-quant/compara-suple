@@ -6,7 +6,6 @@ import { after } from 'next/server'
 import { Breadcrumb } from '@/components/Breadcrumb'
 import CampoBusca from '@/components/CampoBusca'
 import { ComoComparamos } from '@/components/ComoComparamos'
-import Header from '@/components/Header'
 import { ProductGridCard } from '@/components/category/ProductGridCard'
 import { filtrarPorTermo, parseTermoBusca } from '@/lib/busca'
 import { ehBot, registrarEvento } from '@/lib/eventos'
@@ -71,8 +70,6 @@ export default async function ProdutosPage({ searchParams }: Props) {
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-800">
-      <Header />
-
       <main className="max-w-7xl mx-auto px-4 py-10">
         <Breadcrumb
           items={[

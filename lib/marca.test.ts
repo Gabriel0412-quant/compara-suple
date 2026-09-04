@@ -23,6 +23,23 @@ import { describe, expect, it } from 'vitest'
 const RAIZ = process.cwd()
 const NOME_ANTIGO = /comparasuple/i
 
+/**
+ * O nome partido entre elementos.
+ *
+ * O header antigo escrevia a marca como duas `<span>` — "Compara" numa,
+ * "Suple" noutra — para colorir só a primeira metade. Resultado: o nome
+ * antigo aparecia em todas as páginas do site, e a primeira versão deste
+ * teste passava, porque a string "ComparaSuple" nunca existe no arquivo.
+ *
+ * Descoberto no #120, ao reescrever o header, depois do #119 ter sido
+ * mergeado alegando que nenhuma superfície pública dizia o nome antigo.
+ *
+ * Tirar as tags e o espaço em branco cola as metades de volta.
+ */
+function textoColado(codigo: string): string {
+  return codigo.replace(/<[^>]*>/g, '').replace(/\s+/g, '')
+}
+
 function superficiesPublicas(): string[] {
   const achados: string[] = []
   const anda = (dir: string) => {
@@ -58,6 +75,24 @@ describe('o nome antigo não aparece nas superfícies públicas', () => {
         : `O nome antigo reapareceu:\n${relatorio}\n\n` +
           'O produto se chama Preço Suplemento desde 04/09/2026.',
     ).toEqual([])
+  })
+
+  it('nem partido entre elementos, como o header antigo fazia', () => {
+    const culpados = superficiesPublicas().filter((caminho) =>
+      NOME_ANTIGO.test(textoColado(readFileSync(caminho, 'utf8'))),
+    )
+    expect(
+      culpados.map((c) => relative(RAIZ, c)),
+      'O nome antigo reapareceu partido entre elementos — foi assim que ele sobreviveu ao #119.',
+    ).toEqual([])
+  })
+
+  it('reconhece a forma exata que escapou do #119', () => {
+    const headerAntigo =
+      '<span className="text-xl font-bold text-green-600">Compara</span>\n' +
+      '<span className="text-xl font-bold text-gray-800">Suple</span>'
+    expect(NOME_ANTIGO.test(headerAntigo)).toBe(false) // passava antes
+    expect(NOME_ANTIGO.test(textoColado(headerAntigo))).toBe(true) // pega agora
   })
 
   it('audita um conjunto de arquivos que não está vazio', () => {

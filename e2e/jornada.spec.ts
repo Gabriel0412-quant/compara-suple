@@ -72,7 +72,19 @@ test.describe('home → categoria', () => {
 
   test('clicar num atalho abre a categoria com produtos', async ({ page }) => {
     await page.goto('/')
-    await page.locator('a[href="/categoria/creatina"]').first().click()
+    /*
+      Escopado ao `main` de propósito.
+
+      Antes era `.first()` sobre a página inteira, e o primeiro em ordem de DOM
+      era o link do header — então o teste dizia "atalho da home" e clicava no
+      do header. Passou a falhar no #120, quando as categorias do header foram
+      para dentro de um `<details>`: o alvo continuava no DOM, mas invisível.
+
+      É o achado do #113 de novo: a malha de links tem dois caminhos
+      independentes, Header e home. Cada um precisa do seu próprio teste, e
+      este é o da home.
+    */
+    await page.getByRole('main').locator('a[href="/categoria/creatina"]').first().click()
     await expect(page).toHaveURL(/\/categoria\/creatina/)
     await expect(page.locator('article').first()).toContainText('Creatina')
   })

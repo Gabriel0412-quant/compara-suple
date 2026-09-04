@@ -5,7 +5,6 @@ import { after } from 'next/server'
 import { Plus, X, Check, Trophy } from 'lucide-react'
 
 import { ComoComparamos } from '@/components/ComoComparamos'
-import Header from '@/components/Header'
 import { filtrarPorTermo, parseTermoBusca } from '@/lib/busca'
 import { ehBot, registrarEvento } from '@/lib/eventos'
 import { getCatalogStats } from '@/lib/stats'
@@ -117,8 +116,6 @@ export default async function CompararPage({ searchParams }: Props) {
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-800">
-      <Header />
-
       <main className="max-w-7xl mx-auto px-4 py-6 md:py-10">
         <Breadcrumb items={[{ label: 'Início', href: '/' }, { label: 'Comparador' }]} />
 

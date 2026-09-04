@@ -2,7 +2,6 @@ import Link from 'next/link'
 import { Flame, TrendingDown, Trophy } from 'lucide-react'
 
 import CampoBusca from '@/components/CampoBusca'
-import Header from '@/components/Header'
 import {
   getProductsOnSale,
   listCategoriesWithProducts,
@@ -27,8 +26,14 @@ export default async function Home() {
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-800">
-      {/* 2. Header */}
-      <Header />
+      {/*
+        A home era a única das nove páginas sem landmark `main` — as outras
+        oito já tinham. Passou despercebido enquanto o `<Header />` era
+        importado por cada página; com header e rodapé no layout, a falta
+        fica evidente, e quem navega por landmarks não tinha como pular a
+        navegação para chegar ao conteúdo.
+      */}
+      <main>
 
       {/* 3. Hero — text à esquerda + top 2 ofertas à direita */}
       <section className="bg-white py-10 md:py-14 px-4">
@@ -112,37 +117,7 @@ export default async function Home() {
       <FallingProductsSection products={fallingProducts} />
 
       {/* 7. Footer */}
-      <footer className="bg-gray-900 py-10 px-4">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center md:items-start justify-between gap-6">
-          <div>
-            <Link href="/" className="flex items-center mb-3">
-              <span className="text-xl font-bold text-green-600">Compara</span>
-              <span className="text-xl font-bold text-white">Suple</span>
-            </Link>
-            <p className="text-gray-400 text-xs max-w-xs leading-relaxed">
-              Alguns links são de afiliados. O preço que você paga é o mesmo.
-            </p>
-          </div>
-          {/* Só destinos que existem. Os links institucionais (Sobre, Blog,
-              Privacidade, Termos, Contato) apontavam todos para "#": pareciam
-              navegação e não levavam a lugar nenhum. Voltam quando as páginas
-              existirem. */}
-          <nav
-            aria-label="Navegação do rodapé"
-            className="flex flex-wrap gap-x-6 gap-y-2 text-sm justify-center md:justify-end"
-          >
-            {[
-              { rotulo: 'Produtos', href: '/produtos' },
-              { rotulo: 'Ofertas', href: '/ofertas' },
-              { rotulo: 'Comparador', href: '/comparar' },
-            ].map(({ rotulo, href }) => (
-              <Link key={href} href={href} className="text-gray-400 hover:text-white transition-colors">
-                {rotulo}
-              </Link>
-            ))}
-          </nav>
-        </div>
-      </footer>
+      </main>
     </div>
   )
 }

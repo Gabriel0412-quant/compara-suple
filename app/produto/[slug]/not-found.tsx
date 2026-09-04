@@ -1,10 +1,8 @@
 import Link from 'next/link'
-import Header from '@/components/Header'
 
 export default function NotFound() {
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header />
       <main className="max-w-3xl mx-auto px-4 py-20 text-center">
         <p className="text-sm font-semibold text-green-600 mb-2">404</p>
         <h1 className="text-3xl font-bold text-gray-800 mb-3">

@@ -2,6 +2,8 @@ import Link from 'next/link'
 import { Flame, TrendingDown } from 'lucide-react'
 
 import CampoBusca from '@/components/CampoBusca'
+import FaixaDeMarcas from '@/components/home/FaixaDeMarcas'
+import { listarMarcas } from '@/lib/brands'
 import {
   getProductsOnSale,
   listCategoriesWithProducts,
@@ -16,11 +18,18 @@ export const dynamic = 'force-dynamic'
 
 export default async function Home() {
   // Busca os produtos em oferta (já vem ordenado por desconto absoluto)
-  const [onSale, stats, categorias] = await Promise.all([
+  const [onSale, stats, categorias, marcas] = await Promise.all([
     getProductsOnSale(),
     getCatalogStats(),
     listCategoriesWithProducts(),
+    listarMarcas(),
   ])
+  /*
+    A faixa mostra as cinco primeiras, mas o texto do recorte precisa do total
+    para não afirmar um corte que não houve — dizer "as 5 com mais ofertas"
+    com três marcas no catálogo seria inventar uma seleção.
+  */
+  const marcasEmDestaque = marcas.slice(0, 5)
   /*
     `TopOfferCard` e o `topOffers` saíram junto com a coluna direita do hero.
 
@@ -96,6 +105,8 @@ export default async function Home() {
           </p>
         </div>
       </section>
+
+      <FaixaDeMarcas marcas={marcasEmDestaque} total={marcas.length} />
 
       {/*
         A faixa de números saiu daqui.

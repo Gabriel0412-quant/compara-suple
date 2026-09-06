@@ -99,6 +99,33 @@ describe('loadCuratedItems separa o que dá para coletar', () => {
     expect(items[0].manualByItemId).toEqual({ MLB99: 'https://exemplo/99' })
   })
 
+  it('preserva apenas strings não vazias e objetos da curadoria por anúncio', () => {
+    const reviewed = {
+      url: 'https://www.mercadolivre.com.br/social/revisao',
+      seller_id: 9,
+      reviewed_at: '2026-09-05',
+      review_ref: 'review-54',
+    }
+    const { items } = loadCuratedItems([{
+      catalog_id: 'MLB54',
+      affiliate_urls: {
+        legado: 'https://www.mercadolivre.com.br/p/MLB54?wid=legado',
+        reviewed,
+        incompleto: { url: 'https://www.mercadolivre.com.br/social/incompleto' },
+        vazio: '',
+        nulo: null,
+        numero: 9,
+        booleano: false,
+      },
+    } as never])
+
+    expect(items[0].manualByItemId).toEqual({
+      legado: 'https://www.mercadolivre.com.br/p/MLB54?wid=legado',
+      reviewed,
+      incompleto: { url: 'https://www.mercadolivre.com.br/social/incompleto' },
+    })
+  })
+
   it('lista vazia não quebra', () => {
     expect(loadCuratedItems([])).toEqual({ items: [], recusados: [] })
   })

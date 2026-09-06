@@ -42,10 +42,10 @@ não comprova atribuição e não é publicado.
 o campo antigo `affiliate_url` é ignorado e contado em
 `ml_affiliate_url_compartilhada_ignorada`.
 
-Deixar `affiliate_urls` vazio é o caso normal. Nesta etapa, toda URL manual é
-legada e sem proveniência oficial demonstrada; ela não é publicada. O fallback
-é construído por oferta para preservar a navegação de compra sem declarar
-atribuição.
+Deixar `affiliate_urls` vazio é o caso normal. Nesta etapa, toda **string**
+manual é legada e sem proveniência oficial demonstrada; ela não é publicada. O
+fallback é construído por oferta para preservar a navegação de compra sem
+declarar atribuição. O objeto revisado por anúncio é tratado separadamente.
 
 ## Classificação de uma URL legada
 
@@ -63,9 +63,37 @@ publicada. Qualquer recusa estrutural cai no fallback:
 | `fallback_dominio` | fora de `mercadolivre.com.br`, `mercadolibre.com.br`, `mercadolibre.com` |
 | `fallback_wid` | sem `wid`, com `wid` de outra oferta ou `wid` duplicado |
 
-O `wid` é o ponto central: sem ele a URL vale para o catálogo inteiro e não
-distingue o vendedor. É por isso que os links `/social/...` do portal, que não
-têm `wid`, são recusados.
+Para strings legadas, o `wid` é o ponto central: sem ele a URL vale para o
+catálogo inteiro e não distingue o vendedor. Por isso links sociais legados,
+que não têm `wid`, são recusados. Um objeto revisado tem regras próprias de
+identidade e pode usar uma URL social sem `wid`.
+
+## Importação revisada por anúncio
+
+Uma entrada revisada usa o mesmo mapa por `item_id`, com objeto completo:
+
+```json
+{
+  "MLB5872093596": {
+    "url": "https://www.mercadolivre.com.br/social/exemplo",
+    "seller_id": 123,
+    "reviewed_at": "2026-09-05",
+    "review_ref": "ML54.02:exemplo"
+  }
+}
+```
+
+Ela só é selecionada quando o `seller_id` coincide com o snapshot da oferta, a
+data civil e a referência opaca são válidas e a URL original usa HTTPS com a
+autoridade textual `www.mercadolivre.com.br` e o caminho
+`/social/<segmento>`. Porta explícita, credencial, host ou caminho diferente,
+e `wid` duplicado ou divergente são recusados. A ausência de `wid` é aceita
+apenas porque o mapa e o vendedor revisado identificam a oferta.
+
+O valor de `url` é persistido sem reconstrução. A revisão é uma checagem local
+de formato e identidade; ela não prova clique, conversão ou atribuição no
+painel. A mesma URL revisada não pode ser usada por dois anúncios no catálogo.
+Os logs e o retorno do cron expõem contadores, nunca a URL ou `review_ref`.
 
 ## Fallback
 
@@ -80,10 +108,14 @@ https://www.mercadolivre.com.br/up/{catalogId}?wid={itemId}   (user products, ML
 
 `ML_AFFILIATE_TAG` não é usado para construir o fallback. Preencher uma
 variável local não demonstra atribuição nem restaura comissão. O cron registra
-`ml_url_fallback_ativo` em toda execução e expõe contadores finitos em `urls`:
-`fallback`, `fallback_absent`, `fallback_unverified`,
-`fallback_url_invalida`, `fallback_protocolo`, `fallback_dominio` e
-`fallback_wid`.
+`ml_url_fallback_ativo` quando o lote contém fallback e expõe em `urls` todos
+os contadores finitos: `affiliate_reviewed`, `reviewed_import`, `fallback`,
+`fallback_absent`, `fallback_unverified`, `fallback_url_invalida`,
+`fallback_protocolo`, `fallback_dominio`, `fallback_wid`,
+`fallback_reviewed_metadata`, `fallback_seller` e `fallback_duplicate`.
+Em cada catálogo e no agregado, `ofertas_resolvidas = affiliate_reviewed +
+fallback`; `reviewed_import` é o motivo de sucesso que acompanha cada entrada
+contada em `affiliate_reviewed`.
 
 ## Observabilidade
 

@@ -405,7 +405,7 @@ async function ingestCatalog(
       manualByItemId,
     })
     urlCounters[link.reason]++
-    if (!link.tracked) urlCounters.sem_tag_de_afiliado++
+    urlCounters.fallback++
     ofertas.push({
       external_id: offer.item_id,
       url: link.url,
@@ -429,9 +429,7 @@ async function ingestCatalog(
     simular,
   })
   logReconciliacao(catalogId, 'success', reconciliacao)
-  // Só contadores: a URL afiliada completa carrega o token de rastreio e nunca
-  // entra em log.
-  console.info('ml_url_afiliada', { catalogId, ...urlCounters })
+  console.info('ml_url_fallback', { catalogId, ...urlCounters })
 
   return {
     ok: true,
@@ -501,13 +499,7 @@ export async function runCuratedIngest(
   const storeId = await getStoreId()
   const { items, recusados } = loadCuratedItems()
 
-  // Sem a tag, todo link sai válido mas sem atribuição: o clique acontece e a
-  // comissão não. É silencioso demais para não avisar.
-  if (!process.env.ML_AFFILIATE_TAG) {
-    console.warn('ml_affiliate_tag_ausente', {
-      efeito: 'links serao gerados sem atribuicao de afiliado',
-    })
-  }
+  console.warn('ml_url_fallback_ativo', { destino: 'untracked_fallback' })
 
   const result: IngestResult = {
     simulado: simular,

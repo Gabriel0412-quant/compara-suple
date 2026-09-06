@@ -18,20 +18,41 @@ vi.mock('./client', () => ({
   getUserProductItems,
 }))
 vi.mock('@/data/items.json', () => ({
-  default: { items: ['MLB111', 'MLB222', 'MLBU333'] },
+  default: {
+    items: [
+      { catalog_id: 'MLB111', affiliate_urls: {} },
+      {
+        catalog_id: 'MLB222',
+        affiliate_urls: {
+          MLB1: 'https://www.mercadolivre.com.br/p/MLB222?wid=MLB1&campaign=legado',
+          MLB2: 'url-manual-invalida',
+        },
+      },
+      { catalog_id: 'MLBU333', affiliate_urls: {} },
+    ],
+  },
 }))
 vi.mock('@/lib/db-admin', () => {
-  const single = () => Promise.resolve({ data: { id: 1 }, error: null })
-  const chain: Record<string, unknown> = {}
-  for (const metodo of ['select', 'eq', 'is', 'upsert', 'insert', 'update']) {
-    chain[metodo] = () => chain
+  const ids: Record<string, number> = {
+    store: 101,
+    brand: 202,
+    product: 303,
+    variant: 404,
   }
-  chain.single = single
-  chain.maybeSingle = () => Promise.resolve({ data: null, error: null })
-  return { supabaseAdmin: { from: () => chain, rpc } }
+  const from = (table: string) => {
+    const chain: Record<string, unknown> = {}
+    for (const metodo of ['select', 'eq', 'is', 'upsert', 'insert', 'update']) {
+      chain[metodo] = () => chain
+    }
+    chain.single = () => Promise.resolve({ data: { id: ids[table] }, error: null })
+    chain.maybeSingle = () => Promise.resolve({ data: null, error: null })
+    return chain
+  }
+  return { supabaseAdmin: { from, rpc } }
 })
 
 import { runCuratedIngest } from './ingest'
+import { newOfferUrlCounters } from './offer-url'
 
 const contadores = {
   simulado: false,
@@ -172,16 +193,68 @@ describe('runCuratedIngest', () => {
     expect(new URL(urls[1]).searchParams.get('wid')).toBe('MLB2')
   })
 
-  it('conta o motivo de cada link e o total sem tag de afiliado', async () => {
+  it('TestRunCuratedIngest_ShouldAggregateFallbackCountersOncePerOfferAndCatalog', async () => {
+    vi.stubEnv('ML_AFFILIATE_TAG', 'tag-configurada-sem-efeito')
+
     const resultado = await runCuratedIngest()
 
-    expect(resultado.urls).toMatchObject({
-      manual: 0,
-      fallback_sem_manual: 6,
+    expect(resultado.urls).toEqual({
+      fallback: 6,
+      fallback_absent: 4,
+      fallback_unverified: 1,
+      fallback_url_invalida: 1,
+      fallback_protocolo: 0,
+      fallback_dominio: 0,
       fallback_wid: 0,
-      sem_tag_de_afiliado: 6,
     })
-    expect(resultado.per_catalog[0].urls?.fallback_sem_manual).toBe(2)
+    expect(resultado.per_catalog.map(c => c.urls?.fallback)).toEqual([2, 2, 2])
+    expect(resultado.urls.fallback).toBe(
+      resultado.urls.fallback_absent
+      + resultado.urls.fallback_unverified
+      + resultado.urls.fallback_url_invalida
+      + resultado.urls.fallback_protocolo
+      + resultado.urls.fallback_dominio
+      + resultado.urls.fallback_wid,
+    )
+    for (const catalog of resultado.per_catalog) {
+      if (!catalog.urls) continue
+      expect(catalog.urls.fallback).toBe(
+        catalog.urls.fallback_absent
+        + catalog.urls.fallback_unverified
+        + catalog.urls.fallback_url_invalida
+        + catalog.urls.fallback_protocolo
+        + catalog.urls.fallback_dominio
+        + catalog.urls.fallback_wid,
+      )
+    }
+    expect(JSON.stringify(resultado.urls)).not.toContain('tracked')
+    expect(JSON.stringify(resultado.urls)).not.toContain('sem_tag_de_afiliado')
+    const urls = chamadasRpc().flatMap(call => call.args.p_items.map((offer: { url: string }) => offer.url))
+    expect(urls).toHaveLength(6)
+    expect(new Set(urls).size).toBe(6)
+
+    getProductItems
+      .mockResolvedValueOnce(snapshotVazio())
+      .mockResolvedValueOnce({
+        status: 'upstream_error',
+        reason: 'request_failed',
+        totalReceived: 0,
+        pagesFetched: 1,
+        rejectedByReason: {
+          invalid_item_id: 0, invalid_seller_id: 0, invalid_price: 0,
+          invalid_currency: 0, invalid_condition: 0,
+        },
+      } as MlProductItemsSnapshot)
+    getUserProductItems.mockResolvedValueOnce(snapshotVazio())
+
+    const semOfertasOuFalho = await runCuratedIngest()
+
+    expect(semOfertasOuFalho.urls).toEqual(newOfferUrlCounters())
+    expect(semOfertasOuFalho.per_catalog.map(catalog => catalog.status)).toEqual([
+      'success_empty',
+      'upstream_error',
+      'success_empty',
+    ])
   })
 
   it('repetir o mesmo snapshot produz exatamente o mesmo payload', async () => {
@@ -235,7 +308,7 @@ describe('runCuratedIngest', () => {
     expect(JSON.stringify(chamadasRpc()[0].args.p_items)).toBe(real)
   })
 
-  it('isola a falha de um catálogo sem derrubar os outros', async () => {
+  it('TestRunCuratedIngest_ShouldContinueOtherCatalogsWhenOneCatalogPersistenceFails', async () => {
     rpc
       .mockResolvedValueOnce({ data: null, error: { message: 'deadlock detected' } })
       .mockResolvedValueOnce({ data: contadores, error: null })
@@ -249,6 +322,54 @@ describe('runCuratedIngest', () => {
     expect(resultado.per_catalog[1].status).toBe('success')
     expect(resultado.catalogs_ingested).toBe(2)
     expect(resultado.offers_indisponibilizadas).toBe(6)
+  })
+
+  it('TestRunCuratedIngest_ShouldSanitizeFallbackLogsAndKeepCommercialFieldsIndependent', async () => {
+    vi.stubEnv('ML_AFFILIATE_TAG', 'tag-secreta')
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    const resultado = await runCuratedIngest()
+    const logText = JSON.stringify(info.mock.calls)
+    const resultText = JSON.stringify(resultado)
+    const firstOffer = chamadasRpc()[0].args.p_items[0]
+    const fallbackLogs = info.mock.calls.filter(([event]) => event === 'ml_url_fallback')
+
+    expect(logText).not.toContain('https://www.mercadolivre.com.br/p/MLB222?wid=MLB1&campaign=legado')
+    expect(logText).not.toContain('tag-secreta')
+    expect(resultText).not.toContain('https://www.mercadolivre.com.br/p/MLB222?wid=MLB1&campaign=legado')
+    expect(firstOffer).toMatchObject({
+      external_id: 'MLB1',
+      price: 50,
+      ml_rank: 0,
+      raw: { seller_id: 9 },
+    })
+    expect(firstOffer.url).toBe('https://www.mercadolivre.com.br/p/MLB111?wid=MLB1')
+    expect(chamadasRpc()[0].args).toMatchObject({
+      p_store_id: 101,
+      p_variant_id: 404,
+      p_catalog_id: 'MLB111',
+    })
+    expect(fallbackLogs).toEqual([
+      ['ml_url_fallback', {
+        catalogId: 'MLB111', fallback: 2, fallback_absent: 2, fallback_unverified: 0,
+        fallback_url_invalida: 0, fallback_protocolo: 0, fallback_dominio: 0, fallback_wid: 0,
+      }],
+      ['ml_url_fallback', {
+        catalogId: 'MLB222', fallback: 2, fallback_absent: 0, fallback_unverified: 1,
+        fallback_url_invalida: 1, fallback_protocolo: 0, fallback_dominio: 0, fallback_wid: 0,
+      }],
+      ['ml_url_fallback', {
+        catalogId: 'MLBU333', fallback: 2, fallback_absent: 2, fallback_unverified: 0,
+        fallback_url_invalida: 0, fallback_protocolo: 0, fallback_dominio: 0, fallback_wid: 0,
+      }],
+    ])
+    expect(warn.mock.calls).toEqual([
+      ['ml_url_fallback_ativo', { destino: 'untracked_fallback' }],
+    ])
+
+    info.mockRestore()
+    warn.mockRestore()
   })
 
   it('propaga falhas de conexão em vez de escondê-las por catálogo', async () => {

@@ -50,6 +50,7 @@ describe('/api/cron/ml-ingest', () => {
     const response = await handler(request(method))
 
     expect(response.status).toBe(401)
+    expect(response.headers.get('content-type')).toContain('application/json')
     await expect(response.json()).resolves.toEqual({ ok: false, error: 'unauthorized' })
     expect(runCuratedIngest).not.toHaveBeenCalled()
   })
@@ -60,6 +61,7 @@ describe('/api/cron/ml-ingest', () => {
     const response = await GET(request('GET', 'Bearer cron-secret'))
 
     expect(response.status).toBe(503)
+    expect(response.headers.get('content-type')).toContain('application/json')
     await expect(response.json()).resolves.toEqual({
       ok: false,
       error: 'configuration_error',
@@ -73,6 +75,7 @@ describe('/api/cron/ml-ingest', () => {
     const response = await GET(request('GET'))
 
     expect(response.status).toBe(503)
+    expect(response.headers.get('content-type')).toContain('application/json')
     await expect(response.json()).resolves.toEqual({
       ok: false,
       error: 'configuration_error',
@@ -91,6 +94,7 @@ describe('/api/cron/ml-ingest', () => {
     const response = await GET(request('GET', 'Bearer cron-secret'))
 
     expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toContain('application/json')
     await expect(response.json()).resolves.toEqual({
       ok: true,
       result: {
@@ -100,6 +104,49 @@ describe('/api/cron/ml-ingest', () => {
         per_catalog: [],
       },
     })
+  })
+
+  it('TestCronMlIngest_ShouldExposeFallbackCountersWithoutLegacyAffiliateFields', async () => {
+    const result = {
+      simulado: false,
+      catalogIds: 1,
+      catalogs_ingested: 1,
+      offers_ingested: 1,
+      urls: {
+        fallback: 1,
+        fallback_absent: 1,
+        fallback_unverified: 0,
+        fallback_url_invalida: 0,
+        fallback_protocolo: 0,
+        fallback_dominio: 0,
+        fallback_wid: 0,
+      },
+      per_catalog: [{
+        catalog_id: 'MLB54',
+        status: 'success',
+        urls: {
+          fallback: 1,
+          fallback_absent: 1,
+          fallback_unverified: 0,
+          fallback_url_invalida: 0,
+          fallback_protocolo: 0,
+          fallback_dominio: 0,
+          fallback_wid: 0,
+        },
+      }],
+    }
+    runCuratedIngest.mockResolvedValue(result)
+
+    for (const [method, handler] of [['GET', GET], ['POST', POST]] as const) {
+      const response = await handler(request(method, 'Bearer cron-secret'))
+      const body = await response.json()
+
+      expect(response.status).toBe(200)
+      expect(response.headers.get('content-type')).toContain('application/json')
+      expect(body).toEqual({ ok: true, result })
+      expect(JSON.stringify(body)).not.toContain('tracked')
+      expect(JSON.stringify(body)).not.toContain('sem_tag_de_afiliado')
+    }
   })
 
   it.each([
@@ -125,6 +172,7 @@ describe('/api/cron/ml-ingest', () => {
     const response = await GET(request('GET', undefined, '?simular=1'))
 
     expect(response.status).toBe(401)
+    expect(response.headers.get('content-type')).toContain('application/json')
     expect(runCuratedIngest).not.toHaveBeenCalled()
   })
 
@@ -136,6 +184,7 @@ describe('/api/cron/ml-ingest', () => {
     const response = await POST(request('POST', 'Bearer cron-secret'))
 
     expect(response.status).toBe(503)
+    expect(response.headers.get('content-type')).toContain('application/json')
     await expect(response.json()).resolves.toEqual({
       ok: false,
       error: 'auth_required',
@@ -154,6 +203,7 @@ describe('/api/cron/ml-ingest', () => {
     const response = await POST(request('POST', 'Bearer cron-secret'))
 
     expect(response.status).toBe(500)
+    expect(response.headers.get('content-type')).toContain('application/json')
     await expect(response.json()).resolves.toEqual({
       ok: false,
       error: 'ingestion_failed',
@@ -174,6 +224,7 @@ describe('/api/cron/ml-ingest', () => {
     const response = await POST(request('POST', 'Bearer cron-secret'))
 
     expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toContain('application/json')
     expect(warn).toHaveBeenCalledWith('ml_ingest_partial_failure', {
       failed_catalogs: 1,
       catalog_ids: 2,

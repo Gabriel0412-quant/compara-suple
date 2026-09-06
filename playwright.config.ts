@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test'
 
-const PORTA_APP = 3210
-const PORTA_STUB = 54321
+const PORTA_APP = Number(process.env.E2E_APP_PORT ?? 3210)
+const PORTA_STUB = Number(process.env.E2E_STUB_PORT ?? 54321)
 const BASE_URL = `http://127.0.0.1:${PORTA_APP}`
 
 /**

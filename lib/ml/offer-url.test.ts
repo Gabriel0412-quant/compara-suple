@@ -1,88 +1,119 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { newOfferUrlCounters, resolveOfferUrl } from './offer-url'
 
 const CATALOGO = 'MLB19049048'
 const ITEM_A = 'MLB5872093596'
 const ITEM_B = 'MLB4169713445'
-const TAG = 'tag-de-teste'
 
-function urlDoItem(itemId: string) {
-  return `https://www.mercadolivre.com.br/p/${CATALOGO}?affiliate=oficial&wid=${itemId}`
+function fallback(catalogId = CATALOGO, externalId = ITEM_A) {
+  return `https://www.mercadolivre.com.br/${catalogId.startsWith('MLBU') ? 'up' : 'p'}/${encodeURIComponent(catalogId)}?wid=${encodeURIComponent(externalId)}`
 }
 
-function resolver(externalId: string, manualByItemId?: Record<string, string>) {
-  return resolveOfferUrl({ catalogId: CATALOGO, externalId, manualByItemId, affiliateTag: TAG })
-}
+afterEach(() => {
+  vi.unstubAllEnvs()
+})
 
 describe('resolveOfferUrl', () => {
-  it('dá a cada oferta o link do seu próprio anúncio', () => {
-    const a = resolver(ITEM_A)
-    const b = resolver(ITEM_B)
+  it.each([undefined, 'tag-arbitraria', '   '])(
+    'TestResolveOfferUrl_ShouldReturnUntrackedFallbackForMissingArbitraryOrBlankTag (%s)',
+    affiliateTag => {
+      vi.stubEnv('ML_AFFILIATE_TAG', affiliateTag ?? '')
 
-    expect(a.url).not.toBe(b.url)
-    expect(new URL(a.url).searchParams.get('wid')).toBe(ITEM_A)
-    expect(new URL(b.url).searchParams.get('wid')).toBe(ITEM_B)
-  })
+      const resolution = resolveOfferUrl({ catalogId: CATALOGO, externalId: ITEM_A })
 
-  it('aceita a URL curada quando o wid dela é o da própria oferta', () => {
-    const r = resolver(ITEM_A, { [ITEM_A]: urlDoItem(ITEM_A) })
+      expect(resolution).toEqual({
+        url: fallback(),
+        destination: 'untracked_fallback',
+        origin: 'none',
+        validation: 'absent',
+        reason: 'fallback_absent',
+      })
+      expect(new URL(resolution.url).searchParams.getAll('wid')).toEqual([ITEM_A])
+      expect(resolution.url).not.toContain('affiliate')
+      if (affiliateTag) expect(resolution.url).not.toContain(affiliateTag)
+      expect(resolveOfferUrl({
+        catalogId: CATALOGO,
+        externalId: ITEM_A,
+        manualByItemId: { [ITEM_A]: '' },
+      })).toEqual({
+        url: fallback(),
+        destination: 'untracked_fallback',
+        origin: 'none',
+        validation: 'absent',
+        reason: 'fallback_absent',
+      })
+    },
+  )
 
-    expect(r).toEqual({ url: urlDoItem(ITEM_A), reason: 'manual', tracked: true })
-  })
+  it.each([
+    'mercadolivre.com.br',
+    'mercadolibre.com.br',
+    'mercadolibre.com',
+  ])('TestResolveOfferUrl_ShouldClassifyManualUrlWithoutOfficialProvenanceAsUnverifiedFallback (%s)', host => {
+    const manual = `https://${host}/p/${CATALOGO}?wid=${ITEM_A}&campaign=legado`
 
-  it('nunca aplica em B a URL curada de A', () => {
-    const curadas = { [ITEM_A]: urlDoItem(ITEM_A) }
-
-    const b = resolver(ITEM_B, curadas)
-
-    expect(b.url).not.toContain(ITEM_A)
-    expect(b.reason).toBe('fallback_sem_manual')
-    expect(new URL(b.url).searchParams.get('wid')).toBe(ITEM_B)
+    expect(resolveOfferUrl({
+      catalogId: CATALOGO,
+      externalId: ITEM_A,
+      manualByItemId: { [ITEM_A]: manual },
+    })).toEqual({
+      url: fallback(),
+      destination: 'untracked_fallback',
+      origin: 'legacy_manual',
+      validation: 'unverified',
+      reason: 'fallback_unverified',
+    })
   })
 
   it.each([
+    ['somente espaços', '   ', 'fallback_url_invalida'],
     ['http', `http://www.mercadolivre.com.br/p/${CATALOGO}?wid=${ITEM_A}`, 'fallback_protocolo'],
     ['domínio de fora', `https://exemplo.com/p/${CATALOGO}?wid=${ITEM_A}`, 'fallback_dominio'],
     ['domínio parecido', `https://mercadolivre.com.br.exemplo.com/?wid=${ITEM_A}`, 'fallback_dominio'],
-    ['sem wid', `https://www.mercadolivre.com.br/social/abc?matt_word=abc`, 'fallback_wid'],
-    ['wid de outra oferta', urlDoItem(ITEM_B), 'fallback_wid'],
+    ['sem wid', `https://www.mercadolivre.com.br/p/${CATALOGO}`, 'fallback_wid'],
+    ['wid de outra oferta', `https://www.mercadolivre.com.br/p/${CATALOGO}?wid=${ITEM_B}`, 'fallback_wid'],
+    ['wid duplicado igual', `https://www.mercadolivre.com.br/p/${CATALOGO}?wid=${ITEM_A}&wid=${ITEM_A}`, 'fallback_wid'],
+    ['wid duplicado divergente', `https://www.mercadolivre.com.br/p/${CATALOGO}?wid=${ITEM_A}&wid=${ITEM_B}`, 'fallback_wid'],
     ['não é URL', 'nao-e-uma-url', 'fallback_url_invalida'],
-  ] as const)('recusa URL curada com %s e cai no fallback', (_caso, manual, motivo) => {
-    const r = resolver(ITEM_A, { [ITEM_A]: manual })
-
-    expect(r.reason).toBe(motivo)
-    expect(r.url).toBe(
-      `https://www.mercadolivre.com.br/p/${CATALOGO}?affiliate=${TAG}&wid=${ITEM_A}`,
-    )
-  })
-
-  it('aceita subdomínios do Mercado Livre', () => {
-    const manual = `https://produto.mercadolivre.com.br/MLB-x?wid=${ITEM_A}`
-
-    expect(resolver(ITEM_A, { [ITEM_A]: manual }).reason).toBe('manual')
-  })
-
-  it('usa a rota /up/ dos user products no fallback', () => {
-    const r = resolveOfferUrl({
-      catalogId: 'MLBU3907661448',
+  ] as const)('TestResolveOfferUrl_ShouldUseReasonSpecificFallbackForRejectedManualInputs (%s)', (_case, manual, reason) => {
+    expect(resolveOfferUrl({
+      catalogId: CATALOGO,
       externalId: ITEM_A,
-      affiliateTag: TAG,
+      manualByItemId: { [ITEM_A]: manual },
+    })).toEqual({
+      url: fallback(),
+      destination: 'untracked_fallback',
+      origin: 'legacy_manual',
+      validation: 'rejected',
+      reason,
     })
-
-    expect(r.url).toBe(
-      `https://www.mercadolivre.com.br/up/MLBU3907661448?affiliate=${TAG}&wid=${ITEM_A}`,
-    )
   })
 
-  it('marca como não rastreado o link construído sem tag de afiliado', () => {
-    const semTag = resolveOfferUrl({ catalogId: CATALOGO, externalId: ITEM_A, affiliateTag: '' })
+  it('TestBuildMlCatalogLink_ShouldEncodeCatalogAndKeepOneFallbackWidForMlbAndMlbu', () => {
+    const cases = [
+      ['MLB catálogo/54', 'MLB item?54', 'p'],
+      ['MLBU catálogo/54', 'MLB item?54', 'up'],
+    ] as const
 
-    expect(semTag.tracked).toBe(false)
-    expect(semTag.url).not.toContain('affiliate=')
-    expect(resolver(ITEM_A).tracked).toBe(true)
+    for (const [catalogId, externalId, route] of cases) {
+      const resolution = resolveOfferUrl({ catalogId, externalId })
+      const url = new URL(resolution.url)
+
+      expect(url.pathname).toBe(`/${route}/${encodeURIComponent(catalogId)}`)
+      expect(url.searchParams.getAll('wid')).toEqual([externalId])
+      expect(url.searchParams.has('affiliate')).toBe(false)
+    }
   })
 
-  it('começa com todos os contadores zerados', () => {
-    expect(Object.values(newOfferUrlCounters()).every(n => n === 0)).toBe(true)
+  it('starts all fallback counters at zero', () => {
+    expect(newOfferUrlCounters()).toEqual({
+      fallback: 0,
+      fallback_absent: 0,
+      fallback_unverified: 0,
+      fallback_url_invalida: 0,
+      fallback_protocolo: 0,
+      fallback_dominio: 0,
+      fallback_wid: 0,
+    })
   })
 })

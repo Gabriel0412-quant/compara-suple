@@ -1,51 +1,36 @@
 import { buildMlCatalogLink } from '../affiliate'
 
-/**
- * Resolução da URL de compra de uma oferta.
- *
- * Cada oferta representa o anúncio de um vendedor específico dentro de um
- * catálogo. O link precisa levar para esse anúncio — não para o catálogo, e
- * não para o anúncio de outro vendedor. Uma URL curada só é aceita quando ela
- * própria comprova o vínculo, via `wid`; caso contrário caímos no link
- * construído a partir do `catalogId` + `item_id` da oferta.
- */
-
 export type OfferUrlReason =
-  /** URL curada validada para este item_id. */
-  | 'manual'
-  /** Não existe URL curada para este item_id. */
-  | 'fallback_sem_manual'
-  /** URL curada descartada: não é uma URL absoluta válida. */
+  | 'fallback_absent'
+  | 'fallback_unverified'
   | 'fallback_url_invalida'
-  /** URL curada descartada: protocolo diferente de https. */
   | 'fallback_protocolo'
-  /** URL curada descartada: domínio fora do Mercado Livre. */
   | 'fallback_dominio'
-  /** URL curada descartada: sem `wid`, ou com `wid` de outra oferta. */
   | 'fallback_wid'
 
 export type OfferUrlResolution = {
   url: string
+  destination: 'untracked_fallback'
+  origin: 'none' | 'legacy_manual'
+  validation: 'absent' | 'unverified' | 'rejected'
   reason: OfferUrlReason
-  /** false quando o link saiu sem tag de afiliado — o clique não gera comissão. */
-  tracked: boolean
 }
 
 export type OfferUrlCounters = Record<OfferUrlReason, number> & {
-  sem_tag_de_afiliado: number
+  fallback: number
 }
 
 const DOMINIOS_ML = ['mercadolivre.com.br', 'mercadolibre.com.br', 'mercadolibre.com']
 
 export function newOfferUrlCounters(): OfferUrlCounters {
   return {
-    manual: 0,
-    fallback_sem_manual: 0,
+    fallback: 0,
+    fallback_absent: 0,
+    fallback_unverified: 0,
     fallback_url_invalida: 0,
     fallback_protocolo: 0,
     fallback_dominio: 0,
     fallback_wid: 0,
-    sem_tag_de_afiliado: 0,
   }
 }
 
@@ -54,12 +39,7 @@ function dominioDoMercadoLivre(hostname: string): boolean {
   return DOMINIOS_ML.some(d => host === d || host.endsWith(`.${d}`))
 }
 
-/**
- * Aceita a URL curada apenas se ela provar que aponta para esta oferta.
- * Devolve o motivo da recusa em vez de um booleano para que o ingest possa
- * contar cada causa separadamente.
- */
-function validarUrlManual(manual: string, externalId: string): OfferUrlReason {
+function validarUrlManual(manual: string, externalId: string): OfferUrlReason | null {
   let parsed: URL
   try {
     parsed = new URL(manual)
@@ -68,33 +48,45 @@ function validarUrlManual(manual: string, externalId: string): OfferUrlReason {
   }
   if (parsed.protocol !== 'https:') return 'fallback_protocolo'
   if (!dominioDoMercadoLivre(parsed.hostname)) return 'fallback_dominio'
-  // Sem wid, a URL vale para o catálogo inteiro e não distingue o vendedor.
-  if (parsed.searchParams.get('wid') !== externalId) return 'fallback_wid'
-  return 'manual'
+  const wid = parsed.searchParams.getAll('wid')
+  if (wid.length !== 1 || wid[0] !== externalId) return 'fallback_wid'
+  return null
 }
 
 export function resolveOfferUrl(opts: {
   catalogId: string
   externalId: string
-  /** URLs curadas do catálogo, chaveadas por item_id. */
   manualByItemId?: Readonly<Record<string, string>>
-  affiliateTag?: string
 }): OfferUrlResolution {
-  const tag = opts.affiliateTag ?? process.env.ML_AFFILIATE_TAG ?? ''
   const manual = opts.manualByItemId?.[opts.externalId]
+  const url = buildMlCatalogLink(opts.catalogId, opts.externalId)
 
-  const reason: OfferUrlReason = manual
-    ? validarUrlManual(manual, opts.externalId)
-    : 'fallback_sem_manual'
-
-  if (reason === 'manual') {
-    return { url: manual!, reason, tracked: true }
+  if (manual === undefined || manual === '') {
+    return {
+      url,
+      destination: 'untracked_fallback',
+      origin: 'none',
+      validation: 'absent',
+      reason: 'fallback_absent',
+    }
   }
+
+  const rejection = validarUrlManual(manual, opts.externalId)
+  if (rejection) {
+    return {
+      url,
+      destination: 'untracked_fallback',
+      origin: 'legacy_manual',
+      validation: 'rejected',
+      reason: rejection,
+    }
+  }
+
   return {
-    url: buildMlCatalogLink(opts.catalogId, opts.externalId, tag),
-    reason,
-    // buildMlCatalogLink omite o parâmetro `affiliate` quando não há tag: o
-    // link continua funcionando, mas o clique deixa de ser atribuído.
-    tracked: tag !== '',
+    url,
+    destination: 'untracked_fallback',
+    origin: 'legacy_manual',
+    validation: 'unverified',
+    reason: 'fallback_unverified',
   }
 }

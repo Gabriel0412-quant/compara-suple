@@ -54,8 +54,9 @@ Antes de rodar de verdade, confira no retorno:
   Muito acima disso significa que o snapshot veio incompleto e o catálogo inteiro
   vai cair.
 - `offers_criadas` perto de zero — o catálogo é curado e estável.
-- `urls.sem_tag_de_afiliado` — se for maior que zero, `ML_AFFILIATE_TAG` não está
-  definida e os links sairão sem atribuição de comissão.
+- `urls.fallback` — mostra quantas ofertas usaram o fallback comprável por
+  oferta. Os motivos em `fallback_absent`, `fallback_unverified` e os motivos
+  de recusa mostram a causa sem declarar atribuição ou comissão.
 - `per_catalog[].status` — qualquer `snapshot_invalid` ou `upstream_error`
   significa que aquele catálogo **não foi tocado**, o que é o comportamento
   correto, mas os preços dele ficam do dia anterior.

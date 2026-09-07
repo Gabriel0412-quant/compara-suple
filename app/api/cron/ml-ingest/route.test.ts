@@ -1,11 +1,12 @@
 import { NextRequest } from 'next/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { runCuratedIngest } = vi.hoisted(() => ({
+const { runCuratedIngest, runOperationalCuratedIngest } = vi.hoisted(() => ({
   runCuratedIngest: vi.fn(),
+  runOperationalCuratedIngest: vi.fn(),
 }))
 
-vi.mock('@/lib/ml/ingest', () => ({ runCuratedIngest }))
+vi.mock('@/lib/ml/ingest', () => ({ runCuratedIngest, runOperationalCuratedIngest }))
 
 import { GET, POST } from './route'
 
@@ -37,6 +38,7 @@ describe('/api/cron/ml-ingest', () => {
       vi.stubEnv(name, value)
     }
     runCuratedIngest.mockReset()
+    runOperationalCuratedIngest.mockReset()
   })
 
   afterEach(() => {
@@ -84,24 +86,22 @@ describe('/api/cron/ml-ingest', () => {
   })
 
   it('runs a configured and authorized ingest', async () => {
-    runCuratedIngest.mockResolvedValue({
-      catalogIds: 16,
-      catalogs_ingested: 16,
-      offers_ingested: 451,
-      per_catalog: [],
+    runOperationalCuratedIngest.mockResolvedValue({
+      runId: '0199243f-5418-7e26-8d7e-6068e98a5970', state: 'running',
+      disposition: 'acquired', processed: 12, succeeded: 12, failed: 0,
+      hasContinuation: true, durationMs: 12,
     })
 
     const response = await GET(request('GET', 'Bearer cron-secret'))
 
-    expect(response.status).toBe(200)
+    expect(response.status).toBe(202)
     expect(response.headers.get('content-type')).toContain('application/json')
     await expect(response.json()).resolves.toEqual({
       ok: true,
       result: {
-        catalogIds: 16,
-        catalogs_ingested: 16,
-        offers_ingested: 451,
-        per_catalog: [],
+        runId: '0199243f-5418-7e26-8d7e-6068e98a5970', state: 'running',
+        disposition: 'acquired', processed: 12, succeeded: 12, failed: 0,
+        hasContinuation: true, durationMs: 12,
       },
     })
   })
@@ -138,7 +138,7 @@ describe('/api/cron/ml-ingest', () => {
     runCuratedIngest.mockResolvedValue(result)
 
     for (const [method, handler] of [['GET', GET], ['POST', POST]] as const) {
-      const response = await handler(request(method, 'Bearer cron-secret'))
+      const response = await handler(request(method, 'Bearer cron-secret', '?simular=1'))
       const body = await response.json()
 
       expect(response.status).toBe(200)
@@ -173,7 +173,7 @@ describe('/api/cron/ml-ingest', () => {
     runCuratedIngest.mockResolvedValue(result)
 
     for (const [method, handler] of [['GET', GET], ['POST', POST]] as const) {
-      const response = await handler(request(method, 'Bearer cron-secret'))
+      const response = await handler(request(method, 'Bearer cron-secret', '?simular=1'))
       const body = await response.json()
       expect(response.status).toBe(200)
       expect(response.headers.get('content-type')).toContain('application/json')
@@ -183,15 +183,9 @@ describe('/api/cron/ml-ingest', () => {
     }
   })
 
-  it.each([
-    ['?simular=1', true],
-    ['?simular=true', true],
-    ['', false],
-    ['?simular=0', false],
-    ['?simular=talvez', false],
-  ] as const)('reads %s as simular=%s', async (query, esperado) => {
+  it.each(['?simular=1', '?simular=true'] as const)('uses the simulation path for %s', async query => {
     runCuratedIngest.mockResolvedValue({
-      simulado: esperado,
+      simulado: true,
       catalogIds: 0,
       catalogs_ingested: 0,
       per_catalog: [],
@@ -199,7 +193,21 @@ describe('/api/cron/ml-ingest', () => {
 
     await GET(request('GET', 'Bearer cron-secret', query))
 
-    expect(runCuratedIngest).toHaveBeenCalledWith({ simular: esperado })
+    expect(runCuratedIngest).toHaveBeenCalledWith({ simular: true })
+    expect(runOperationalCuratedIngest).not.toHaveBeenCalled()
+  })
+
+  it.each(['', '?simular=0', '?simular=talvez'] as const)('uses the durable path for %s', async query => {
+    runOperationalCuratedIngest.mockResolvedValue({
+      runId: '0199243f-5418-7e26-8d7e-6068e98a5970', state: 'succeeded',
+      disposition: 'acquired', processed: 1, succeeded: 1, failed: 0,
+      hasContinuation: false, durationMs: 12,
+    })
+
+    await GET(request('GET', 'Bearer cron-secret', query))
+
+    expect(runOperationalCuratedIngest).toHaveBeenCalledOnce()
+    expect(runCuratedIngest).not.toHaveBeenCalled()
   })
 
   it('does not let an unauthorized caller simulate', async () => {
@@ -211,7 +219,7 @@ describe('/api/cron/ml-ingest', () => {
   })
 
   it('returns a stable error code when authorization must be recovered', async () => {
-    runCuratedIngest.mockRejectedValue(
+    runOperationalCuratedIngest.mockRejectedValue(
       new Error('access_token ML expirou e não há refresh_token salvo.'),
     )
 
@@ -226,12 +234,10 @@ describe('/api/cron/ml-ingest', () => {
   })
 
   it('returns 500 when every curated catalog fails', async () => {
-    runCuratedIngest.mockResolvedValue({
-      catalogIds: 16,
-      catalogs_ingested: 0,
-      per_catalog: Array.from({ length: 16 }, () => ({
-        status: 'product_error',
-      })),
+    runOperationalCuratedIngest.mockResolvedValue({
+      runId: '0199243f-5418-7e26-8d7e-6068e98a5970', state: 'failed',
+      disposition: 'terminal', processed: 0, succeeded: 0, failed: 16,
+      hasContinuation: false, durationMs: 12,
     })
 
     const response = await POST(request('POST', 'Bearer cron-secret'))
@@ -246,13 +252,10 @@ describe('/api/cron/ml-ingest', () => {
 
   it('keeps a partial ingest successful and emits an operational warning', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    runCuratedIngest.mockResolvedValue({
-      catalogIds: 2,
-      catalogs_ingested: 1,
-      per_catalog: [
-        { status: 'success' },
-        { status: 'product_error' },
-      ],
+    runOperationalCuratedIngest.mockResolvedValue({
+      runId: '0199243f-5418-7e26-8d7e-6068e98a5970', state: 'partial_failed',
+      disposition: 'acquired', processed: 2, succeeded: 1, failed: 1,
+      hasContinuation: false, durationMs: 12,
     })
 
     const response = await POST(request('POST', 'Bearer cron-secret'))
@@ -260,8 +263,8 @@ describe('/api/cron/ml-ingest', () => {
     expect(response.status).toBe(200)
     expect(response.headers.get('content-type')).toContain('application/json')
     expect(warn).toHaveBeenCalledWith('ml_ingest_partial_failure', {
-      failed_catalogs: 1,
-      catalog_ids: 2,
+      run_id: '0199243f-5418-7e26-8d7e-6068e98a5970',
+      failed_items: 1,
     })
     warn.mockRestore()
   })

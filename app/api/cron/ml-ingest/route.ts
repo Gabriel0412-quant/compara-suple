@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { runCuratedIngest } from '@/lib/ml/ingest'
+import { runCuratedIngest, runOperationalCuratedIngest } from '@/lib/ml/ingest'
 import { classifyMlIngestError, getMissingMlIngestConfig } from '@/lib/ml/runtime'
 
 // Roda em Node.js runtime (não Edge) — temos chamadas longas e múltiplas
 export const runtime = 'nodejs'
-// Vercel Pro permite até 300s; Hobby tem 60s. Ajustar se for plano Hobby.
 export const maxDuration = 300
 
 function authorize(req: NextRequest): NextResponse | null {
@@ -59,27 +58,42 @@ export async function POST(req: NextRequest) {
 
 async function runIngest(simular: boolean) {
   try {
-    const result = await runCuratedIngest({ simular })
-    if (result.catalogIds > 0 && result.catalogs_ingested === 0) {
+    if (simular) {
+      const result = await runCuratedIngest({ simular: true })
+      if (result.catalogIds > 0 && result.catalogs_ingested === 0) {
+        console.error('ml_ingest_failed', {
+          error: 'all_catalogs_failed',
+          catalog_ids: result.catalogIds,
+        })
+        return NextResponse.json(
+          { ok: false, error: 'ingestion_failed' },
+          { status: 500 },
+        )
+      }
+      return NextResponse.json({ ok: true, result })
+    }
+
+    const result = await runOperationalCuratedIngest()
+    if (result.state === 'failed') {
       console.error('ml_ingest_failed', {
-        error: 'all_catalogs_failed',
-        catalog_ids: result.catalogIds,
+        error: 'ingestion_failed',
+        run_id: result.runId,
       })
       return NextResponse.json(
         { ok: false, error: 'ingestion_failed' },
         { status: 500 },
       )
     }
-    const failedCatalogs = result.per_catalog.filter(catalog =>
-      catalog.status !== 'success' && catalog.status !== 'success_empty'
-    ).length
-    if (failedCatalogs > 0) {
+    if (result.failed > 0 || result.state === 'partial_failed') {
       console.warn('ml_ingest_partial_failure', {
-        failed_catalogs: failedCatalogs,
-        catalog_ids: result.catalogIds,
+        run_id: result.runId,
+        failed_items: result.failed,
       })
     }
-    return NextResponse.json({ ok: true, result })
+    return NextResponse.json(
+      { ok: true, result },
+      { status: result.hasContinuation ? 202 : 200 },
+    )
   } catch (e) {
     const error = classifyMlIngestError(e)
     console.error('ml_ingest_failed', { error })

@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto'
+
 import {
   getProduct,
   getProductItems,
@@ -14,6 +16,8 @@ import {
   type OfferUrlCounters,
   type OfferUrlResolution,
 } from './offer-url'
+import { executeIngestionBatch } from './ingestion-orchestrator'
+import { supabaseIngestionOrchestrationStore } from './ingestion-run'
 import itemsData from '@/data/items.json'
 import { classificarIdCatalogo, motivoDeRecusa, type MotivoNaoColetado } from './catalog-id'
 
@@ -605,3 +609,56 @@ export async function runCuratedIngest(
 }
 
 export const runDefaultIngest = runCuratedIngest
+
+export type OperationalIngestResult = {
+  runId: string
+  state: import('./ingestion-run').IngestionRunState
+  disposition: 'acquired' | 'busy' | 'terminal' | 'blocked' | 'lease_lost'
+  processed: number
+  succeeded: number
+  failed: number
+  hasContinuation: boolean
+  durationMs: number
+  counters?: {
+    total: number
+    succeeded: number
+    failed: number
+    skipped: number
+    retryScheduled: number
+  }
+}
+
+function environmentInteger(name: string, fallback: number): number {
+  const value = process.env[name]
+  if (!value) return fallback
+  if (!/^\d+$/.test(value)) throw new Error(`${name}_INVALID`)
+  return Number(value)
+}
+
+export async function runOperationalCuratedIngest(): Promise<OperationalIngestResult> {
+  const startedAt = Date.now()
+  const { items } = loadCuratedItems()
+  const itemByCatalogId = new Map(items.map(item => [item.catalogId, item]))
+  const storeId = await getStoreId()
+  const result = await executeIngestionBatch({
+    itemKeys: items.map(item => item.catalogId),
+    workerId: randomUUID(),
+    batchSize: environmentInteger('INGEST_BATCH_SIZE', 12),
+    timeBudgetMs: environmentInteger('INGEST_TIME_BUDGET_MS', 240_000),
+    leaseSeconds: environmentInteger('INGEST_LEASE_SECONDS', 360),
+    codeVersion: process.env.VERCEL_GIT_COMMIT_SHA ?? null,
+    processItem: async catalogId => {
+      const item = itemByCatalogId.get(catalogId)
+      if (!item) return { ok: false }
+      const catalog = await ingestCatalog(
+        item.catalogId,
+        storeId,
+        item.manualByItemId,
+        false,
+      )
+      return { ok: catalog.ok }
+    },
+  }, supabaseIngestionOrchestrationStore)
+
+  return { ...result, durationMs: Date.now() - startedAt }
+}

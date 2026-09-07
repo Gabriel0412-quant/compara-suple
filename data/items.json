@@ -78,7 +78,14 @@
     {
       "catalog_id": "MLB6204289",
       "nota": "Creatina 100% Pura 300g - Integralmedica",
-      "affiliate_urls": {}
+      "affiliate_urls": {
+        "MLB4417557797": {
+          "url": "https://meli.la/2ioo8Jj",
+          "seller_id": 1006727559,
+          "reviewed_at": "2026-09-07",
+          "review_ref": "ml-affiliate-review-001"
+        }
+      }
     }
   ]
 }

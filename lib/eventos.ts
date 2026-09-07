@@ -96,8 +96,9 @@ export function ehBot(userAgent: string | null | undefined): boolean {
  */
 export async function registrarEvento(e: Evento): Promise<void> {
   try {
-    await supabaseAdmin.from('ui_event').insert(montarLinha(e))
-  } catch (erro) {
-    console.error('ui_event_falhou', { evento: e.evento, erro: String(erro) })
+    const { error } = await supabaseAdmin.from('ui_event').insert(montarLinha(e))
+    if (error) console.error('ui_event_falhou', { evento: e.evento, code: 'write_failed' })
+  } catch {
+    console.error('ui_event_falhou', { evento: e.evento, code: 'write_failed' })
   }
 }

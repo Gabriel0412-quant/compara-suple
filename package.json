@@ -13,7 +13,8 @@
     "test:e2e:ui": "playwright test --ui",
     "test:property": "vitest run lib/ml/offer-url.property.test.ts",
     "test:db": "bash scripts/test-db.sh",
-    "test:mutation": "stryker run"
+    "test:mutation": "stryker run",
+    "ml:affiliate-links": "tsx scripts/ml-affiliate-links.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",

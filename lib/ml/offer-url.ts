@@ -167,7 +167,7 @@ function reviewedWidRejection(url: URL, externalId: string): OfferUrlReason | nu
 }
 
 function revisarUrlSocial(url: string, externalId: string): OfferUrlReason | null {
-  if (/\s/.test(url)) return 'fallback_url_invalida'
+  if (/\s/.test(url) || /[^\x21-\x7e]/.test(url)) return 'fallback_url_invalida'
   const parsed = parseUrl(url)
   if (!parsed) return 'fallback_url_invalida'
   const structureRejection = reviewedUrlStructureRejection(url, parsed)

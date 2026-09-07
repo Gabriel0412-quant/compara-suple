@@ -15,9 +15,11 @@ import {
 export function OffersSection({
   offers,
   servings,
+  superficie = 'produto',
 }: {
   offers: Offer[]
   servings: number | null
+  superficie?: 'produto' | 'comparador'
 }) {
   const [onlyFreeShipping, setOnlyFreeShipping] = useState(false)
   const [onlyOfficial, setOnlyOfficial] = useState(false)
@@ -216,7 +218,7 @@ export function OffersSection({
                     {/* Ação */}
                     <td className="px-4 py-3">
                       <a
-                        href={`/go/${loja.offerId}?de=produto&por=${isCheapest ? 'menor_preco' : 'destaque'}`}
+                        href={`/go/${loja.offerId}?de=${superficie}&por=${isCheapest ? 'menor_preco' : 'destaque'}`}
                         target="_blank"
                         rel="noopener noreferrer sponsored"
                         className={`text-xs font-semibold px-4 py-2 rounded-lg transition-colors whitespace-nowrap ${

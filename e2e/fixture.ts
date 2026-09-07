@@ -20,6 +20,10 @@ type Oferta = {
 
 const AGORA = new Date().toISOString()
 
+export function reviewedAffiliateUrl(id: number): string {
+  return `https://www.mercadolivre.com.br/social/ml54-fixture?wid=MLB${id}&ref=synthetic%2F${id}#reviewed`
+}
+
 function oferta(
   id: number,
   price: number,
@@ -29,13 +33,26 @@ function oferta(
   return {
     id,
     external_id: `MLB${id}`,
-    url: `https://www.mercadolivre.com.br/p/MLB${id}`,
+    url: reviewedAffiliateUrl(id),
     price,
     available,
     fetched_at: AGORA,
     ml_rank: 1,
-    raw: { thumbnail: `https://exemplo.test/${id}.jpg` },
     ...extra,
+    raw: extra.raw === null ? null : {
+      thumbnail: `https://exemplo.test/${id}.jpg`,
+      ...extra.raw,
+      seller_id: id + 9000,
+      affiliate_link: {
+        destination: 'affiliate_link',
+        origin: 'reviewed_import',
+        validation: 'reviewed',
+        reason: 'reviewed_import',
+        seller_id: id + 9000,
+        reviewed_at: '2026-09-06',
+        review_ref: `synthetic-${id}`,
+      },
+    },
   }
 }
 

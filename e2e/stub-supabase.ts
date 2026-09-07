@@ -18,6 +18,9 @@ import { OFERTAS, PRODUTOS, TOTAIS } from './fixture'
 
 type Linha = Record<string, unknown>
 
+const writes: { table: string; row: Linha }[] = []
+let offerReads = 0
+
 /** `?id=in.(1,2)` → [1,2] */
 function parseIn(valor: string | null): number[] | null {
   if (!valor?.startsWith('in.(')) return null
@@ -72,10 +75,26 @@ function filtrarOfertas(params: URLSearchParams): Linha[] {
   return linhas
 }
 
-function responder(req: IncomingMessage, res: ServerResponse) {
+async function responder(req: IncomingMessage, res: ServerResponse) {
   const url = new URL(req.url ?? '/', 'http://localhost')
+  if (url.pathname === '/__test/affiliate-tracking') {
+    res.writeHead(200, { 'content-type': 'application/json' })
+    res.end(JSON.stringify({ writes, offerReads }))
+    return
+  }
   const tabela = url.pathname.replace(/^\/rest\/v1\//, '')
   const params = url.searchParams
+
+  if (req.method === 'POST' && (tabela === 'click_event' || tabela === 'ui_event')) {
+    let body = ''
+    for await (const chunk of req) body += String(chunk)
+    const row: Linha = JSON.parse(body)
+    writes.push({ table: tabela, row })
+    res.writeHead(201, { 'content-type': 'application/json' })
+    res.end('{}')
+    return
+  }
+  if (tabela === 'offer' && params.has('id')) offerReads += 1
 
   let linhas: Linha[]
   if (tabela === 'product') linhas = filtrarProdutos(params)

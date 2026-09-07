@@ -132,3 +132,36 @@ função fica no banco sem efeito, porque nada a chama.
 Reverter a migration em si é `drop function public.reconciliar_catalogo(...)`.
 **Não derrube `offer.source_catalog_id`** — a ingestão passa a gravá-la e o
 backfill não é reconstituível sem `raw`.
+## Aplicação e rollback de links afiliados
+
+CA13 permanece pendente até uma execução autorizada fora deste repositório. No ambiente escolhido,
+publique o código e aplique `supabase/migrations/0011_ml_affiliate_links.sql` antes de usar o comando.
+Defina `NEXT_PUBLIC_SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` no ambiente do processo; esse script
+não carrega automaticamente o `.env.local` do Next.js. Comece por simulação e guarde somente os
+contadores e identificadores do catálogo:
+
+```bash
+pnpm ml:affiliate-links --catalog MLB123
+pnpm ml:affiliate-links --apply --catalog MLB123
+pnpm ml:affiliate-links --rollback --catalog MLB123
+pnpm ml:affiliate-links --apply --rollback --catalog MLB123
+```
+
+O inventário operacional deve separar ofertas com `raw.affiliate_link.destination =
+'affiliate_link'`, fallbacks `untracked_fallback` e entradas sem `affiliate_link`; também deve
+registrar catálogo, estado, exceção e contagem. A aplicação e o rollback usam a RPC restrita à
+`service_role`; não existe endpoint público. Nenhum destes comandos foi executado em produção.
+
+```sql
+select o.source_catalog_id as catalogo,
+       case when o.available then 'ativa' else 'inativa' end as estado,
+       coalesce(o.raw->'affiliate_link'->>'destination', 'metadata_ausente') as destination,
+       coalesce(o.raw->'affiliate_link'->>'origin', 'metadata_ausente') as origin,
+       coalesce(o.raw->'affiliate_link'->>'validation', 'metadata_ausente') as validation,
+       coalesce(o.raw->'affiliate_link'->>'reason', 'metadata_ausente') as reason,
+       count(*) as ofertas
+from offer o
+join store s on s.id = o.store_id and s.slug = 'mercado-livre'
+group by 1, 2, 3, 4, 5, 6
+order by 1, 2, 3, 4, 5, 6;
+```

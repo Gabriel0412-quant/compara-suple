@@ -95,6 +95,25 @@ de formato e identidade; ela não prova clique, conversão ou atribuição no
 painel. A mesma URL revisada não pode ser usada por dois anúncios no catálogo.
 Os logs e o retorno do cron expõem contadores, nunca a URL ou `review_ref`.
 
+## Verificação operacional pendente (CA14)
+
+Em ambiente autorizado, o responsável deve registrar uma amostra de três produtos de três
+vendedores distintos antes de aplicar somente as entradas revisadas. O registro sanitizado contém
+produto, vendedor, catálogo e estado da revisão, sem URL ou `review_ref`:
+
+| Produto | Vendedor | Catálogo | Revisão | Resultado no painel |
+| --- | --- | --- | --- | --- |
+| 1 | distinto | identificado | revisada | pendente |
+| 2 | distinto | identificado | revisada | pendente |
+| 3 | distinto | identificado | revisada | pendente |
+
+Depois de confirmar os três destinos, é permitido **um único clique** controlado. A página de
+métricas informa atualização a cada **3 horas**, conforme a
+[evidência da ML54-02](evidencias-afiliacao-ml54-02.md); essa cadência deve ser revalidada no
+painel no dia da operação. O relatório registra data, ambiente, catálogo, a janela observada e o
+resultado sanitizado. Em 2026-09-06 o resultado continua pendente: testes automatizados não
+demonstram atribuição, conversão ou comissão.
+
 ## Fallback
 
 `buildMlCatalogLink(catalogId, itemId)` monta:

@@ -179,23 +179,14 @@ function FallingProductsSection({ products }: { products: CategoryProduct[] }) {
   )
 }
 
-function FallingCard({ product }: { product: CategoryProduct }) {
-  const hasDiscount =
-    product.featuredOriginalPrice != null &&
-    product.featuredOriginalPrice > product.featuredPrice
-  const discountPct = hasDiscount
-    ? Math.round((1 - product.featuredPrice / product.featuredOriginalPrice!) * 100)
-    : 0
-  const economyAbs = hasDiscount
-    ? product.featuredOriginalPrice! - product.featuredPrice
-    : 0
+export function FallingCard({ product }: { product: CategoryProduct }) {
+  const discount = discountFor(product)
 
   return (
-    <Link
-      href={`/produto/${product.slug}`}
+    <article
       className="group bg-white border border-gray-100 hover:border-orange-400 hover:shadow-md transition-all rounded-2xl overflow-hidden flex flex-col"
     >
-      <div className="flex gap-3 p-4 items-start">
+      <Link href={`/produto/${product.slug}`} className="flex gap-3 p-4 items-start">
         {/* Thumbnail */}
         <div className="relative w-20 h-20 shrink-0 bg-gray-50 rounded-lg flex items-center justify-center p-1.5">
           {product.thumbnail ? (
@@ -226,33 +217,66 @@ function FallingCard({ product }: { product: CategoryProduct }) {
             </p>
           )}
         </div>
-      </div>
+      </Link>
 
       {/* Footer com preço + desconto, destacado em laranja */}
       <div className="px-4 py-3 bg-orange-50/60 border-t border-orange-100/60 flex items-end justify-between gap-2">
-        <div>
-          <div className="flex items-baseline gap-1.5">
-            <span className="text-xl font-bold text-gray-800">
-              {formatBRL(product.featuredPrice)}
-            </span>
-            {hasDiscount && (
-              <span className="text-xs text-gray-400 line-through">
-                {formatBRL(product.featuredOriginalPrice!)}
-              </span>
-            )}
-          </div>
-          {hasDiscount && (
-            <p className="text-[11px] font-semibold text-orange-700 mt-0.5">
-              Economiza {formatBRL(economyAbs)}
-            </p>
-          )}
-        </div>
-        {hasDiscount && (
-          <span className="text-sm font-bold px-2.5 py-1 rounded-lg bg-orange-500 text-white shadow-sm">
-            -{discountPct}%
-          </span>
+        <FallingCardPrice product={product} discount={discount} />
+        <DiscountBadge percentage={discount?.percentage ?? null} />
+        {product.featuredOfferId && (
+          <a
+            href={`/go/${product.featuredOfferId}?de=home&por=destaque`}
+            target="_blank"
+            rel="noopener noreferrer sponsored"
+            aria-label={`Comprar ${product.name} no Mercado Livre (abre em nova aba)`}
+            className="rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white hover:bg-green-700"
+          >
+            Comprar →
+          </a>
         )}
       </div>
-    </Link>
+    </article>
   )
+}
+
+type Discount = { originalPrice: number; economy: number; percentage: number }
+
+export function discountFor(product: CategoryProduct): Discount | null {
+  const originalPrice = product.featuredOriginalPrice
+  if (originalPrice == null || originalPrice <= product.featuredPrice) return null
+  return {
+    originalPrice,
+    economy: originalPrice - product.featuredPrice,
+    percentage: Math.round((1 - product.featuredPrice / originalPrice) * 100),
+  }
+}
+
+export function FallingCardPrice({ product, discount }: { product: CategoryProduct; discount: Discount | null }) {
+  return (
+    <div>
+      <div className="flex items-baseline gap-1.5">
+        <span className="text-xl font-bold text-gray-800">{formatBRL(product.featuredPrice)}</span>
+        <FeaturedOriginalPrice price={discount?.originalPrice ?? null} />
+      </div>
+      {discount && (
+        <p className="text-[11px] font-semibold text-orange-700 mt-0.5">
+          Economiza {formatBRL(discount.economy)}
+        </p>
+      )}
+    </div>
+  )
+}
+
+export function DiscountBadge({ percentage }: { percentage: number | null }) {
+  if (percentage === null) return null
+  return (
+    <span className="text-sm font-bold px-2.5 py-1 rounded-lg bg-orange-500 text-white shadow-sm">
+      -{percentage}%
+    </span>
+  )
+}
+
+function FeaturedOriginalPrice({ price }: { price: number | null }) {
+  if (price === null) return null
+  return <span className="text-xs text-gray-400 line-through">{formatBRL(price)}</span>
 }

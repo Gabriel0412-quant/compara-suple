@@ -223,6 +223,7 @@ describe('resolveOfferUrl', () => {
     ['encoding inválido', 'https://www.mercadolivre.com.br/social/%ZZ'],
     ['barra invertida', 'https://www.mercadolivre.com.br/social/x\\revisao'],
     ['espaço', 'https://www.mercadolivre.com.br/social/revisao com espaço'],
+    ['unicode cru', 'https://www.mercadolivre.com.br/social/ação'],
     ['url malformada', 'https://www.mercadolivre.com.br:porta/social/revisao'],
     ['https maiúsculo', 'HTTPS://www.mercadolivre.com.br/social/revisao'],
     ['caminho social vazio', 'https://www.mercadolivre.com.br/social/'],
@@ -250,7 +251,7 @@ describe('resolveOfferUrl', () => {
       validation: 'rejected',
       reason: name === 'http' ? 'fallback_protocolo'
         : name.includes('wid') ? 'fallback_wid'
-          : name === 'espaço' || name === 'url malformada' || name === 'encoding inválido' ? 'fallback_url_invalida'
+          : name === 'espaço' || name === 'unicode cru' || name === 'url malformada' || name === 'encoding inválido' ? 'fallback_url_invalida'
             : 'fallback_dominio',
     })
   })

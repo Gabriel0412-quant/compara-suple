@@ -118,13 +118,13 @@ A auditoria humana detalhada permanece fora do JSON público. O histórico Git i
 - A simulação usa o mesmo payload e o savepoint atual: não altera `offer`, `price_history` ou
   `raw.affiliate_link`. Os upserts auxiliares existentes de brand/product/variant continuam
   documentados.
-- Repetir a ingestão com a mesma curadoria é idempotente e preserva `offer.id`, `external_id`,
+- Repetir a ingestão com o mesmo snapshot e curadoria é idempotente e preserva `offer.id`, `external_id`,
   relacionamentos e histórico.
 - Atualização e rollback de links existentes não dependem de nova coleta. Uma função SQL restrita a
   `service_role` atualiza somente `offer.url` e `raw.affiliate_link`, depois de conferir loja,
   catálogo, `external_id` e `seller_id` armazenados.
 - A função aceita `p_simular`; o modo simulado executa o mesmo update em savepoint e o desfaz. Lote
-  com oferta ausente ou identidade divergente falha inteiro antes de atualizar qualquer linha.
+  com oferta ausente ou identidade divergente aborta a transação inteira, sem persistir alterações parciais.
 - O rollback calcula o fallback com o builder existente a partir de `source_catalog_id` e
   `external_id`, grava estado `untracked_fallback` e não consulta o Mercado Livre.
 - Aplicação e rollback preservam preço, disponibilidade, `ml_rank`, `fetched_at`, restante de
@@ -154,7 +154,7 @@ A auditoria humana detalhada permanece fora do JSON público. O histórico Git i
 | CA07 | A resolução direta não executa HTTP; teste comprova zero chamadas de rede. Estados de timeout, 429 e 5xx não são fabricados para um transporte inexistente. | ML54-02 |
 | CA08 | Mistura de importações revisadas, ausentes, legadas e rejeitadas fecha contadores por catálogo e agregado; catálogos falhos ficam separados. | ML54-02 |
 | CA09 | Simulação usa o payload real e não muda URL, `raw.affiliate_link` ou histórico. | ML54-03 |
-| CA10 | Aplicação repetida preserva identidades; backfill e rollback mudam somente URL/estado e funcionam sem rede. | ML54-03 |
+| CA10 | Aplicação repetida preserva identidades; backfill e rollback mudam somente URL/estado. A preparação é offline e o adaptador acessa somente o banco, sem nova coleta ML. | ML54-03 |
 | CA11 | Quatro superfícies usam `/go`; 302 preserva o link e tolera falhas retornadas ou lançadas pelos dois trackings. | ML54-03 |
 | CA12 | A curadoria e o `Location` contêm a URL pública de divulgação como dado funcional; logs, cron e erros não repetem URL nem `review_ref` e nunca expõem segredo ou erro bruto. | ML54-02, ML54-03 |
 | CA13 | Procedimento gera inventário datado de cobertura e exceções; a execução em ambiente real ocorre depois da entrega técnica. | ML54-03 operacional |
@@ -165,8 +165,8 @@ A auditoria humana detalhada permanece fora do JSON público. O histórico Git i
 | Tarefa | Estado | Dependência |
 | --- | --- | --- |
 | ML54-01 | concluída em `5a265a1` | nenhuma |
-| ML54-02 | pronta para Specifier | ML54-01 concluída |
-| ML54-03 | pronta para Specifier; implementação após ML54-02 | ML54-02 |
+| ML54-02 | concluída em `8bba7ee` | ML54-01 concluída |
+| ML54-03 | concluída localmente; gate e E2E aprovados | ML54-02 concluída |
 | fechamento operacional CA13–CA14 | pendente após publicação/configuração | entrega técnica + ambiente autorizado |
 
 A falta de URLs reais na curadoria não bloqueia os cenários nem o código: testes usam fixtures
@@ -180,7 +180,7 @@ sintéticas. Ela apenas mantém `affiliate_reviewed = 0` e todas as ofertas em f
 | metadados ausentes/inválidos | `rejected` + motivo finito + fallback |
 | vendedor diferente do snapshot | `rejected` + `fallback_seller` + fallback |
 | URL inválida ou fora do formato local aprovado | `rejected` + motivo estrutural + fallback |
-| oferta/identidade divergente no backfill | lote abortado antes de qualquer update |
+| oferta/identidade divergente no backfill | transação do lote abortada, sem alterações parciais persistidas |
 | falha de banco no backfill | erro propagado, transação revertida |
 | falha de tracking em `/go` | log sanitizado e 302 preservado |
 

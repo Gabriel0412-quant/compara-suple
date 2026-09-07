@@ -204,11 +204,14 @@ describe('resolveOfferUrl', () => {
   it.each([
     ['sem wid', 'https://www.mercadolivre.com.br/social/revisao'],
     ['wid correto', `https://www.mercadolivre.com.br/social/revisao?wid=${ITEM_A}`],
+    ['link curto oficial', 'https://meli.la/revisao123'],
+    ['link curto sem caminho', 'https://meli.la?origem=afiliado'],
     ['wid duplicado', `https://www.mercadolivre.com.br/social/revisao?wid=${ITEM_A}&wid=${ITEM_A}`],
     ['wid divergente', `https://www.mercadolivre.com.br/social/revisao?wid=${ITEM_B}`],
     ['host parecido', 'https://www.mercadolivre.com.br.evil/social/revisao'],
     ['subdomínio', 'https://social.www.mercadolivre.com.br/social/revisao'],
     ['outro país', 'https://www.mercadolibre.com/social/revisao'],
+    ['domínio curto parecido', 'https://meli.la.evil/revisao123'],
     ['http', 'http://www.mercadolivre.com.br/social/revisao'],
     ['usuário', 'https://user@www.mercadolivre.com.br/social/revisao'],
     ['porta padrão explícita', 'https://www.mercadolivre.com.br:443/social/revisao'],
@@ -229,12 +232,14 @@ describe('resolveOfferUrl', () => {
     ['caminho social vazio', 'https://www.mercadolivre.com.br/social/'],
     ['outro caminho longo', 'https://www.mercadolivre.com.br/outros/segmento-comprido'],
     ['outro caminho', 'https://www.mercadolivre.com.br/p/MLB54'],
+    ['link curto vazio', 'https://meli.la/'],
+    ['link curto com barra final', 'https://meli.la/revisao123/'],
   ] as const)('TestResolveOfferUrl_ShouldEnforceExactReviewedSocialUrlAllowlist (%s)', (name, url) => {
     const resolution = resolveOfferUrl({
       catalogId: CATALOGO, externalId: ITEM_A, sellerId: 99,
       manualByItemId: { [ITEM_A]: { url, seller_id: 99, reviewed_at: '2026-09-05', review_ref: 'review-54' } },
     } as never)
-    const accepted = name === 'sem wid' || name === 'wid correto'
+    const accepted = name === 'sem wid' || name === 'wid correto' || name === 'link curto oficial'
     expect(resolution).toStrictEqual(accepted ? {
       url,
       destination: 'affiliate_link',

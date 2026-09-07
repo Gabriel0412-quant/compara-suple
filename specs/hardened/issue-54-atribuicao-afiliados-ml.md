@@ -89,12 +89,13 @@ A auditoria humana detalhada permanece fora do JSON público. O histórico Git i
 - Uma URL revisada compartilhada entre anúncios diferentes no mapa do catálogo é ambígua;
   todas as entradas envolvidas usam fallback, sem escolher um anúncio arbitrariamente.
 - A URL deve ser absoluta, HTTPS e ter autoridade textual exatamente
-  `www.mercadolivre.com.br`. A conferência ocorre também sobre a string original, antes de confiar
+  `www.mercadolivre.com.br` com pathname `/social/<segmento-nao-vazio>`, ou `meli.la` com um
+  único segmento não vazio. A conferência ocorre também sobre a string original, antes de confiar
   nos campos normalizados por `URL`, para rejeitar usuário/senha e qualquer porta explícita,
   inclusive `:443`.
-- Nesta entrega, o pathname deve corresponder exatamente a `/social/<segmento-nao-vazio>`, com um
-  único segmento depois de `/social/`, sem barra adicional. Outros hosts ou caminhos permanecem
-  rejeitados até uma mudança revisada de contrato; não se infere formato.
+- Ambos os formatos não aceitam barra adicional. `meli.la` é aceito somente como URL curta emitida
+  pela Barra de afiliados para uma entrada revisada por oferta e vendedor; outros hosts ou caminhos
+  permanecem rejeitados até uma mudança revisada de contrato.
 - Query string, ordem de parâmetros, percent-encoding e fragmento não são alterados.
 - Não se exige `wid` de uma URL social. Quando o parâmetro existir, deve haver exatamente um e seu
   valor deve ser igual à chave `external_id`; `wid` divergente ou duplicado rejeita a entrada. Sem

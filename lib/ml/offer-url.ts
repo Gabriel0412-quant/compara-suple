@@ -156,9 +156,30 @@ function reviewedSocialPathRejection(url: string): OfferUrlReason | null {
   return decodedSocialSegmentRejection(segment)
 }
 
+function reviewedShortLinkPath(url: string): string {
+  const rest = url.slice('https://meli.la'.length)
+  return rest.split(/[?#]/, 1)[0]
+}
+
+function reviewedShortLinkSegment(url: string): string | null {
+  const path = reviewedShortLinkPath(url)
+  if (path.at(0) !== '/' || path.length === 1) return null
+  const segment = path.slice(1)
+  if (segment.includes('/') || segment.includes('\\')) return null
+  return segment
+}
+
+function reviewedShortLinkPathRejection(url: string): OfferUrlReason | null {
+  const segment = reviewedShortLinkSegment(url)
+  if (segment === null) return 'fallback_dominio'
+  return decodedSocialSegmentRejection(segment)
+}
+
 function reviewedUrlStructureRejection(url: string, parsed: URL): OfferUrlReason | null {
   if (parsed.protocol !== 'https:') return 'fallback_protocolo'
-  if (reviewedSocialAuthority(url) !== 'www.mercadolivre.com.br') return 'fallback_dominio'
+  const authority = reviewedSocialAuthority(url)
+  if (authority === 'meli.la') return reviewedShortLinkPathRejection(url)
+  if (authority !== 'www.mercadolivre.com.br') return 'fallback_dominio'
   return reviewedSocialPathRejection(url)
 }
 

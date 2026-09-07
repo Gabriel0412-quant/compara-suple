@@ -86,7 +86,8 @@ Uma entrada revisada usa o mesmo mapa por `item_id`, com objeto completo:
 Ela só é selecionada quando o `seller_id` coincide com o snapshot da oferta, a
 data civil e a referência opaca são válidas e a URL original usa HTTPS com a
 autoridade textual `www.mercadolivre.com.br` e o caminho
-`/social/<segmento>`. Porta explícita, credencial, host ou caminho diferente,
+`/social/<segmento>`, ou a URL curta oficial `https://meli.la/<segmento>`. Porta explícita,
+credencial, host ou caminho diferente,
 e `wid` duplicado ou divergente são recusados. A ausência de `wid` é aceita
 apenas porque o mapa e o vendedor revisado identificam a oferta.
 

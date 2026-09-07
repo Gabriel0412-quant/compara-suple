@@ -608,7 +608,7 @@ function SellersOfSelected({ product }: { product: ProductDetail }) {
         </p>
       </div>
 
-      <OffersSection offers={offers} servings={servings} />
+      <OffersSection offers={offers} servings={servings} superficie="comparador" />
     </section>
   )
 }

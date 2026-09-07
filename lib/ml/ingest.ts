@@ -10,7 +10,9 @@ import type { MlProductItemsSnapshot } from './snapshot'
 import {
   newOfferUrlCounters,
   resolveOfferUrl,
+  type AffiliateUrlEntry,
   type OfferUrlCounters,
+  type OfferUrlResolution,
 } from './offer-url'
 import itemsData from '@/data/items.json'
 import { classificarIdCatalogo, motivoDeRecusa, type MotivoNaoColetado } from './catalog-id'
@@ -26,21 +28,25 @@ type RawCatalog =
       id?: string
       nota?: string
       /** URLs curadas por item_id. Uma por anúncio — nunca uma para o catálogo. */
-      affiliate_urls?: Record<string, string>
+      affiliate_urls?: Record<string, AffiliateUrlEntry>
       /** Formato antigo: uma URL para o catálogo inteiro. Rejeitado. */
       affiliate_url?: string
     }
 
 export type CuratedItem = {
   catalogId: string
-  /** item_id -> URL curada. Vazio quando o catálogo não tem link manual. */
-  manualByItemId: Record<string, string>
+  manualByItemId: Record<string, AffiliateUrlEntry>
 }
 
 /** Item da lista curada que a ingestão reconhece mas não sabe coletar. */
 export type ItemRecusado = { catalogId: string; motivo: MotivoNaoColetado }
 
 export type ListaCurada = { items: CuratedItem[]; recusados: ItemRecusado[] }
+
+function isAffiliateUrlEntry(value: unknown): value is AffiliateUrlEntry {
+  return (typeof value === 'string' && value !== '')
+    || (typeof value === 'object' && value !== null)
+}
 
 export function loadCuratedItems(
   raw: RawCatalog[] = (itemsData as { items: RawCatalog[] }).items,
@@ -72,9 +78,11 @@ export function loadCuratedItems(
     // Uma URL no nível do catálogo iria para todas as ofertas dele e mandaria
     // o comprador para o anúncio de outro vendedor. Nunca é aproveitável.
     if (entry.affiliate_url) compartilhadas++
-    const manual: Record<string, string> = {}
+    const manual: Record<string, AffiliateUrlEntry> = {}
     for (const [itemId, url] of Object.entries(entry.affiliate_urls ?? {})) {
-      if (typeof url === 'string' && url) manual[itemId] = url
+      if (isAffiliateUrlEntry(url)) {
+        manual[itemId] = url
+      }
     }
     items.push({ catalogId: id, manualByItemId: manual })
   }
@@ -302,10 +310,28 @@ function logReconciliacao(
   console.info('ml_reconciliacao', { catalogId, status, ...contadores })
 }
 
+function affiliateLinkMetadata(link: OfferUrlResolution) {
+  return {
+    origin: link.origin,
+    validation: link.validation,
+    destination: link.destination,
+    reason: link.reason,
+    ...(link.seller_id === undefined ? {} : { seller_id: link.seller_id }),
+    ...(link.reviewed_at === undefined ? {} : { reviewed_at: link.reviewed_at }),
+    ...(link.review_ref === undefined ? {} : { review_ref: link.review_ref }),
+  }
+}
+
+function countOfferUrlResolution(counters: OfferUrlCounters, link: OfferUrlResolution): void {
+  counters[link.reason]++
+  if (link.destination === 'affiliate_link') counters.affiliate_reviewed++
+  else counters.fallback++
+}
+
 async function ingestCatalog(
   catalogId: string,
   storeId: number,
-  manualByItemId: Record<string, string>,
+  manualByItemId: Record<string, AffiliateUrlEntry>,
   simular: boolean,
 ): Promise<CatalogResult> {
   let product: MlCatalogProduct
@@ -388,10 +414,6 @@ async function ingestCatalog(
   const productId = await upsertProduct({ catalogId, name: product.name, brandId })
   const variantId = await upsertVariant({ productId, flavor, sizeGrams, servings })
 
-  // Ofertas — cada uma recebe a URL do seu próprio anúncio. A URL curada só
-  // vale quando o `wid` dela bate com o item_id; senão, construímos o link a
-  // partir de catalogId + item_id.
-  //
   // IMPORTANTE: items vem em ordem específica do ML — primeiro = buy box winner.
   // Salvamos essa posição em ml_rank pra preservar o destaque do ML.
   const urlCounters = newOfferUrlCounters()
@@ -402,10 +424,10 @@ async function ingestCatalog(
     const link = resolveOfferUrl({
       catalogId,
       externalId: offer.item_id,
+      sellerId: offer.seller_id,
       manualByItemId,
     })
-    urlCounters[link.reason]++
-    if (!link.tracked) urlCounters.sem_tag_de_afiliado++
+    countOfferUrlResolution(urlCounters, link)
     ofertas.push({
       external_id: offer.item_id,
       url: link.url,
@@ -417,6 +439,7 @@ async function ingestCatalog(
         thumbnail,
         product_name: product.name,
         catalog_id: catalogId,
+        affiliate_link: affiliateLinkMetadata(link),
       },
     })
   }
@@ -429,9 +452,7 @@ async function ingestCatalog(
     simular,
   })
   logReconciliacao(catalogId, 'success', reconciliacao)
-  // Só contadores: a URL afiliada completa carrega o token de rastreio e nunca
-  // entra em log.
-  console.info('ml_url_afiliada', { catalogId, ...urlCounters })
+  console.info('ml_url_fallback', { catalogId, ...urlCounters })
 
   return {
     ok: true,
@@ -500,14 +521,6 @@ export async function runCuratedIngest(
   const t0 = Date.now()
   const storeId = await getStoreId()
   const { items, recusados } = loadCuratedItems()
-
-  // Sem a tag, todo link sai válido mas sem atribuição: o clique acontece e a
-  // comissão não. É silencioso demais para não avisar.
-  if (!process.env.ML_AFFILIATE_TAG) {
-    console.warn('ml_affiliate_tag_ausente', {
-      efeito: 'links serao gerados sem atribuicao de afiliado',
-    })
-  }
 
   const result: IngestResult = {
     simulado: simular,
@@ -582,6 +595,12 @@ export async function runCuratedIngest(
   }
 
   result.durationMs = Date.now() - t0
+  if (result.urls.fallback > 0) {
+    console.warn('ml_url_fallback_ativo', {
+      destino: 'untracked_fallback',
+      fallback: result.urls.fallback,
+    })
+  }
   return result
 }
 

@@ -4,3 +4,4 @@
 - [Mercado Livre — recuperação da atualização de preços](ml/recuperacao-atualizacao-precos.md)
 - [Mercado Livre — OAuth seguro e renovação exclusiva](ml/oauth-seguro-ep01.md)
 - [Plataforma — liveness, readiness e preços defasados](plataforma/readiness-ep13-02.md)
+- [Pipeline — validação isolada dos fallbacks do Mercado Livre (ML54-01)](pipeline/ml54-01-validacao.md)

@@ -10,10 +10,6 @@ import { ehBot, registrarEvento } from '@/lib/eventos'
  * Livre. O desvio existe pra registrar o clique: sem ele não sabemos qual
  * produto ou qual página realmente converte.
  *
- * A `offer.url` já vem do banco com a tag de afiliado aplicada pela ingestão
- * (ver lib/ml/ingest.ts), então aqui NÃO remontamos o link — só validamos e
- * redirecionamos. Reaplicar a tag arriscaria duplicar parâmetro e quebrar o
- * rastreio do ML.
  */
 
 // Cada acesso é um clique que precisa ser contado; cachear perderia registro.
@@ -21,12 +17,13 @@ export const dynamic = 'force-dynamic'
 
 /** Só redirecionamos para http(s) — barra `javascript:`, `data:` e afins. */
 function isSafeRedirect(rawUrl: string): boolean {
-  try {
-    const { protocol } = new URL(rawUrl)
-    return protocol === 'http:' || protocol === 'https:'
-  } catch {
-    return false
-  }
+  if (!URL.canParse(rawUrl) || /[^\x21-\x7e]/.test(rawUrl)) return false
+  const { protocol } = new URL(rawUrl)
+  return protocol === 'http:' || protocol === 'https:'
+}
+
+function redirectWithExactLocation(location: string): Response {
+  return new Response(null, { status: 302, headers: { location } })
 }
 
 /*
@@ -46,30 +43,80 @@ function valido<T extends string>(valor: string | null, aceitos: readonly T[]): 
   return aceitos.includes((valor ?? '') as T) ? (valor as T) : null
 }
 
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ offerId: string }> },
-) {
-  const { offerId } = await params
+type UiTracking = {
+  superficie: (typeof SUPERFICIES)[number] | null
+  criterio: (typeof CRITERIOS)[number] | null
+}
+
+type RedirectOffer = { id: number; url: string }
+
+function validOfferId(offerId: string): number | null {
   const id = Number(offerId)
-  const home = new URL('/', request.url)
+  return Number.isInteger(id) && id > 0 ? id : null
+}
+
+function uiTrackingFromRequest(request: Request): UiTracking {
   const query = new URL(request.url).searchParams
-  const superficie = valido(query.get('de'), SUPERFICIES)
-  const criterio = valido(query.get('por'), CRITERIOS)
-
-  if (!Number.isInteger(id) || id <= 0) {
-    return NextResponse.redirect(home)
+  return {
+    superficie: valido(query.get('de'), SUPERFICIES),
+    criterio: valido(query.get('por'), CRITERIOS),
   }
+}
 
+async function loadRedirectOffer(id: number): Promise<RedirectOffer | null> {
   const { data: offer, error } = await supabase
     .from('offer')
     .select('id, url')
     .eq('id', id)
     .maybeSingle()
 
+  if (error || !offer || !isSafeRedirect(offer.url)) return null
+  return offer
+}
+
+async function recordClickEvent(offer: RedirectOffer, request: Request): Promise<void> {
+  try {
+    const { error } = await supabaseAdmin.from('click_event').insert({
+      offer_id: offer.id,
+      referrer: request.headers.get('referer'),
+      user_agent: request.headers.get('user-agent'),
+    })
+    if (error) console.error('click_event_falhou', { offer_id: offer.id, code: 'write_failed' })
+  } catch {
+    console.error('click_event_falhou', { offer_id: offer.id, code: 'write_failed' })
+  }
+}
+
+async function recordUiEvent(request: Request, tracking: UiTracking): Promise<void> {
+  if (!tracking.superficie || ehBot(request.headers.get('user-agent'))) return
+  try {
+    await registrarEvento({
+      evento: 'saida_para_loja',
+      superficie: tracking.superficie,
+      criterio: tracking.criterio,
+    })
+  } catch {
+    console.error('ui_event_falhou', { evento: 'saida_para_loja', code: 'write_failed' })
+  }
+}
+
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ offerId: string }> },
+) {
+  const { offerId } = await params
+  const home = new URL('/', request.url)
+  const tracking = uiTrackingFromRequest(request)
+  const id = validOfferId(offerId)
+
+  if (id === null) {
+    return NextResponse.redirect(home)
+  }
+
   // Oferta apagada pela ingestão ou id inventado: manda pra home em vez de
   // mostrar erro. O usuário clicou em "Comprar", não merece uma tela de stack.
-  if (error || !offer || !isSafeRedirect(offer.url)) {
+  const offer = await loadRedirectOffer(id)
+  if (offer === null) {
     return NextResponse.redirect(home)
   }
 
@@ -78,15 +125,7 @@ export async function GET(
   //
   // LGPD: gravamos apenas referrer e user-agent. Nada de IP, cookie ou
   // identificador pessoal — não há consentimento coletado para isso.
-  try {
-    await supabaseAdmin.from('click_event').insert({
-      offer_id: offer.id,
-      referrer: request.headers.get('referer'),
-      user_agent: request.headers.get('user-agent'),
-    })
-  } catch (e) {
-    console.error('[go] falha ao registrar clique da oferta', offer.id, e)
-  }
+  await recordClickEvent(offer, request)
 
   /*
     O mesmo clique alimenta duas tabelas com propósitos diferentes:
@@ -95,9 +134,7 @@ export async function GET(
     dois. Não é contagem em dobro da mesma coisa — é o mesmo fato registrado
     para duas perguntas.
   */
-  if (superficie && !ehBot(request.headers.get('user-agent'))) {
-    await registrarEvento({ evento: 'saida_para_loja', superficie, criterio })
-  }
+  await recordUiEvent(request, tracking)
 
-  return NextResponse.redirect(offer.url, { status: 302 })
+  return redirectWithExactLocation(offer.url)
 }

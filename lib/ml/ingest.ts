@@ -20,6 +20,7 @@ import { executeIngestionBatch } from './ingestion-orchestrator'
 import { supabaseIngestionOrchestrationStore } from './ingestion-run'
 import type { IngestionFailure } from './ingestion-retry'
 import { MlRequestError } from './client'
+import { monitorIngestion } from './ingestion-status'
 import itemsData from '@/data/items.json'
 import { classificarIdCatalogo, motivoDeRecusa, type MotivoNaoColetado } from './catalog-id'
 
@@ -702,5 +703,10 @@ export async function runOperationalCuratedIngest(): Promise<OperationalIngestRe
     },
   }, supabaseIngestionOrchestrationStore)
 
+  try {
+    await monitorIngestion()
+  } catch {
+    console.error('ml_ingestion_monitor_failed', { error: 'monitoring_failed' })
+  }
   return { ...result, durationMs: Date.now() - startedAt }
 }

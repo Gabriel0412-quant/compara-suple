@@ -1,6 +1,7 @@
 import Link from 'next/link'
 
-import { tomDaMarca, type Marca, type TomDeMarca } from '@/lib/brands'
+import { CLASSE_DO_TOM } from '@/components/brand/tons'
+import { tomDaMarca, type Marca } from '@/lib/brands'
 
 /**
  * A faixa de marcas acompanhadas, abaixo do hero (maquete 1b).
@@ -10,22 +11,6 @@ import { tomDaMarca, type Marca, type TomDeMarca } from '@/lib/brands'
  * cartão que não é o logo dela insinua uma relação institucional que não
  * existe. Não somos revendedores nem parceiros — listamos preço de anúncios.
  */
-
-/**
- * Tom → classe, escrito por extenso.
- *
- * `bg-${tom}` não funciona: o Tailwind varre o código em busca de nomes de
- * classe literais, e uma classe montada em tempo de execução simplesmente não
- * é gerada — o cartão sairia transparente, sem erro nenhum.
- */
-const CLASSE_DO_TOM: Record<TomDeMarca, string> = {
-  'surface-dark': 'bg-surface-dark',
-  'brand-strong': 'bg-brand-strong',
-  'surface-darker': 'bg-surface-darker',
-  'brand-deep': 'bg-brand-deep',
-  'surface-dark-raised': 'bg-surface-dark-raised',
-  'brand-ink': 'bg-brand-ink',
-}
 
 /**
  * O texto que explica o recorte.
@@ -69,6 +54,17 @@ export default function FaixaDeMarcas({
           </h2>
           <p className="text-sm text-ink-3">{descreverCorte(total, marcas.length)}</p>
           <span aria-hidden="true" className="hidden h-px flex-1 bg-line sm:block" />
+          {/*
+            O link que faltava no #152: `/marcas` não existia ainda, e apontar
+            para 404 é o que o rodapé já rejeitou quando removeu Sobre, Blog e
+            Termos apontando para "#". Agora o destino existe.
+          */}
+          <Link
+            href="/marcas"
+            className="rounded-md text-sm font-semibold text-brand-strong hover:text-brand-deep focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+          >
+            Ver todas as marcas <span aria-hidden="true">→</span>
+          </Link>
         </div>
 
         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">

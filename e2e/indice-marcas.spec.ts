@@ -1,0 +1,122 @@
+import { expect, test } from '@playwright/test'
+
+/**
+ * O índice `/marcas`, no HTML servido.
+ *
+ * Cobre o que a leitura do fonte não alcança: que as contagens da página
+ * conferem com as da faixa da home, que cada marca leva a uma listagem que
+ * responde, e que a regra de indexação chega ao `<head>` de verdade.
+ */
+
+test.describe('rota /marcas', () => {
+  test('existe e lista as marcas com as contagens', async ({ page }) => {
+    await page.goto('/marcas')
+
+    await expect(page.getByRole('heading', { level: 1, name: /marcas acompanhadas/i })).toBeVisible()
+
+    const itens = page.getByRole('main').getByRole('listitem')
+    const total = await itens.count()
+    expect(total, 'índice sem marca nenhuma').toBeGreaterThan(0)
+
+    // Toda linha declara produtos e ofertas, com o singular/plural certo.
+    for (let i = 0; i < total; i++) {
+      await expect(itens.nth(i)).toContainText(/\d+ produtos?/)
+      await expect(itens.nth(i)).toContainText(/\d+ ofertas? ativas?/)
+    }
+  })
+
+  test('não é indexável enquanto é só uma lista', async ({ page }) => {
+    await page.goto('/marcas')
+    const robots = page.locator('head meta[name="robots"]')
+    // `noindex` porque a página não tem conteúdo próprio além do que já existe
+    // em /produtos; `follow` porque os links daqui devem ser rastreados.
+    await expect(robots).toHaveAttribute('content', /noindex/)
+    await expect(robots).toHaveAttribute('content', /follow/)
+  })
+
+  test('o canonical aponta para a própria rota', async ({ page }) => {
+    await page.goto('/marcas')
+    const canonical = await page.locator('head link[rel="canonical"]').getAttribute('href')
+    expect(canonical).toMatch(/\/marcas$/)
+  })
+
+  test('nenhuma marca produz link quebrado', async ({ page, request }) => {
+    await page.goto('/marcas')
+    const links = page.getByRole('main').getByRole('listitem').locator('a')
+
+    for (let i = 0; i < (await links.count()); i++) {
+      const href = await links.nth(i).getAttribute('href')
+      expect(href, 'linha sem destino').toMatch(/^\/produtos\?q=/)
+      const resposta = await request.get(href!)
+      expect(resposta.status(), `${href} não responde 200`).toBe(200)
+    }
+  })
+
+  test('o filtro leva à listagem daquela marca, com resultado', async ({ page }) => {
+    await page.goto('/marcas')
+    const primeiro = page.getByRole('main').getByRole('listitem').locator('a').first()
+    const href = await primeiro.getAttribute('href')
+    const termo = decodeURIComponent(new URL(href!, 'http://x').searchParams.get('q') ?? '')
+
+    await primeiro.click()
+    await expect(page).toHaveURL(/\/produtos\?q=/)
+    await expect(page.getByRole('searchbox').first()).toHaveValue(termo)
+    // Marca listada aqui tem oferta ativa, então a busca não pode voltar vazia.
+    await expect(page.getByRole('main').getByRole('article').first()).toBeVisible()
+  })
+
+  test('as contagens conferem com a faixa da home', async ({ page }) => {
+    /*
+      As duas telas partem do mesmo `listarMarcas()`. Se divergirem, é porque
+      alguém recalculou de um lado — que é exatamente o que o read model do
+      #151 existe para evitar.
+    */
+    await page.goto('/marcas')
+    const primeiraLinha = page.getByRole('main').getByRole('listitem').first()
+    const nome = (await primeiraLinha.locator('a > span > span').first().innerText()).trim()
+    const contagens = (await primeiraLinha.innerText()).match(/(\d+) produtos?[^\d]+(\d+) ofertas?/)
+
+    await page.goto('/')
+    const naFaixa = page
+      .getByRole('region', { name: 'Marcas acompanhadas' })
+      .getByRole('listitem')
+      .filter({ hasText: new RegExp(nome, 'i') })
+      .locator('a')
+
+    await expect(naFaixa).toHaveAccessibleName(
+      new RegExp(`${contagens![1]} produtos?, ${contagens![2]} ofertas?`),
+    )
+  })
+})
+
+test.describe('navegação entre home e índice', () => {
+  test('a faixa da home leva ao índice', async ({ page }) => {
+    await page.goto('/')
+    await page
+      .getByRole('region', { name: 'Marcas acompanhadas' })
+      .getByRole('link', { name: /ver todas as marcas/i })
+      .click()
+    await expect(page).toHaveURL(/\/marcas$/)
+  })
+})
+
+for (const [nome, viewport] of [
+  ['desktop', { width: 1440, height: 900 }],
+  ['celular', { width: 375, height: 800 }],
+] as const) {
+  test.describe(`índice em ${nome}`, () => {
+    test.use({ viewport })
+
+    test('não rola na horizontal e o primeiro item recebe foco', async ({ page }) => {
+      await page.goto('/marcas')
+      const estoura = await page.evaluate(
+        () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+      )
+      expect(estoura).toBe(false)
+
+      const primeiro = page.getByRole('main').getByRole('listitem').locator('a').first()
+      await primeiro.focus()
+      await expect(primeiro).toBeFocused()
+    })
+  })
+}

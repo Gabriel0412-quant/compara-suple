@@ -33,7 +33,7 @@ export function PrateleiraDeCategoria({ prateleira }: { prateleira: Prateleira }
             que o read model separa em `totalProdutos` e `totalOfertas`. Dizer
             "4 produtos" quando a categoria tem nove seria contar a vitrine.
           */}
-          <p className="font-mono text-xs text-ink-3">
+          <p className="font-mono text-sm text-ink-3 sm:text-xs">
             {formatCount(totalProdutos)} {totalProdutos === 1 ? 'produto' : 'produtos'} ·{' '}
             {formatCount(totalOfertas)} {totalOfertas === 1 ? 'oferta' : 'ofertas'}
           </p>
@@ -41,7 +41,7 @@ export function PrateleiraDeCategoria({ prateleira }: { prateleira: Prateleira }
           <div className="ml-auto flex items-center gap-4">
             <Link
               href={`/categoria/${categoria.slug}`}
-              className="rounded-md text-sm font-semibold text-brand-strong hover:text-brand-deep focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+              className="flex min-h-11 items-center rounded-md text-sm font-semibold text-brand-strong hover:text-brand-deep focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
             >
               Ver todos
             </Link>

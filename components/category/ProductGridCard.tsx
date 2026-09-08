@@ -35,7 +35,7 @@ export function ProductGridCard({
           <span className="text-sm text-ink-4">sem imagem</span>
         )}
         {hasDiscount && (
-          <span className="absolute right-3 top-3 rounded-full bg-surface-warm px-2 py-0.5 font-mono text-xs font-semibold text-brand-ink">
+          <span className="absolute right-3 top-3 rounded-full bg-surface-warm px-2 py-0.5 font-mono text-sm font-semibold text-brand-ink sm:text-xs">
             -{discountPct}%
           </span>
         )}
@@ -43,18 +43,18 @@ export function ProductGridCard({
 
       <div className="p-5 flex flex-col flex-1">
         {product.brand && (
-          <span className="mb-1 font-mono text-[10px] uppercase tracking-[0.1em] text-ink-3">
+          <span className="mb-1 font-mono text-sm uppercase tracking-[0.1em] text-ink-3 sm:text-[10px]">
             {product.brand}
           </span>
         )}
 
         <Link href={`/produto/${product.slug}`} className="block mb-3">
-          <h2 className="line-clamp-2 text-sm font-semibold text-ink transition-colors hover:text-brand-strong">
+          <h2 className="line-clamp-2 text-base font-semibold text-ink transition-colors hover:text-brand-strong sm:text-sm">
             {product.name}
           </h2>
         </Link>
 
-        <div className="mb-3 flex flex-wrap gap-x-2 font-mono text-xs text-ink-3">
+        <div className="mb-3 flex flex-wrap gap-x-2 font-mono text-sm text-ink-3 sm:text-xs">
           {product.sizeGrams && (
             <span>
               {product.sizeGrams >= 1000
@@ -72,19 +72,19 @@ export function ProductGridCard({
                 {formatBRL(product.featuredPrice)}
               </span>
               {precoNormalizado ? (
-                <span className="font-mono text-xs font-semibold text-brand-strong">
+                <span className="font-mono text-sm font-semibold text-brand-strong sm:text-xs">
                   {precoNormalizado}
                 </span>
               ) : (
-                <span className="text-xs text-ink-4">sem dose ou peso informado</span>
+                <span className="text-sm text-ink-4 sm:text-xs">sem dose ou peso informado</span>
               )}
             </div>
             {hasDiscount && (
-              <span className="font-mono text-xs text-ink-4 line-through">
+              <span className="font-mono text-sm text-ink-4 line-through sm:text-xs">
                 {formatBRL(product.featuredOriginalPrice!)}
               </span>
             )}
-            <p className="mt-1 text-[11px] text-ink-4">
+            <p className="mt-1 text-sm text-ink-4 sm:text-[11px]">
               Destaque entre {product.offerCount}{' '}
               {product.offerCount === 1 ? 'oferta' : 'ofertas'}
             </p>
@@ -100,7 +100,7 @@ export function ProductGridCard({
                 href={`/go/${product.lowestOfferId}?de=${superficie}&por=menor_preco`}
                 target="_blank"
                 rel="noopener noreferrer sponsored"
-                className="mt-1 inline-block text-[11px] font-semibold text-brand-strong hover:underline"
+                className="mt-1 inline-flex min-h-11 items-center text-sm font-semibold text-brand-strong hover:underline sm:min-h-0 sm:text-[11px]"
               >
                 Menor preço: {formatBRL(product.lowestPrice!)} →
               </a>
@@ -110,7 +110,7 @@ export function ProductGridCard({
           <div className="flex gap-2">
             <Link
               href={`/produto/${product.slug}`}
-              className="flex-1 rounded-xl border border-line-strong py-2.5 text-center text-sm font-semibold text-ink-2 transition-colors hover:border-brand hover:text-brand-strong"
+              className="flex min-h-11 flex-1 items-center justify-center rounded-xl border border-line-strong py-2.5 text-center text-sm font-semibold text-ink-2 transition-colors hover:border-brand hover:text-brand-strong"
             >
               Comparar
             </Link>
@@ -130,12 +130,12 @@ export function ProductGridCard({
                 href={`/go/${product.featuredOfferId}?de=${superficie}&por=destaque`}
                 target="_blank"
                 rel="noopener noreferrer sponsored"
-                className="flex-1 rounded-xl bg-brand py-2.5 text-center text-sm font-semibold text-white transition-colors hover:bg-brand-strong"
+                className="flex min-h-11 flex-1 items-center justify-center rounded-xl bg-brand py-2.5 text-center text-sm font-semibold text-white transition-colors hover:bg-brand-strong"
               >
                 Ir à loja →
               </a>
             ) : (
-              <span className="flex-1 rounded-xl bg-surface-muted py-2.5 text-center text-sm font-semibold text-ink-4">
+              <span className="flex min-h-11 flex-1 items-center justify-center rounded-xl bg-surface-muted py-2.5 text-center text-sm font-semibold text-ink-4">
                 Sem oferta ativa
               </span>
             )}

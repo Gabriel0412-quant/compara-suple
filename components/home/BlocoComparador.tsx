@@ -33,17 +33,17 @@ function Cartao({ item, destacado }: { item: ItemComparado; destacado: boolean }
 
   return (
     <li
-      className={`rounded-2xl p-5 ${
+      className={`w-[280px] shrink-0 snap-start rounded-2xl p-5 sm:w-[320px] lg:w-auto ${
         destacado ? 'border-2 border-brand bg-surface-warm-soft' : 'border border-line bg-surface'
       }`}
     >
       <div className="flex items-start justify-between gap-2">
-        <p className="font-mono text-[10px] uppercase tracking-[0.1em] text-ink-3">
+        <p className="font-mono text-sm uppercase tracking-[0.1em] text-ink-3 sm:text-[10px]">
           {produto.brand ? `${produto.brand} · ` : ''}
           {peso}
         </p>
         {destacado && (
-          <span className="shrink-0 rounded-full bg-brand px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.05em] text-white">
+          <span className="shrink-0 rounded-full bg-brand px-2 py-1 font-mono text-sm font-semibold uppercase tracking-[0.05em] text-white sm:py-0.5 sm:text-[10px]">
             Melhor R$/kg
           </span>
         )}
@@ -51,7 +51,7 @@ function Cartao({ item, destacado }: { item: ItemComparado; destacado: boolean }
 
       <Link
         href={`/produto/${produto.slug}`}
-        className="mt-3 block rounded-md text-sm font-semibold text-ink transition-colors hover:text-brand-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+        className="mt-3 flex min-h-11 items-center rounded-md text-base font-semibold text-ink transition-colors hover:text-brand-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand sm:min-h-0 sm:text-sm"
       >
         {produto.name}
       </Link>
@@ -60,7 +60,7 @@ function Cartao({ item, destacado }: { item: ItemComparado; destacado: boolean }
         {formatBRL(produto.featuredPrice)}
       </p>
 
-      <dl className="mt-4 flex flex-col gap-2 text-sm">
+      <dl className="mt-4 flex flex-col gap-2 text-base sm:text-sm">
         {/*
           Dose ausente é dita, não omitida — mesma formulação do card de
           produto. Some sem explicação parece bug; dizer que falta é informação.
@@ -123,13 +123,23 @@ export function BlocoComparador({ dados }: { dados: ComparadorDaHome | null }) {
           </div>
           <Link
             href={urlDoComparador}
-            className="self-start whitespace-nowrap rounded-lg bg-surface-dark px-4 py-2.5 text-sm font-semibold text-ink-on-dark transition-colors hover:bg-surface-dark-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand sm:self-auto"
+            className="flex min-h-11 items-center self-start whitespace-nowrap rounded-lg bg-surface-dark px-4 py-2.5 text-sm font-semibold text-ink-on-dark transition-colors hover:bg-surface-dark-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand sm:self-auto"
           >
             Abrir comparador <span aria-hidden="true">→</span>
           </Link>
         </div>
 
-        <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {/*
+          Em tela estreita o bloco **rola**, não empilha.
+
+          Empilhar seria o reflexo automático, e destruiria a única coisa que
+          este bloco faz: comparar. Três cartões um embaixo do outro obrigam a
+          memorizar o R$/kg do primeiro para conferir no terceiro — que é
+          exatamente o trabalho que o site existe para poupar. Com
+          `snap-mandatory` a rolagem para em cartão inteiro, e o de referência
+          continua meio visível na borda.
+        */}
+        <ul className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 lg:mx-0 lg:grid lg:grid-cols-3 lg:overflow-visible lg:px-0 lg:pb-0">
           {itens.map((item, i) => (
             <Cartao key={item.produto.id} item={item} destacado={melhorPorKg.includes(i)} />
           ))}

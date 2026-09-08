@@ -132,4 +132,56 @@ describe('executeIngestionBatch', () => {
     expect(processItem).toHaveBeenCalledOnce()
     expect(ingestionStore.finalize).not.toHaveBeenCalled()
   })
+
+  it('distributes a simulated 400-item run into bounded resumable batches', async () => {
+    const pending = Array.from({ length: 400 }, (_, index) => ({
+      id: index + 1,
+      key: `MLB${index + 1}`,
+      attemptCount: 1,
+    }))
+    const completed: number[] = []
+    const ingestionStore = store({
+      claim: vi.fn(async ({ limit }: { limit: number }) => ({
+        items: pending.splice(0, limit),
+      })),
+      completeItem: vi.fn(async ({ itemId }: { itemId: number }) => {
+        completed.push(itemId)
+      }),
+      finalize: vi.fn(async () => ({
+        state: pending.length === 0 ? 'succeeded' as const : 'running' as const,
+        counters: {
+          total: 400,
+          succeeded: completed.length,
+          failed: 0,
+          skipped: 0,
+          retryScheduled: 0,
+        },
+      })),
+    })
+    const processItem = vi.fn(async () => ({ ok: true } as const))
+    const input = {
+      itemKeys: pending.map(item => item.key),
+      workerId,
+      batchSize: 12,
+      now: () => new Date('2026-09-08T09:00:00Z'),
+      processItem,
+    }
+
+    const logMetric = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const batches = []
+    try {
+      while (pending.length > 0) {
+        batches.push(await executeIngestionBatch(input, ingestionStore))
+      }
+    } finally {
+      logMetric.mockRestore()
+    }
+
+    expect(batches).toHaveLength(34)
+    expect(batches.slice(0, -1).every(batch => batch.hasContinuation)).toBe(true)
+    expect(batches.at(-1)).toMatchObject({ state: 'succeeded', hasContinuation: false })
+    expect(processItem).toHaveBeenCalledTimes(400)
+    expect(new Set(completed).size).toBe(400)
+    expect(ingestionStore.claim).toHaveBeenCalledTimes(34)
+  })
 })

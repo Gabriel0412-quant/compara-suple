@@ -45,7 +45,7 @@ export default async function Home() {
   const fallingProducts = onSale.slice(0, 6)
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-800">
+    <div className="min-h-screen bg-surface-muted text-ink">
       {/*
         A home era a única das nove páginas sem landmark `main` — as outras
         oito já tinham. Passou despercebido enquanto o `<Header />` era
@@ -156,32 +156,40 @@ export default async function Home() {
 
 function FallingProductsSection({ products }: { products: CategoryProduct[] }) {
   return (
-    <section className="bg-white py-14 px-4 border-y border-gray-100">
+    <section className="border-y border-line bg-surface px-4 py-14">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
           <div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold rounded-full bg-orange-50 text-orange-700 mb-3 border border-orange-100">
-              <Flame className="w-3.5 h-3.5" />
-              <span className="flex items-center gap-1">
-                EM QUEDA
-                <span className="relative flex h-1.5 w-1.5 ml-1">
-                  <span className="absolute inline-flex h-full w-full rounded-full bg-orange-500 opacity-75 animate-ping" />
-                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-orange-500" />
-                </span>
-              </span>
+            {/*
+              O título dizia "Em queda agora", com selo "EM QUEDA" pulsando.
+
+              Isso afirma variação de preço no tempo, e o dado por trás é
+              `original_price` do próprio anúncio: desconto em relação ao preço
+              anunciado, não queda observada entre coletas. É a mesma afirmação
+              que o #128 está bloqueado por não poder sustentar até o EP10
+              (#114) entregar histórico com cobertura — só que já estava no ar.
+
+              O subtítulo sempre foi honesto. O título e o selo passam a
+              nomear o que o dado é. O ponto pulsante saiu junto: ele sugeria
+              tempo real, e a coleta é diária.
+            */}
+            <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-warm px-3 py-1 font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-brand-ink">
+              <Flame className="h-3.5 w-3.5" aria-hidden="true" />
+              Desconto
             </div>
-            <h2 className="text-3xl font-bold text-gray-800 flex items-center gap-2 flex-wrap">
-              <TrendingDown className="w-7 h-7 text-orange-500" />
-              Em queda agora
+            <h2 className="flex flex-wrap items-center gap-2 text-3xl font-bold tracking-[-0.03em] text-ink">
+              <TrendingDown className="h-7 w-7 text-brand" aria-hidden="true" />
+              Maiores descontos
             </h2>
-            <p className="text-gray-500 text-sm mt-2">
-              Produtos com maior desconto detectado no Mercado Livre.
+            <p className="mt-2 text-sm text-ink-3">
+              Produtos com maior desconto em relação ao preço anunciado no Mercado Livre, na
+              última coleta.
             </p>
           </div>
           <Link
             href="/ofertas"
-            className="self-start sm:self-auto text-sm font-semibold px-4 py-2 rounded-lg border border-green-600 text-green-600 hover:bg-green-600 hover:text-white transition-colors"
+            className="self-start rounded-lg border border-brand px-4 py-2 text-sm font-semibold text-brand-strong transition-colors hover:bg-brand hover:text-white sm:self-auto"
           >
             Ver todas as ofertas →
           </Link>
@@ -189,7 +197,7 @@ function FallingProductsSection({ products }: { products: CategoryProduct[] }) {
 
         {/* Grid */}
         {products.length === 0 ? (
-          <div className="bg-gray-50 border border-gray-100 rounded-2xl p-10 text-center text-sm text-gray-400">
+          <div className="rounded-2xl border border-line bg-surface-muted p-10 text-center text-sm text-ink-3">
             Nenhuma promoção rolando agora. Verificamos o ML diariamente — quando rolar desconto, aparece aqui.
           </div>
         ) : (
@@ -209,11 +217,11 @@ export function FallingCard({ product }: { product: CategoryProduct }) {
 
   return (
     <article
-      className="group bg-white border border-gray-100 hover:border-orange-400 hover:shadow-md transition-all rounded-2xl overflow-hidden flex flex-col"
+      className="group flex flex-col overflow-hidden rounded-2xl border border-line bg-surface transition-all hover:border-brand hover:shadow-md"
     >
       <Link href={`/produto/${product.slug}`} className="flex gap-3 p-4 items-start">
         {/* Thumbnail */}
-        <div className="relative w-20 h-20 shrink-0 bg-gray-50 rounded-lg flex items-center justify-center p-1.5">
+        <div className="relative flex h-20 w-20 shrink-0 items-center justify-center rounded-lg bg-surface-muted p-1.5">
           {product.thumbnail ? (
             /* eslint-disable-next-line @next/next/no-img-element */
             <img
@@ -222,22 +230,22 @@ export function FallingCard({ product }: { product: CategoryProduct }) {
               className="max-h-full max-w-full object-contain"
             />
           ) : (
-            <span className="text-gray-300 text-[9px]">sem img</span>
+            <span className="text-[9px] text-ink-4">sem img</span>
           )}
         </div>
 
         {/* Info */}
         <div className="flex-1 min-w-0">
           {product.brand && (
-            <p className="text-[10px] font-bold uppercase tracking-wide text-green-600 truncate">
+            <p className="truncate font-mono text-[10px] uppercase tracking-[0.1em] text-ink-3">
               {product.brand}
             </p>
           )}
-          <h3 className="text-sm font-bold text-gray-800 leading-tight line-clamp-2 group-hover:text-orange-600 transition-colors">
+          <h3 className="line-clamp-2 text-sm font-bold leading-tight text-ink transition-colors group-hover:text-brand-strong">
             {product.name}
           </h3>
           {product.featuredPerDose && (
-            <p className="text-[11px] text-gray-500 mt-1">
+            <p className="mt-1 text-[11px] text-ink-3">
               {formatBRL(product.featuredPerDose)}/dose
             </p>
           )}
@@ -245,7 +253,7 @@ export function FallingCard({ product }: { product: CategoryProduct }) {
       </Link>
 
       {/* Footer com preço + desconto, destacado em laranja */}
-      <div className="px-4 py-3 bg-orange-50/60 border-t border-orange-100/60 flex items-end justify-between gap-2">
+      <div className="flex items-end justify-between gap-2 border-t border-line bg-surface-warm px-4 py-3">
         <FallingCardPrice product={product} discount={discount} />
         <DiscountBadge percentage={discount?.percentage ?? null} />
         {product.featuredOfferId && (
@@ -253,10 +261,16 @@ export function FallingCard({ product }: { product: CategoryProduct }) {
             href={`/go/${product.featuredOfferId}?de=home&por=destaque`}
             target="_blank"
             rel="noopener noreferrer sponsored"
-            aria-label={`Comprar ${product.name} no Mercado Livre (abre em nova aba)`}
-            className="rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white hover:bg-green-700"
+            aria-label={`Ver oferta de ${product.name} no Mercado Livre (abre em nova aba)`}
+            className="rounded-lg bg-brand px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-strong"
           >
-            Comprar →
+            {/*
+              Era "Comprar →", como no ProductGridCard antes do #155 — e este
+              escapou porque é outro componente, e meu teste de lá estava
+              escopado à prateleira. O rótulo sugere que o checkout acontece
+              aqui; a compra é na loja.
+            */}
+            Ir à loja →
           </a>
         )}
       </div>
@@ -280,11 +294,11 @@ export function FallingCardPrice({ product, discount }: { product: CategoryProdu
   return (
     <div>
       <div className="flex items-baseline gap-1.5">
-        <span className="text-xl font-bold text-gray-800">{formatBRL(product.featuredPrice)}</span>
+        <span className="font-mono text-xl font-semibold text-ink">{formatBRL(product.featuredPrice)}</span>
         <FeaturedOriginalPrice price={discount?.originalPrice ?? null} />
       </div>
       {discount && (
-        <p className="text-[11px] font-semibold text-orange-700 mt-0.5">
+        <p className="mt-0.5 font-mono text-[11px] font-semibold text-brand-strong">
           Economiza {formatBRL(discount.economy)}
         </p>
       )}
@@ -295,7 +309,7 @@ export function FallingCardPrice({ product, discount }: { product: CategoryProdu
 export function DiscountBadge({ percentage }: { percentage: number | null }) {
   if (percentage === null) return null
   return (
-    <span className="text-sm font-bold px-2.5 py-1 rounded-lg bg-orange-500 text-white shadow-sm">
+    <span className="rounded-lg bg-brand px-2.5 py-1 font-mono text-sm font-semibold text-white shadow-sm">
       -{percentage}%
     </span>
   )
@@ -303,5 +317,5 @@ export function DiscountBadge({ percentage }: { percentage: number | null }) {
 
 function FeaturedOriginalPrice({ price }: { price: number | null }) {
   if (price === null) return null
-  return <span className="text-xs text-gray-400 line-through">{formatBRL(price)}</span>
+  return <span className="font-mono text-xs text-ink-4 line-through">{formatBRL(price)}</span>
 }

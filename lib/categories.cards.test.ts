@@ -127,7 +127,9 @@ describe('saídas de compra nas superfícies públicas', () => {
     const ofertas = readFileSync(resolve(process.cwd(), 'components/product/OffersSection.tsx'), 'utf8')
 
     expect(home).toContain('href={`/go/${product.featuredOfferId}?de=home&por=destaque`}')
-    expect(home).toContain('aria-label={`Comprar ${product.name} no Mercado Livre (abre em nova aba)`}')
+    expect(home).toContain(
+      'aria-label={`Ver oferta de ${product.name} no Mercado Livre (abre em nova aba)`}',
+    )
     expect(comparador).toContain('superficie="comparador"')
     expect(ofertas).toContain('href={`/go/${loja.offerId}?de=${superficie}&por=${isCheapest ? \'menor_preco\' : \'destaque\'}`}')
   })

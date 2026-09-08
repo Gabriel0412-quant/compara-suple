@@ -159,3 +159,61 @@ test.describe('rolagem e teclado', () => {
     await contexto.close()
   })
 })
+
+test.describe('a home fala uma língua visual só', () => {
+  test('não afirma queda de preço, só desconto anunciado', async ({ page }) => {
+    await page.goto('/')
+    const texto = await page.getByRole('main').innerText()
+
+    /*
+      "Em queda agora" e o selo "EM QUEDA" afirmavam variação no tempo. O dado
+      é `original_price` do anúncio — desconto, não queda observada entre
+      coletas. Volta com nome certo no #128, quando o EP10 der histórico.
+    */
+    expect(texto).not.toMatch(/em queda/i)
+    await expect(page.getByRole('heading', { name: /maiores descontos/i })).toBeVisible()
+  })
+
+  test('preços em monoespaçada, para alinhar dígito com dígito', async ({ page }) => {
+    await page.goto('/')
+    const preco = prateleira(page).getByRole('listitem').first().getByText(/^R\$/).first()
+    const fonte = await preco.evaluate(el => getComputedStyle(el).fontFamily)
+    expect(fonte).toMatch(/plex mono/i)
+  })
+
+  test('nenhum CTA da home inteira diz "Comprar"', async ({ page }) => {
+    await page.goto('/')
+    /*
+      O teste do #155 checava só a prateleira, e por isso não viu que o card
+      da seção de descontos — outro componente — continuava com "Comprar →".
+      Aqui a varredura é da página toda, que é o escopo do claim.
+    */
+    const main = page.getByRole('main')
+    await expect(main.getByRole('link', { name: /^comprar\s*→?$/i })).toHaveCount(0)
+
+    const saidas = main.locator('a[href^="/go/"]')
+    const total = await saidas.count()
+    expect(total, 'a home deveria ter saídas para a loja').toBeGreaterThan(0)
+    for (let i = 0; i < total; i++) {
+      const nome = (await saidas.nth(i).getAttribute('aria-label')) ?? (await saidas.nth(i).innerText())
+      expect(nome, `saída com rótulo que sugere checkout aqui: "${nome}"`).not.toMatch(/^comprar/i)
+    }
+  })
+
+  test('nada na home usa a cor de destaque do layout antigo', async ({ page }) => {
+    await page.goto('/')
+    /*
+      O verde `#16a34a` era a cor de ação do layout anterior — preço, CTA e
+      links. Se ele reaparecer em qualquer elemento pintado da home, a
+      dissonância voltou.
+    */
+    const verdes = await page.evaluate(() => {
+      const alvo = 'rgb(22, 163, 74)'
+      return [...document.querySelectorAll('main *')].filter(el => {
+        const s = getComputedStyle(el)
+        return s.color === alvo || s.backgroundColor === alvo || s.borderColor === alvo
+      }).length
+    })
+    expect(verdes, 'o verde do layout antigo voltou à home').toBe(0)
+  })
+})

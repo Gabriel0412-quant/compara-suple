@@ -27,7 +27,9 @@ test.describe('home → resultados de busca', () => {
     await page.getByRole('button', { name: /buscar preços/i }).click()
 
     await expect(page).toHaveURL(/\/produtos\?q=whey/)
-    await expect(page.locator('article')).toHaveCount(2)
+    // Três desde o #157: a fixture ganhou um terceiro whey comprável para a
+    // categoria ter trio, que é o que o bloco comparador da home exige.
+    await expect(page.locator('article')).toHaveCount(3)
   })
 
   test('o termo volta no campo depois de navegar', async ({ page }) => {

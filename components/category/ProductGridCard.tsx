@@ -19,10 +19,10 @@ export function ProductGridCard({
   } = estadoDoCard(product)
 
   return (
-    <article className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col">
+    <article className="flex flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-sm transition-shadow hover:shadow-md">
       <Link
         href={`/produto/${product.slug}`}
-        className="block aspect-square bg-gray-50 flex items-center justify-center p-4 relative"
+        className="relative flex aspect-square items-center justify-center bg-surface-muted p-4"
       >
         {product.thumbnail ? (
           /* eslint-disable-next-line @next/next/no-img-element */
@@ -32,10 +32,10 @@ export function ProductGridCard({
             className="max-h-full max-w-full object-contain"
           />
         ) : (
-          <span className="text-gray-300 text-sm">sem imagem</span>
+          <span className="text-sm text-ink-4">sem imagem</span>
         )}
         {hasDiscount && (
-          <span className="absolute top-3 right-3 text-xs font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">
+          <span className="absolute right-3 top-3 rounded-full bg-surface-warm px-2 py-0.5 font-mono text-xs font-semibold text-brand-ink">
             -{discountPct}%
           </span>
         )}
@@ -43,18 +43,18 @@ export function ProductGridCard({
 
       <div className="p-5 flex flex-col flex-1">
         {product.brand && (
-          <span className="text-xs font-semibold text-green-600 mb-1 uppercase tracking-wide">
+          <span className="mb-1 font-mono text-[10px] uppercase tracking-[0.1em] text-ink-3">
             {product.brand}
           </span>
         )}
 
         <Link href={`/produto/${product.slug}`} className="block mb-3">
-          <h2 className="font-semibold text-sm text-gray-800 line-clamp-2 hover:text-green-600 transition-colors">
+          <h2 className="line-clamp-2 text-sm font-semibold text-ink transition-colors hover:text-brand-strong">
             {product.name}
           </h2>
         </Link>
 
-        <div className="text-xs text-gray-500 mb-3 flex flex-wrap gap-x-2">
+        <div className="mb-3 flex flex-wrap gap-x-2 font-mono text-xs text-ink-3">
           {product.sizeGrams && (
             <span>
               {product.sizeGrams >= 1000
@@ -68,23 +68,23 @@ export function ProductGridCard({
         <div className="mt-auto">
           <div className="mb-3">
             <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-bold text-green-600">
+              <span className="font-mono text-2xl font-semibold text-ink">
                 {formatBRL(product.featuredPrice)}
               </span>
               {precoNormalizado ? (
-                <span className="text-xs font-semibold text-green-700">
+                <span className="font-mono text-xs font-semibold text-brand-strong">
                   {precoNormalizado}
                 </span>
               ) : (
-                <span className="text-xs text-gray-400">sem dose ou peso informado</span>
+                <span className="text-xs text-ink-4">sem dose ou peso informado</span>
               )}
             </div>
             {hasDiscount && (
-              <span className="text-xs text-gray-400 line-through">
+              <span className="font-mono text-xs text-ink-4 line-through">
                 {formatBRL(product.featuredOriginalPrice!)}
               </span>
             )}
-            <p className="text-[11px] text-gray-400 mt-1">
+            <p className="mt-1 text-[11px] text-ink-4">
               Destaque entre {product.offerCount}{' '}
               {product.offerCount === 1 ? 'oferta' : 'ofertas'}
             </p>
@@ -100,7 +100,7 @@ export function ProductGridCard({
                 href={`/go/${product.lowestOfferId}?de=${superficie}&por=menor_preco`}
                 target="_blank"
                 rel="noopener noreferrer sponsored"
-                className="inline-block text-[11px] font-semibold text-green-700 mt-1 hover:underline"
+                className="mt-1 inline-block text-[11px] font-semibold text-brand-strong hover:underline"
               >
                 Menor preço: {formatBRL(product.lowestPrice!)} →
               </a>
@@ -110,7 +110,7 @@ export function ProductGridCard({
           <div className="flex gap-2">
             <Link
               href={`/produto/${product.slug}`}
-              className="flex-1 text-center py-2.5 border border-gray-200 text-gray-700 rounded-xl text-sm font-semibold hover:border-green-600 hover:text-green-600 transition-colors"
+              className="flex-1 rounded-xl border border-line-strong py-2.5 text-center text-sm font-semibold text-ink-2 transition-colors hover:border-brand hover:text-brand-strong"
             >
               Comparar
             </Link>
@@ -130,12 +130,12 @@ export function ProductGridCard({
                 href={`/go/${product.featuredOfferId}?de=${superficie}&por=destaque`}
                 target="_blank"
                 rel="noopener noreferrer sponsored"
-                className="flex-1 text-center py-2.5 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition-colors"
+                className="flex-1 rounded-xl bg-brand py-2.5 text-center text-sm font-semibold text-white transition-colors hover:bg-brand-strong"
               >
                 Ir à loja →
               </a>
             ) : (
-              <span className="flex-1 text-center py-2.5 bg-gray-100 text-gray-400 rounded-xl text-sm font-semibold">
+              <span className="flex-1 rounded-xl bg-surface-muted py-2.5 text-center text-sm font-semibold text-ink-4">
                 Sem oferta ativa
               </span>
             )}

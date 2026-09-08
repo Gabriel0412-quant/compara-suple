@@ -13,7 +13,10 @@ describe('FallingCard', () => {
     const html = renderToStaticMarkup(<FallingCard product={product} />)
     expect(html).toContain('href="/produto/whey-54"')
     expect(html).toContain('href="/go/54?de=home&amp;por=destaque"')
-    expect(html).toContain('aria-label="Comprar Whey 54 no Mercado Livre (abre em nova aba)"')
+    // O rótulo era "Comprar ...": sugeria que o checkout acontece aqui. Este
+    // teste quebrou ao trocá-lo, que é exatamente o que ele deveria fazer.
+    expect(html).toContain('aria-label="Ver oferta de Whey 54 no Mercado Livre (abre em nova aba)"')
+    expect(html).toContain('Ir à loja')
     expect(html).toContain('-25%')
   })
   it('does not render the CTA without a featured offer', () => {

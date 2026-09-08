@@ -24,6 +24,20 @@ const HEX = /#[0-9a-fA-F]{3,8}\b/g
 const FUNCAO_DE_COR = /\b(?:oklch|rgba?|hsla?)\([^)]*\)/g
 
 /**
+ * Classe da paleta padrão do Tailwind: `text-green-600`, `bg-gray-50`.
+ *
+ * O teste acima pegava `#F26A1B` e deixava passar `text-green-600`, que é a
+ * mesma falha com outra sintaxe — e foi por isso que a home ficou com hero
+ * laranja e cards verdes por três PRs sem nada acusar (#192).
+ *
+ * A paleta de Preço Suplemento está em `app/globals.css` e se usa por
+ * `bg-brand`, `text-ink-3`, `border-line`. Cor que vem do Tailwind não passou
+ * por decisão nenhuma de marca.
+ */
+const CLASSE_DA_PALETA_PADRAO =
+  /\b(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:50|[1-9]00|950)\b/g
+
+/**
  * Exceções, cada uma com data de validade declarada.
  *
  * Não é lista de conveniência: uma entrada aqui é dívida, e quem a adiciona
@@ -37,6 +51,26 @@ const EXCECOES: { arquivo: string; valores: string[]; porque: string }[] = [
       'Gráfico de histórico ainda em mock e desabilitado na tela, verde fora da paleta. ' +
       'Sai quando o #114 (EP10) ligar o histórico real, ou quando o #133 redesenhar a página — o que vier antes.',
   },
+]
+
+/**
+ * Telas que ainda não foram redesenhadas, com a issue que as migra.
+ *
+ * Não é lista de conveniência: é dívida com prazo. Cada entrada some quando a
+ * página correspondente entrar no EP22, e nenhuma entrada nova deve ser
+ * acrescentada — arquivo novo já nasce nos tokens.
+ */
+const AGUARDANDO_REDESENHO: { arquivo: string; issue: string }[] = [
+  { arquivo: 'app/produtos/page.tsx', issue: '#161' },
+  { arquivo: 'app/produto/[slug]/page.tsx', issue: '#163' },
+  { arquivo: 'app/produto/[slug]/loading.tsx', issue: '#163' },
+  { arquivo: 'app/produto/[slug]/not-found.tsx', issue: '#163' },
+  { arquivo: 'components/product/OffersSection.tsx', issue: '#163' },
+  { arquivo: 'app/comparar/page.tsx', issue: '#165' },
+  { arquivo: 'app/categoria/[slug]/page.tsx', issue: '#167' },
+  { arquivo: 'app/categoria/[slug]/not-found.tsx', issue: '#167' },
+  { arquivo: 'app/ofertas/page.tsx', issue: '#169' },
+  { arquivo: 'components/ComoComparamos.tsx', issue: '#163' },
 ]
 
 function arquivosDeUi(): string[] {
@@ -117,6 +151,48 @@ describe('cores da marca vivem só nos tokens', () => {
   it('audita um conjunto de arquivos que não está vazio', () => {
     // Uma auditoria que não lê nada passa sempre. Mesma proteção do claims.test.ts.
     expect(arquivosDeUi().length).toBeGreaterThan(5)
+  })
+
+  it('nenhuma classe da paleta padrão do Tailwind fora das telas ainda não redesenhadas', () => {
+    const esperando = new Set(AGUARDANDO_REDESENHO.map(e => e.arquivo))
+
+    const achados = arquivosDeUi().flatMap(caminho => {
+      const arquivo = relative(RAIZ, caminho)
+      if (esperando.has(arquivo)) return []
+      const conteudo = semComentarios(readFileSync(caminho, 'utf8'))
+      return conteudo.split('\n').flatMap((texto, i) =>
+        [...texto.matchAll(CLASSE_DA_PALETA_PADRAO)].map(m => `  ${arquivo}:${i + 1}  ${m[0]}`),
+      )
+    })
+
+    expect(
+      achados,
+      achados.length === 0
+        ? ''
+        : `Cor da paleta do Tailwind, não da marca:\n${achados.join('\n')}\n\n` +
+          'Use os tokens de app/globals.css — bg-brand, text-ink-3, border-line. ' +
+          'Se o arquivo ainda espera redesenho, ele precisa estar em AGUARDANDO_REDESENHO ' +
+          'com a issue que o migra.',
+    ).toEqual([])
+  })
+
+  it('toda tela aguardando redesenho aponta a issue que a migra', () => {
+    for (const { arquivo, issue } of AGUARDANDO_REDESENHO) {
+      expect(issue, `${arquivo} sem issue de migração`).toMatch(/^#\d+$/)
+    }
+  })
+
+  it('a lista de espera não guarda arquivo que já foi migrado', () => {
+    // Entrada obsoleta esconde regressão: o arquivo voltaria a poder usar a
+    // paleta antiga sem ninguém notar.
+    for (const { arquivo } of AGUARDANDO_REDESENHO) {
+      const conteudo = semComentarios(readFileSync(resolve(RAIZ, arquivo), 'utf8'))
+      expect(
+        CLASSE_DA_PALETA_PADRAO.test(conteudo),
+        `${arquivo} já está nos tokens: tire da lista de espera`,
+      ).toBe(true)
+      CLASSE_DA_PALETA_PADRAO.lastIndex = 0
+    }
   })
 
   it('referência de issue em comentário não é confundida com cor', () => {

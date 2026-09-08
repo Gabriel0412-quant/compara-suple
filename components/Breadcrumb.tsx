@@ -10,23 +10,23 @@ export function Breadcrumb({ items }: { items: BreadcrumbItem[] }) {
   return (
     <nav
       aria-label="Breadcrumb"
-      className="flex items-center gap-1 text-sm text-gray-500 overflow-x-auto"
+      className="flex items-center gap-1 overflow-x-auto text-sm text-ink-3"
     >
       {items.map((item, i) => {
         const isLast = i === items.length - 1
         return (
           <span key={i} className="flex items-center gap-1 whitespace-nowrap">
-            {i > 0 && <ChevronRight className="w-3 h-3 text-gray-300 shrink-0" />}
+            {i > 0 && <ChevronRight className="h-3 w-3 shrink-0 text-ink-4" />}
             {item.href && !isLast ? (
               <Link
                 href={item.href}
-                className="hover:text-green-600 transition-colors"
+                className="transition-colors hover:text-brand-strong"
               >
                 {item.label}
               </Link>
             ) : (
               <span
-                className={isLast ? 'text-gray-700 font-medium truncate max-w-xs' : ''}
+                className={isLast ? 'max-w-xs truncate font-medium text-ink' : ''}
                 aria-current={isLast ? 'page' : undefined}
               >
                 {item.label}

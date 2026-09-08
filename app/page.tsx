@@ -3,8 +3,10 @@ import { Flame, TrendingDown } from 'lucide-react'
 
 import CampoBusca from '@/components/CampoBusca'
 import FaixaDeMarcas from '@/components/home/FaixaDeMarcas'
+import { BlocoComparador } from '@/components/home/BlocoComparador'
 import { PrateleiraDeCategoria } from '@/components/home/PrateleiraDeCategoria'
 import { listarMarcas } from '@/lib/brands'
+import { comparadorDaHome } from '@/lib/comparador-home'
 import { fundoDaPrateleira, prateleirasDaHome } from '@/lib/shelves'
 import {
   getProductsOnSale,
@@ -20,12 +22,13 @@ export const dynamic = 'force-dynamic'
 
 export default async function Home() {
   // Busca os produtos em oferta (já vem ordenado por desconto absoluto)
-  const [onSale, stats, categorias, marcas, prateleiras] = await Promise.all([
+  const [onSale, stats, categorias, marcas, prateleiras, comparador] = await Promise.all([
     getProductsOnSale(),
     getCatalogStats(),
     listCategoriesWithProducts(),
     listarMarcas(),
     prateleirasDaHome(),
+    comparadorDaHome(),
   ])
   /*
     A faixa mostra as cinco primeiras, mas o texto do recorte precisa do total
@@ -132,6 +135,8 @@ export default async function Home() {
           </div>
         ))
       }
+
+      <BlocoComparador dados={comparador} />
 
       {/*
         A faixa de números saiu daqui.

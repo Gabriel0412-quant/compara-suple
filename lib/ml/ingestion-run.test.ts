@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   createIngestionRun,
+  replayIngestionRun,
   type IngestionRunStore,
 } from './ingestion-run'
 
@@ -74,3 +75,29 @@ describe('ingestion run repository', () => {
   })
 })
 
+describe('ingestion replay repository', () => {
+  it('sends an explicit, narrow replay scope to the protected RPC', async () => {
+    const replay = vi.fn(async () => ({ data: [{ state: 'pending', requeued_count: 1 }], error: null }))
+
+    await expect(replayIngestionRun({
+      runId,
+      itemId: 12,
+    }, { replay })).resolves.toEqual({ state: 'pending', requeuedCount: 1 })
+
+    expect(replay).toHaveBeenCalledWith({
+      p_run_id: runId,
+      p_item_id: 12,
+      p_include_completed: false,
+      p_now: expect.any(String),
+    })
+  })
+
+  it('sanitizes an invalid scope reported by the database', async () => {
+    await expect(replayIngestionRun({ runId }, {
+      replay: vi.fn(async () => ({
+        data: null,
+        error: { message: 'ingestion_replay_scope_invalid', details: 'do not expose this' },
+      })),
+    })).rejects.toThrowError('INGESTION_REPLAY_SCOPE_INVALID')
+  })
+})

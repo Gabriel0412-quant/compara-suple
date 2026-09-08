@@ -18,6 +18,8 @@ import {
 } from './offer-url'
 import { executeIngestionBatch } from './ingestion-orchestrator'
 import { supabaseIngestionOrchestrationStore } from './ingestion-run'
+import type { IngestionFailure } from './ingestion-retry'
+import { MlRequestError } from './client'
 import itemsData from '@/data/items.json'
 import { classificarIdCatalogo, motivoDeRecusa, type MotivoNaoColetado } from './catalog-id'
 
@@ -337,6 +339,7 @@ async function ingestCatalog(
   storeId: number,
   manualByItemId: Record<string, AffiliateUrlEntry>,
   simular: boolean,
+  throwTransportFailure = false,
 ): Promise<CatalogResult> {
   let product: MlCatalogProduct
   let snapshot: MlProductItemsSnapshot
@@ -360,7 +363,7 @@ async function ingestCatalog(
       snapshot = await getProductItems(catalogId)
     }
   } catch (error) {
-    if (isConnectionFailure(error)) throw error
+    if (isConnectionFailure(error) || (throwTransportFailure && error instanceof MlRequestError)) throw error
     return { ok: false, status: 'product_error', reason: 'product_request_failed' }
   }
 
@@ -617,6 +620,7 @@ export type OperationalIngestResult = {
   processed: number
   succeeded: number
   failed: number
+  retryScheduled: number
   hasContinuation: boolean
   durationMs: number
   counters?: {
@@ -635,6 +639,27 @@ function environmentInteger(name: string, fallback: number): number {
   return Number(value)
 }
 
+function classifyOperationalFailure(error: unknown): IngestionFailure {
+  if (error instanceof MlRequestError) {
+    if (error.kind === 'auth') {
+      return { classification: 'auth_blocking', code: 'oauth_authorization_failed' }
+    }
+    if (error.kind === 'permanent') {
+      return { classification: 'permanent', code: `ml_http_${error.status ?? 'invalid'}` }
+    }
+    return {
+      classification: 'transient',
+      code: error.kind === 'timeout' ? 'ml_timeout' : 'ml_unavailable',
+      retryAfterMs: error.retryAfterMs,
+    }
+  }
+  const message = error instanceof Error ? error.message : String(error)
+  if (isConnectionFailure(error) || message.includes('ML_OAUTH_RECONNECT_REQUIRED')) {
+    return { classification: 'auth_blocking', code: 'oauth_reconnect_required' }
+  }
+  return { classification: 'internal', code: 'persistence_failed' }
+}
+
 export async function runOperationalCuratedIngest(): Promise<OperationalIngestResult> {
   const startedAt = Date.now()
   const { items } = loadCuratedItems()
@@ -646,17 +671,34 @@ export async function runOperationalCuratedIngest(): Promise<OperationalIngestRe
     batchSize: environmentInteger('INGEST_BATCH_SIZE', 12),
     timeBudgetMs: environmentInteger('INGEST_TIME_BUDGET_MS', 240_000),
     leaseSeconds: environmentInteger('INGEST_LEASE_SECONDS', 360),
+    maxAttempts: environmentInteger('INGEST_MAX_ATTEMPTS', 5),
     codeVersion: process.env.VERCEL_GIT_COMMIT_SHA ?? null,
     processItem: async catalogId => {
       const item = itemByCatalogId.get(catalogId)
-      if (!item) return { ok: false }
-      const catalog = await ingestCatalog(
-        item.catalogId,
-        storeId,
-        item.manualByItemId,
-        false,
-      )
-      return { ok: catalog.ok }
+      if (!item) {
+        return {
+          ok: false as const,
+          failure: { classification: 'permanent' as const, code: 'catalog_not_curated' },
+        }
+      }
+      try {
+        const catalog = await ingestCatalog(
+          item.catalogId,
+          storeId,
+          item.manualByItemId,
+          false,
+          true,
+        )
+        if (catalog.ok) return { ok: true as const }
+        return {
+          ok: false as const,
+          failure: catalog.status === 'upstream_error'
+            ? { classification: 'transient' as const, code: 'ml_snapshot_unavailable' }
+            : { classification: 'permanent' as const, code: catalog.status },
+        }
+      } catch (error) {
+        return { ok: false as const, failure: classifyOperationalFailure(error) }
+      }
     },
   }, supabaseIngestionOrchestrationStore)
 

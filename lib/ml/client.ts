@@ -18,9 +18,25 @@ const SITE = 'MLB'
 const DEFAULT_TIMEOUT_MS = 15_000
 // ML permite ~1500 req/min/app. Mantemos 10 req/s pra evitar 429.
 const MIN_INTERVAL_MS = 100
-const MAX_RETRIES = 4
 
 let lastCallAt = 0
+
+export class MlRequestError extends Error {
+  constructor(
+    readonly kind: 'auth' | 'transient' | 'permanent' | 'timeout',
+    readonly status?: number,
+    readonly retryAfterMs?: number,
+  ) {
+    super(`ML_REQUEST_${kind.toUpperCase()}`)
+  }
+}
+
+function retryAfterMilliseconds(value: string | null, now = Date.now()): number | undefined {
+  if (!value) return undefined
+  if (/^\d+$/.test(value.trim())) return Number(value.trim()) * 1_000
+  const retryAt = Date.parse(value)
+  return Number.isNaN(retryAt) ? undefined : Math.max(0, retryAt - now)
+}
 
 async function throttle(): Promise<void> {
   const now = Date.now()
@@ -29,34 +45,40 @@ async function throttle(): Promise<void> {
   lastCallAt = Date.now()
 }
 
-async function fetchJson<T>(url: string, attempt = 0): Promise<T> {
+async function fetchJson<T>(url: string): Promise<T> {
   await throttle()
+  const token = await getValidAccessToken()
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), DEFAULT_TIMEOUT_MS)
   try {
-    const token = await getValidAccessToken()
-    const res = await fetch(url, {
-      signal: ctrl.signal,
-      headers: {
-        Accept: 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-    })
-
-    if (res.status === 401 && attempt < 1) {
-      await new Promise(r => setTimeout(r, 200))
-      return fetchJson<T>(url, attempt + 1)
-    }
-
-    if ((res.status === 429 || res.status >= 500) && attempt < MAX_RETRIES) {
-      const delay = 2 ** attempt * 500
-      await new Promise(r => setTimeout(r, delay))
-      return fetchJson<T>(url, attempt + 1)
+    let res: Response
+    try {
+      res = await fetch(url, {
+        signal: ctrl.signal,
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      })
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new MlRequestError('timeout')
+      }
+      throw new MlRequestError('transient')
     }
 
     if (!res.ok) {
-      const body = await res.text().catch(() => '')
-      throw new Error(`ML API ${res.status}: ${body.slice(0, 200)}`)
+      if (res.status === 401 || res.status === 403) {
+        throw new MlRequestError('auth', res.status)
+      }
+      if (res.status === 408 || res.status === 429 || res.status >= 500) {
+        throw new MlRequestError(
+          'transient',
+          res.status,
+          retryAfterMilliseconds(res.headers.get('retry-after')),
+        )
+      }
+      throw new MlRequestError('permanent', res.status)
     }
 
     return (await res.json()) as T

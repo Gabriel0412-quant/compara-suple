@@ -1,4 +1,8 @@
 import type { IngestionRunState, IngestionTriggerSource } from './ingestion-run'
+import {
+  decideIngestionRetry,
+  type IngestionFailure,
+} from './ingestion-retry'
 
 export type IngestionRunCounters = {
   total: number
@@ -25,14 +29,22 @@ export type IngestionOrchestrationStore = {
     limit: number
     now: Date
     leaseSeconds: number
-  }): Promise<{ itemIds: number[]; itemKeys: string[] }>
+  }): Promise<{ items: Array<{ id: number; key: string; attemptCount: number }> }>
   heartbeat(input: { runId: string; workerId: string; now: Date; leaseSeconds: number }): Promise<boolean>
   completeItem(input: {
     runId: string
     workerId: string
     itemId: number
-    outcome: 'succeeded' | 'failed'
+    outcome: 'succeeded' | 'retry_scheduled' | 'failed'
     errorCode: string | null
+    retryAt: Date | null
+  }): Promise<void>
+  block(input: {
+    runId: string
+    workerId: string
+    itemId: number
+    errorCode: string
+    now: Date
   }): Promise<void>
   finalize(input: { runId: string; workerId: string; now: Date }): Promise<{
     state: IngestionRunState
@@ -43,7 +55,7 @@ export type IngestionOrchestrationStore = {
 export type ExecuteIngestionBatchInput = {
   itemKeys: string[]
   workerId: string
-  processItem(itemKey: string): Promise<{ ok: boolean }>
+  processItem(itemKey: string): Promise<IngestionItemProcessResult>
   now?: () => Date
   ingestionType?: string
   idempotencyKey?: string
@@ -52,7 +64,13 @@ export type ExecuteIngestionBatchInput = {
   batchSize?: number
   timeBudgetMs?: number
   leaseSeconds?: number
+  maxAttempts?: number
+  random?: () => number
 }
+
+export type IngestionItemProcessResult =
+  | { ok: true }
+  | { ok: false; failure: IngestionFailure }
 
 export type IngestionBatchResult = {
   disposition: 'acquired' | 'busy' | 'terminal' | 'blocked' | 'lease_lost'
@@ -61,6 +79,7 @@ export type IngestionBatchResult = {
   processed: number
   succeeded: number
   failed: number
+  retryScheduled: number
   hasContinuation: boolean
   counters?: IngestionRunCounters
 }
@@ -68,6 +87,7 @@ export type IngestionBatchResult = {
 const DEFAULT_BATCH_SIZE = 12
 const DEFAULT_TIME_BUDGET_MS = 240_000
 const DEFAULT_LEASE_SECONDS = 360
+const DEFAULT_MAX_ATTEMPTS = 5
 
 function utcDay(now: Date): string {
   return now.toISOString().slice(0, 10)
@@ -87,6 +107,29 @@ function configuredBudget(value: number | undefined): number {
   return budget
 }
 
+function configuredMaxAttempts(value: number | undefined): number {
+  const attempts = value ?? DEFAULT_MAX_ATTEMPTS
+  if (!Number.isInteger(attempts) || attempts < 1 || attempts > 10) {
+    throw new Error('INGEST_MAX_ATTEMPTS_INVALID')
+  }
+  return attempts
+}
+
+function logMetric(event: 'attempt' | 'recovered' | 'final_failure' | 'retry_scheduled' | 'blocked', input: {
+  runId: string
+  itemId: number
+  attempt: number
+  code?: string
+}): void {
+  console.info('ml_ingestion_metric', {
+    event,
+    run_id: input.runId,
+    item_id: input.itemId,
+    attempt: input.attempt,
+    ...(input.code ? { code: input.code } : {}),
+  })
+}
+
 export async function executeIngestionBatch(
   input: ExecuteIngestionBatchInput,
   store: IngestionOrchestrationStore,
@@ -96,6 +139,7 @@ export async function executeIngestionBatch(
   const batchSize = configuredBatchSize(input.batchSize)
   const timeBudgetMs = configuredBudget(input.timeBudgetMs)
   const leaseSeconds = input.leaseSeconds ?? DEFAULT_LEASE_SECONDS
+  const maxAttempts = configuredMaxAttempts(input.maxAttempts)
   const acquired = await store.acquire({
     ingestionType: input.ingestionType ?? 'ml_catalog',
     idempotencyKey: input.idempotencyKey ?? utcDay(startedAt),
@@ -115,6 +159,7 @@ export async function executeIngestionBatch(
       processed: 0,
       succeeded: 0,
       failed: 0,
+      retryScheduled: 0,
       hasContinuation: acquired.disposition === 'busy',
     }
   }
@@ -130,7 +175,9 @@ export async function executeIngestionBatch(
   let succeeded = 0
   let failed = 0
 
-  for (let index = 0; index < claimed.itemKeys.length; index++) {
+  let retryScheduled = 0
+
+  for (const item of claimed.items) {
     if (now().getTime() - startedAt.getTime() >= timeBudgetMs) break
     const ownsLease = await store.heartbeat({
       runId: acquired.runId, workerId: input.workerId, now: now(), leaseSeconds,
@@ -138,24 +185,76 @@ export async function executeIngestionBatch(
     if (!ownsLease) {
       return {
         disposition: 'lease_lost', runId: acquired.runId, state: 'running',
-        processed, succeeded, failed, hasContinuation: true,
+        processed, succeeded, failed, retryScheduled, hasContinuation: true,
       }
     }
-    const itemId = claimed.itemIds[index]
+    logMetric('attempt', {
+      runId: acquired.runId, itemId: item.id, attempt: item.attemptCount,
+    })
+    let outcome: IngestionItemProcessResult
     try {
-      const outcome = await input.processItem(claimed.itemKeys[index])
-      if (!outcome.ok) throw new Error('item_processing_failed')
+      outcome = await input.processItem(item.key)
+    } catch {
+      outcome = {
+        ok: false,
+        failure: { classification: 'internal', code: 'item_processing_failed' },
+      }
+    }
+    if (outcome.ok) {
       await store.completeItem({
-        runId: acquired.runId, workerId: input.workerId, itemId,
-        outcome: 'succeeded', errorCode: null,
+        runId: acquired.runId, workerId: input.workerId, itemId: item.id,
+        outcome: 'succeeded', errorCode: null, retryAt: null,
       })
       succeeded++
-    } catch {
-      await store.completeItem({
-        runId: acquired.runId, workerId: input.workerId, itemId,
-        outcome: 'failed', errorCode: 'item_processing_failed',
+      if (item.attemptCount > 1) {
+        logMetric('recovered', {
+          runId: acquired.runId, itemId: item.id, attempt: item.attemptCount,
+        })
+      }
+    } else {
+      const decision = decideIngestionRetry({
+        failure: outcome.failure,
+        attempt: item.attemptCount,
+        maxAttempts,
+        now: now(),
+        random: input.random,
       })
-      failed++
+      if (decision.outcome === 'blocked') {
+        await store.block({
+          runId: acquired.runId,
+          workerId: input.workerId,
+          itemId: item.id,
+          errorCode: decision.code,
+          now: now(),
+        })
+        logMetric('blocked', {
+          runId: acquired.runId, itemId: item.id, attempt: item.attemptCount, code: decision.code,
+        })
+        return {
+          disposition: 'blocked', runId: acquired.runId, state: 'blocked',
+          processed: processed + 1, succeeded, failed, retryScheduled,
+          hasContinuation: false,
+        }
+      }
+      await store.completeItem({
+        runId: acquired.runId,
+        workerId: input.workerId,
+        itemId: item.id,
+        outcome: decision.outcome,
+        errorCode: decision.code,
+        retryAt: decision.outcome === 'retry_scheduled' ? decision.retryAt : null,
+      })
+      if (decision.outcome === 'retry_scheduled') {
+        retryScheduled++
+        logMetric('retry_scheduled', {
+          runId: acquired.runId, itemId: item.id, attempt: item.attemptCount, code: decision.code,
+        })
+      } else {
+        failed++
+        logMetric('final_failure', {
+          runId: acquired.runId, itemId: item.id, attempt: item.attemptCount, code: decision.code,
+        })
+      }
     }
     processed++
   }
@@ -163,7 +262,7 @@ export async function executeIngestionBatch(
   const final = await store.finalize({ runId: acquired.runId, workerId: input.workerId, now: now() })
   return {
     disposition: 'acquired', runId: acquired.runId, state: final.state,
-    processed, succeeded, failed,
+    processed, succeeded, failed, retryScheduled,
     hasContinuation: final.state === 'running', counters: final.counters,
   }
 }

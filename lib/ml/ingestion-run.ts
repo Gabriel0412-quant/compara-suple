@@ -148,12 +148,17 @@ export const supabaseIngestionOrchestrationStore: IngestionOrchestrationStore = 
     })
     if (!Array.isArray(data)) throw new Error('INGESTION_ORCHESTRATION_RESPONSE_INVALID')
     const rows = data.map(record)
-    if (rows.some(row => !row || !Number.isSafeInteger(row.item_id) || typeof row.item_key !== 'string')) {
+    if (rows.some(row => !row || !Number.isSafeInteger(row.item_id)
+      || typeof row.item_key !== 'string'
+      || !Number.isSafeInteger(row.attempt_count) || Number(row.attempt_count) < 1)) {
       throw new Error('INGESTION_ORCHESTRATION_RESPONSE_INVALID')
     }
     return {
-      itemIds: rows.map(row => Number(row?.item_id)),
-      itemKeys: rows.map(row => String(row?.item_key)),
+      items: rows.map(row => ({
+        id: Number(row?.item_id),
+        key: String(row?.item_key),
+        attemptCount: Number(row?.attempt_count),
+      })),
     }
   },
 
@@ -169,13 +174,24 @@ export const supabaseIngestionOrchestrationStore: IngestionOrchestrationStore = 
   },
 
   async completeItem(input) {
-    await orchestrationRpc('complete_ingestion_item', {
+    await orchestrationRpc('record_ingestion_item_outcome', {
       p_run_id: input.runId,
       p_item_id: input.itemId,
       p_worker_id: input.workerId,
       p_outcome: input.outcome,
       p_error_code: input.errorCode,
+      p_next_retry_at: input.retryAt?.toISOString() ?? null,
       p_now: new Date().toISOString(),
+    })
+  },
+
+  async block(input) {
+    await orchestrationRpc('block_ingestion_run', {
+      p_run_id: input.runId,
+      p_worker_id: input.workerId,
+      p_item_id: input.itemId,
+      p_error_code: input.errorCode,
+      p_now: input.now.toISOString(),
     })
   },
 
@@ -191,4 +207,49 @@ export const supabaseIngestionOrchestrationStore: IngestionOrchestrationStore = 
     if (!state || !counters) throw new Error('INGESTION_ORCHESTRATION_RESPONSE_INVALID')
     return { state, counters }
   },
+}
+
+export type ReplayIngestionRunInput = {
+  runId: string
+  itemId?: number
+  includeCompleted?: boolean
+}
+
+export type ReplayIngestionRunStore = {
+  replay(parameters: Record<string, unknown>): Promise<StoreResult>
+}
+
+const supabaseReplayIngestionRunStore: ReplayIngestionRunStore = {
+  async replay(parameters) {
+    const { data, error } = await supabaseAdmin.rpc('replay_ingestion_run', parameters)
+    return { data, error }
+  },
+}
+
+export async function replayIngestionRun(
+  input: ReplayIngestionRunInput,
+  store: ReplayIngestionRunStore = supabaseReplayIngestionRunStore,
+): Promise<{ state: IngestionRunState; requeuedCount: number }> {
+  const result = await store.replay({
+    p_run_id: input.runId,
+    p_item_id: input.itemId ?? null,
+    p_include_completed: input.includeCompleted ?? false,
+    p_now: new Date().toISOString(),
+  })
+  if (result.error) {
+    const error = record(result.error)
+    if (error?.message === 'ingestion_replay_scope_invalid') {
+      throw new Error('INGESTION_REPLAY_SCOPE_INVALID')
+    }
+    if (error?.message === 'ingestion_replay_run_busy') {
+      throw new Error('INGESTION_REPLAY_RUN_BUSY')
+    }
+    throw new Error('INGESTION_REPLAY_FAILED')
+  }
+  const row = oneRecord(result.data)
+  const state = readRunState(row?.state)
+  if (!row || !state || !Number.isSafeInteger(row.requeued_count) || Number(row.requeued_count) < 0) {
+    throw new Error('INGESTION_REPLAY_RESPONSE_INVALID')
+  }
+  return { state, requeuedCount: Number(row.requeued_count) }
 }

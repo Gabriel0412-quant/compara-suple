@@ -6,7 +6,7 @@ const { getValidAccessToken } = vi.hoisted(() => ({
 
 vi.mock('./oauth', () => ({ getValidAccessToken }))
 
-import { getUserProduct, getUserProductItems } from './client'
+import { getUserProduct, getUserProductItems, MlRequestError } from './client'
 
 function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -114,5 +114,28 @@ describe('user products client', () => {
       items: [],
     })
     expect(fetch).toHaveBeenCalledOnce()
+  })
+
+  it('returns a categorized rate-limit error with Retry-After instead of retrying in memory', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(null, {
+      status: 429,
+      headers: { 'Retry-After': '60' },
+    }))
+
+    await expect(getUserProduct('MLBU3907661448')).rejects.toMatchObject({
+      kind: 'transient',
+      status: 429,
+      retryAfterMs: 60_000,
+    } satisfies Partial<MlRequestError>)
+    expect(fetch).toHaveBeenCalledOnce()
+  })
+
+  it('classifies a removed identifier as a permanent item failure', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 404 }))
+
+    await expect(getUserProduct('MLBU3907661448')).rejects.toMatchObject({
+      kind: 'permanent',
+      status: 404,
+    } satisfies Partial<MlRequestError>)
   })
 })

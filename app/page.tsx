@@ -91,7 +91,7 @@ export default async function Home() {
                 <Link
                   key={categoria.slug}
                   href={`/categoria/${categoria.slug}`}
-                  className="rounded-full border-[1.5px] border-line-strong px-4 py-2 text-sm text-ink transition-colors hover:border-brand hover:text-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+                  className="flex min-h-11 items-center rounded-full border-[1.5px] border-line-strong px-4 text-sm text-ink transition-colors hover:border-brand hover:text-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
                 >
                   {categoria.name}
                 </Link>
@@ -179,7 +179,7 @@ function FallingProductsSection({ products }: { products: CategoryProduct[] }) {
               nomear o que o dado é. O ponto pulsante saiu junto: ele sugeria
               tempo real, e a coleta é diária.
             */}
-            <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-warm px-3 py-1 font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-brand-ink">
+            <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-warm px-3 py-1 font-mono text-sm font-semibold uppercase tracking-[0.1em] text-brand-ink sm:text-[11px]">
               <Flame className="h-3.5 w-3.5" aria-hidden="true" />
               Desconto
             </div>
@@ -194,7 +194,7 @@ function FallingProductsSection({ products }: { products: CategoryProduct[] }) {
           </div>
           <Link
             href="/ofertas"
-            className="self-start rounded-lg border border-brand px-4 py-2 text-sm font-semibold text-brand-strong transition-colors hover:bg-brand hover:text-white sm:self-auto"
+            className="flex min-h-11 items-center self-start rounded-lg border border-brand px-4 text-sm font-semibold text-brand-strong transition-colors hover:bg-brand hover:text-white sm:self-auto"
           >
             Ver todas as ofertas →
           </Link>
@@ -235,22 +235,22 @@ export function FallingCard({ product }: { product: CategoryProduct }) {
               className="max-h-full max-w-full object-contain"
             />
           ) : (
-            <span className="text-[9px] text-ink-4">sem img</span>
+            <span className="text-xs text-ink-4">sem img</span>
           )}
         </div>
 
         {/* Info */}
         <div className="flex-1 min-w-0">
           {product.brand && (
-            <p className="truncate font-mono text-[10px] uppercase tracking-[0.1em] text-ink-3">
+            <p className="truncate font-mono text-sm uppercase tracking-[0.1em] text-ink-3 sm:text-[10px]">
               {product.brand}
             </p>
           )}
-          <h3 className="line-clamp-2 text-sm font-bold leading-tight text-ink transition-colors group-hover:text-brand-strong">
+          <h3 className="line-clamp-2 text-base font-bold leading-tight text-ink transition-colors group-hover:text-brand-strong sm:text-sm">
             {product.name}
           </h3>
           {product.featuredPerDose && (
-            <p className="mt-1 text-[11px] text-ink-3">
+            <p className="mt-1 text-sm text-ink-3 sm:text-[11px]">
               {formatBRL(product.featuredPerDose)}/dose
             </p>
           )}
@@ -267,7 +267,7 @@ export function FallingCard({ product }: { product: CategoryProduct }) {
             target="_blank"
             rel="noopener noreferrer sponsored"
             aria-label={`Ver oferta de ${product.name} no Mercado Livre (abre em nova aba)`}
-            className="rounded-lg bg-brand px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-strong"
+            className="flex min-h-11 items-center rounded-lg bg-brand px-3 text-sm font-semibold text-white transition-colors hover:bg-brand-strong"
           >
             {/*
               Era "Comprar →", como no ProductGridCard antes do #155 — e este
@@ -303,7 +303,7 @@ export function FallingCardPrice({ product, discount }: { product: CategoryProdu
         <FeaturedOriginalPrice price={discount?.originalPrice ?? null} />
       </div>
       {discount && (
-        <p className="mt-0.5 font-mono text-[11px] font-semibold text-brand-strong">
+        <p className="mt-0.5 font-mono text-sm font-semibold text-brand-strong sm:text-[11px]">
           Economiza {formatBRL(discount.economy)}
         </p>
       )}
@@ -322,5 +322,5 @@ export function DiscountBadge({ percentage }: { percentage: number | null }) {
 
 function FeaturedOriginalPrice({ price }: { price: number | null }) {
   if (price === null) return null
-  return <span className="font-mono text-xs text-ink-4 line-through">{formatBRL(price)}</span>
+  return <span className="font-mono text-sm text-ink-4 line-through sm:text-xs">{formatBRL(price)}</span>
 }

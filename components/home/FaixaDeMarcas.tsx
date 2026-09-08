@@ -48,7 +48,7 @@ export default function FaixaDeMarcas({
         <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1">
           <h2
             id="marcas-acompanhadas"
-            className="font-mono text-[11px] uppercase tracking-[0.12em] text-ink-4"
+            className="font-mono text-sm uppercase tracking-[0.12em] text-ink-4 sm:text-[11px]"
           >
             Marcas acompanhadas
           </h2>
@@ -61,7 +61,7 @@ export default function FaixaDeMarcas({
           */}
           <Link
             href="/marcas"
-            className="rounded-md text-sm font-semibold text-brand-strong hover:text-brand-deep focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+            className="flex min-h-11 items-center rounded-md text-sm font-semibold text-brand-strong hover:text-brand-deep focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
           >
             Ver todas as marcas <span aria-hidden="true">→</span>
           </Link>

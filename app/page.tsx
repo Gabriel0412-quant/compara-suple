@@ -3,7 +3,9 @@ import { Flame, TrendingDown } from 'lucide-react'
 
 import CampoBusca from '@/components/CampoBusca'
 import FaixaDeMarcas from '@/components/home/FaixaDeMarcas'
+import { PrateleiraDeCategoria } from '@/components/home/PrateleiraDeCategoria'
 import { listarMarcas } from '@/lib/brands'
+import { fundoDaPrateleira, prateleirasDaHome } from '@/lib/shelves'
 import {
   getProductsOnSale,
   listCategoriesWithProducts,
@@ -18,11 +20,12 @@ export const dynamic = 'force-dynamic'
 
 export default async function Home() {
   // Busca os produtos em oferta (já vem ordenado por desconto absoluto)
-  const [onSale, stats, categorias, marcas] = await Promise.all([
+  const [onSale, stats, categorias, marcas, prateleiras] = await Promise.all([
     getProductsOnSale(),
     getCatalogStats(),
     listCategoriesWithProducts(),
     listarMarcas(),
+    prateleirasDaHome(),
   ])
   /*
     A faixa mostra as cinco primeiras, mas o texto do recorte precisa do total
@@ -107,6 +110,28 @@ export default async function Home() {
       </section>
 
       <FaixaDeMarcas marcas={marcasEmDestaque} total={marcas.length} />
+
+      {/*
+        Um bloco por categoria, alternando fundo para separar as faixas sem
+        precisar de linha divisória — como na maquete 1b.
+      */}
+      {/*
+        Fora da mutação: é laço de renderização, não regra.
+
+        A decisão que dá para errar aqui — qual fundo cada prateleira recebe —
+        foi para `fundoDaPrateleira`, que tem teste. O que sobra é `.map()`
+        sobre uma lista já montada e testada em `lib/shelves.ts`. O mutante que
+        restava trocava o corpo por `undefined`, o que apaga as prateleiras da
+        página: só o e2e vê isso, e `e2e/prateleiras.spec.ts` vê.
+      */}
+      {
+        // Stryker disable next-line all
+        prateleiras.map((prateleira, i) => (
+          <div key={prateleira.categoria.slug} className={fundoDaPrateleira(i)}>
+            <PrateleiraDeCategoria prateleira={prateleira} />
+          </div>
+        ))
+      }
 
       {/*
         A faixa de números saiu daqui.

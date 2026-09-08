@@ -4,6 +4,7 @@ import type { CategoryProduct } from './categories'
 import {
   CATEGORIAS_DA_HOME,
   compararPorPrecoDestacado,
+  fundoDaPrateleira,
   montarPrateleiras,
   PRODUTOS_POR_PRATELEIRA,
 } from './shelves'
@@ -182,5 +183,32 @@ describe('estado editorial dos campos ausentes', () => {
     const entrada = [whey({ id: 1, featuredPrice: 200 }), whey({ id: 2, featuredPrice: 100 })]
     montarPrateleiras(entrada, ['whey-protein'])
     expect(entrada.map(p => p.featuredPrice)).toEqual([200, 100])
+  })
+})
+
+describe('fundo alternado', () => {
+  it('alterna a cada prateleira', () => {
+    const fundos = [0, 1, 2, 3].map(fundoDaPrateleira)
+    expect(fundos).toEqual([
+      'bg-surface-muted',
+      'bg-surface',
+      'bg-surface-muted',
+      'bg-surface',
+    ])
+  })
+
+  it('duas prateleiras seguidas nunca têm o mesmo fundo', () => {
+    // Sem alternância os blocos encostam sem separação visível, que é o que a
+    // maquete evita trocando o fundo em vez de usar linha divisória.
+    for (let i = 0; i < 6; i++) {
+      expect(fundoDaPrateleira(i)).not.toBe(fundoDaPrateleira(i + 1))
+    }
+  })
+
+  it('devolve classe literal, não montada', () => {
+    // Classe interpolada não é gerada pelo Tailwind e o bloco sai sem fundo.
+    for (let i = 0; i < 4; i++) {
+      expect(fundoDaPrateleira(i)).toMatch(/^bg-[a-z-]+$/)
+    }
   })
 })

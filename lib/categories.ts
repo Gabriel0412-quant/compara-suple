@@ -280,6 +280,32 @@ export async function listCategoriesWithProducts(): Promise<
     .filter(c => c.productCount > 0)
 }
 
+/**
+ * Ordem de apresentação de uma categoria: menor preço destacado primeiro.
+ *
+ * Os dois desempates não são enfeite. `featuredPrice` empata com frequência —
+ * preços redondos, e o mesmo produto em embalagens diferentes:
+ *
+ * 1. mais ofertas ativas, porque é onde há mais o que comparar;
+ * 2. nome em pt-BR, para a ordem não herdar a ordem em que o banco respondeu.
+ *
+ * Sem o segundo, dois produtos idênticos em preço e número de ofertas trocam
+ * de lugar entre deploys sem nada ter mudado. A ordenação anterior tinha só o
+ * primeiro critério, e ficava à mercê da resposta do Postgres nos empates.
+ *
+ * Mora aqui, e não em `lib/shelves.ts`, porque a prateleira da home é uma
+ * prévia desta página: as duas precisam ordenar igual, senão clicar em "Ver
+ * todos" mostra outros produtos primeiro e o visitante sente que perdeu o que
+ * estava vendo.
+ */
+export function compararPorPrecoDestacado(a: CategoryProduct, b: CategoryProduct): number {
+  return (
+    a.featuredPrice - b.featuredPrice ||
+    b.offerCount - a.offerCount ||
+    a.name.localeCompare(b.name, 'pt-BR')
+  )
+}
+
 /** Lista produtos cujo nome contém alguma das keywords da categoria. */
 export async function getProductsByCategory(
   category: Category,
@@ -291,7 +317,7 @@ export async function getProductsByCategory(
   return matching
     .map(rowToCard)
     .filter(p => p.offerCount > 0)
-    .sort((a, b) => a.featuredPrice - b.featuredPrice)
+    .sort(compararPorPrecoDestacado)
 }
 
 /** Lista produtos com pelo menos uma oferta em desconto (original_price > price). */

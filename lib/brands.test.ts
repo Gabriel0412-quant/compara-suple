@@ -185,6 +185,18 @@ describe('paleta', () => {
     expect(comAcento.tom).toBe(sem.tom)
   })
 
+  it('marcas diferentes recebem tons diferentes', () => {
+    /*
+      Achado pelo Stryker: esvaziar o laço de `hashEstavel` sobrevivia a todos
+      os 21 testes. Com o laço vazio, o hash devolve a semente para qualquer
+      nome — e a faixa inteira sairia da mesma cor, sem nada acusar. Os testes
+      de estabilidade não pegam isso: uma cor só também é estável.
+    */
+    const nomes = ['Growth', 'Dux', 'Max Titanium', 'Integralmédica', 'Probiótica', 'FTW', 'Optimum', 'Black Skull']
+    const tons = new Set(nomes.map(nome => agregarMarcas([card({ brand: nome })])[0].tom))
+    expect(tons.size, 'todas as marcas caíram no mesmo tom').toBeGreaterThan(1)
+  })
+
   it('todo tom aponta para um token da casa', () => {
     const nomes = ['Growth', 'Dux', 'Max Titanium', 'Integralmédica', 'Probiótica', 'FTW', 'Optimum']
     for (const nome of nomes) {
@@ -212,6 +224,12 @@ describe('slug', () => {
     ['Max  Titanium', 'max-titanium'],
     ['Probiótica!', 'probiotica'],
     ['  FTW  ', 'ftw'],
+    // Hífen cercado de espaço vira três hifens antes do colapso: sem o
+    // `.replace(/-+/g, '-')` este caso sai "max---titanium".
+    ['Max - Titanium', 'max-titanium'],
+    // Hífen na borda: sem o `.replace(/^-|-$/g, '')` sai "-growth-".
+    ['- Growth -', 'growth'],
+    ['!!! Dux !!!', 'dux'],
   ])('%s → %s', (nome, esperado) => {
     expect(slugDaMarca(nome)).toBe(esperado)
   })

@@ -62,7 +62,13 @@ export function tomDaMarca(marca: Pick<Marca, 'tom'>): TomDeMarca {
 export function slugDaMarca(nome: string): string {
   return normalizarTexto(nome)
     .replace(/[^a-z0-9\s-]/g, '')
-    .replace(/\s+/g, '-')
+    /*
+      `\s` e não `\s+`: `normalizarTexto` já colapsou sequências de espaço,
+      então o `+` nunca casava mais de um. O Stryker mostrou isso ao trocar um
+      pelo outro sem nenhum teste reclamar — não era falta de teste, era
+      defesa morta dando aparência de robustez.
+    */
+    .replace(/\s/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '')
 }
@@ -140,6 +146,15 @@ export function agregarMarcas(cards: CategoryProduct[]): Marca[] {
   return ordenarMarcas([...porNome.values()])
 }
 
+/*
+  Os dois wrappers abaixo ficam fora da mutação.
+
+  São as únicas linhas do módulo que tocam o banco, e é por isso que
+  `agregarMarcas` é puro e exportado. Cobri-los exigiria mockar
+  `getAllProductCards`, o que testaria o mock e não a regra; quem prova que
+  funcionam é o e2e de `/marcas` e da faixa da home.
+*/
+// Stryker disable all
 /** Todas as marcas do catálogo, para o índice `/marcas`. */
 export async function listarMarcas(): Promise<Marca[]> {
   return agregarMarcas(await getAllProductCards())
@@ -154,3 +169,4 @@ export async function listarMarcas(): Promise<Marca[]> {
 export async function marcasEmDestaque(limite = 5): Promise<Marca[]> {
   return (await listarMarcas()).slice(0, limite)
 }
+// Stryker restore all

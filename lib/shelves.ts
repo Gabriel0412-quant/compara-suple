@@ -103,6 +103,21 @@ export function montarPrateleiras(
   do #155, contra o app servido.
 */
 // Stryker disable all
+/**
+ * Fundo alternado entre prateleiras.
+ *
+ * A maquete separa os blocos por categoria trocando o fundo, sem linha
+ * divisória. A regra mora aqui, e não inline no JSX da home, por um motivo
+ * concreto: escrita lá, ela ficava fora de qualquer teste — o Stryker
+ * apontou sete mutantes sem cobertura sobre essa única expressão, incluindo
+ * um que devolve `undefined` no lugar de cada prateleira.
+ *
+ * As classes são literais para o Tailwind conseguir vê-las na varredura.
+ */
+export function fundoDaPrateleira(indice: number): string {
+  return indice % 2 === 0 ? 'bg-surface-muted' : 'bg-surface'
+}
+
 export async function prateleirasDaHome(): Promise<Prateleira[]> {
   return montarPrateleiras(await getAllProductCards())
 }

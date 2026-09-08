@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { formatBRL } from '@/lib/products'
 import type { CategoryProduct } from '@/lib/categories'
+import { estadoDoCard } from '@/lib/card'
 
 export function ProductGridCard({
   product,
@@ -10,32 +11,12 @@ export function ProductGridCard({
   /** De onde o card está sendo exibido. Vai para a rota de saída. */
   superficie?: 'home' | 'lista' | 'comparador' | 'produto'
 }) {
-  const hasDiscount =
-    product.featuredOriginalPrice !== null &&
-    product.featuredOriginalPrice > product.featuredPrice
-  const discountPct = hasDiscount
-    ? Math.round((1 - product.featuredPrice / product.featuredOriginalPrice!) * 100)
-    : 0
-
-  /*
-    Preço normalizado. Comparar suplemento por preço absoluto engana quando as
-    embalagens têm tamanhos diferentes, então o card sempre mostra a unidade
-    que der: dose quando o produto informa porções, quilo quando informa peso.
-    Sem nenhum dos dois, dizemos isso em vez de omitir em silêncio — a ausência
-    do número é informação, e some sem explicação parece bug.
-  */
-  const precoNormalizado =
-    product.featuredPerDose !== null
-      ? `${formatBRL(product.featuredPerDose)}/dose`
-      : product.sizeGrams && product.sizeGrams > 0
-        ? `${formatBRL((product.featuredPrice / product.sizeGrams) * 1000)}/kg`
-        : null
-
-  // Só vale mostrar a linha de menor preço quando ela contradiz o destaque.
-  const temMaisBarata =
-    product.lowestPrice !== null &&
-    product.lowestOfferId !== null &&
-    product.lowestPrice < product.featuredPrice
+  const {
+    temDesconto: hasDiscount,
+    percentualDesconto: discountPct,
+    precoNormalizado,
+    temMaisBarata,
+  } = estadoDoCard(product)
 
   return (
     <article className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col">
@@ -136,6 +117,13 @@ export function ProductGridCard({
             {/*
               Sem oferta destacada não há para onde mandar o clique. O botão
               apontava para "#": parecia comprável e não levava a lugar nenhum.
+
+              O rótulo era "Comprar →", que sugere que o checkout acontece
+              aqui — a mesma coisa que o #56 tirou da página de produto, onde
+              o CTA passou a ser "Ver oferta no Mercado Livre". Escapou da
+              auditoria porque `lib/claims.ts` proíbe "comprar agora", e esta
+              variante não casava o padrão. Passa a ser "Ir à loja", que é
+              como a maquete 1b rotula o mesmo botão.
             */}
             {product.featuredOfferId ? (
               <a
@@ -144,7 +132,7 @@ export function ProductGridCard({
                 rel="noopener noreferrer sponsored"
                 className="flex-1 text-center py-2.5 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition-colors"
               >
-                Comprar →
+                Ir à loja →
               </a>
             ) : (
               <span className="flex-1 text-center py-2.5 bg-gray-100 text-gray-400 rounded-xl text-sm font-semibold">

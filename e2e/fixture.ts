@@ -127,6 +127,27 @@ export const PRODUTOS = [
     brand: { name: 'Black Skull', slug: 'black-skull' },
     variant: [variante(51, [oferta(501, 110, true, { raw: null })], { size_grams: null, servings: null })],
   },
+  {
+    /*
+      Terceiro whey comprável, para a categoria ter trio.
+
+      O bloco comparador da home (#157) só existe com três produtos elegíveis
+      na mesma categoria, e até aqui a fixture tinha dois. Sem este, o bloco
+      não renderizava e o e2e não conseguia distinguir "não há trio" de "o
+      bloco quebrou" — os dois davam ausência.
+
+      Peso e preço escolhidos para os três R$/kg saírem distintos, e assim
+      haver um vencedor legítimo: 89,90/kg (id 1), 166,56/kg (id 3) e
+      222,11/kg (este). Empate e vencedor solitário são exercitados no
+      unitário, onde o catálogo é montado por caso.
+    */
+    id: 6,
+    slug: 'whey-concentrado-dux',
+    name: 'Whey Protein Concentrado 900g Dux Nutrition',
+    created_at: '2026-01-06T00:00:00+00:00',
+    brand: { name: 'Dux Nutrition', slug: 'dux-nutrition' },
+    variant: [variante(61, [oferta(601, 199.9)], { size_grams: 900, servings: 30 })],
+  },
 ] as const
 
 /** Toda oferta do catálogo, achatada — o que a tabela `offer` devolveria. */

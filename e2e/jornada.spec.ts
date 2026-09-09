@@ -1,11 +1,28 @@
 import { expect, test } from '@playwright/test'
-import { TOTAIS } from './fixture'
+import { PRODUTOS, TOTAIS } from './fixture'
 
 /**
  * Os três caminhos de entrada do #11, mais os estados que só aparecem em um
  * navegador de verdade. Cada teste faz o que uma pessoa faria: digita, clica,
  * e confere onde foi parar.
  */
+
+/**
+ * Contagens derivadas da fixture, não escritas à mão.
+ *
+ * `toHaveCount(2)` virou 3 no #157 e 4 no #198, cada vez que a fixture ganhou
+ * um produto por um motivo legítimo — o comparador precisando de trio, e o
+ * ramo de produto sem marca. Foram duas correções que não vigiavam
+ * comportamento nenhum: só transcreviam o tamanho do catálogo de teste.
+ *
+ * Derivando, o teste falha quando o *filtro* muda, que é o que ele existe
+ * para pegar.
+ */
+function compraveisQueCasam(termo: RegExp): number {
+  return PRODUTOS.filter(
+    p => termo.test(p.name) && p.variant.some(v => v.offer.some(o => o.available)),
+  ).length
+}
 
 test.describe('home → resultados de busca', () => {
   test('digitar e apertar Enter leva aos resultados, com o termo na URL', async ({ page }) => {
@@ -17,7 +34,7 @@ test.describe('home → resultados de busca', () => {
 
     await expect(page).toHaveURL(/\/produtos\?q=creatina/)
     await expect(page.getByRole('heading', { level: 1 })).toContainText('creatina')
-    await expect(page.locator('article')).toHaveCount(1)
+    await expect(page.locator('article')).toHaveCount(compraveisQueCasam(/creatina/i))
     await expect(page.locator('article').first()).toContainText('Creatina Monohidratada')
   })
 
@@ -27,12 +44,7 @@ test.describe('home → resultados de busca', () => {
     await page.getByRole('button', { name: /buscar preços/i }).click()
 
     await expect(page).toHaveURL(/\/produtos\?q=whey/)
-    /*
-      Quatro whey compráveis na fixture, e cada um existe por um motivo:
-      dois desde sempre, o terceiro no #157 (o bloco comparador exige trio) e
-      o quarto no #198 (produto sem marca, que o card renderiza diferente).
-    */
-    await expect(page.locator('article')).toHaveCount(4)
+    await expect(page.locator('article')).toHaveCount(compraveisQueCasam(/whey/i))
   })
 
   test('o termo volta no campo depois de navegar', async ({ page }) => {

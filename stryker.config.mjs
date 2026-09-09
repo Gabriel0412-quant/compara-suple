@@ -19,12 +19,13 @@ const eventosRanges = changedRanges('lib/eventos.ts')
 const homeRanges = changedRanges('app/page.tsx')
 const comparadorRanges = changedRanges('app/comparar/page.tsx')
 const offersSectionRanges = changedRanges('components/product/OffersSection.tsx')
+const faixaMarcasRanges = changedRanges('components/home/FaixaDeMarcas.tsx')
 
 const config = {
   testRunner: 'vitest',
   plugins: ['@stryker-mutator/vitest-runner'],
   vitest: { configFile: 'vitest.config.ts' },
-  mutate: ['lib/brands.ts', 'lib/card.ts', 'lib/comparador-home.ts', 'lib/shelves.ts', 'lib/affiliate.ts', 'lib/ml/offer-url.ts', 'lib/ml/affiliate-links.ts', 'lib/ml/affiliate-links-cli.ts', 'scripts/ml-affiliate-links.ts', ...ingestRanges, ...routeRanges, ...eventosRanges, ...homeRanges, ...comparadorRanges, ...offersSectionRanges],
+  mutate: ['lib/brands.ts', 'lib/brand-logos.ts', 'lib/card.ts', 'lib/comparador-home.ts', 'lib/shelves.ts', 'lib/affiliate.ts', 'lib/ml/offer-url.ts', 'lib/ml/affiliate-links.ts', 'lib/ml/affiliate-links-cli.ts', 'scripts/ml-affiliate-links.ts', ...ingestRanges, ...routeRanges, ...eventosRanges, ...homeRanges, ...comparadorRanges, ...offersSectionRanges, ...faixaMarcasRanges],
   concurrency: 2,
   reporters: ['clear-text', 'json', 'html'],
   jsonReporter: { fileName: 'coverage/mutation/mutation.json' },

@@ -1,16 +1,25 @@
+import Image from 'next/image'
 import Link from 'next/link'
 
-import { CLASSE_DO_TOM } from '@/components/brand/tons'
-import { tomDaMarca, type Marca } from '@/lib/brands'
+import { logoDaMarca } from '@/lib/brand-logos'
+import { type Marca } from '@/lib/brands'
 
 /**
  * A faixa de marcas acompanhadas, abaixo do hero (maquete 1b).
  *
- * Os cartões não são logos. Cada um leva o nome escrito sobre um tom da casa,
- * pela razão registrada no #151: reproduzir a cor oficial de uma marca num
- * cartão que não é o logo dela insinua uma relação institucional que não
- * existe. Não somos revendedores nem parceiros — listamos preço de anúncios.
+ * Cada cartão mostra o logo da marca quando temos o arquivo dela, e o nome
+ * escrito quando não temos. O logo identifica a marca cujos preços listamos —
+ * uso nominativo, o mesmo de qualquer comparador. O que o #151 recusou, e
+ * continua recusado, é vestir um cartão nosso com a cor oficial de terceiro:
+ * ali a cor não identificava ninguém, só insinuava uma relação institucional
+ * que não existe. A razão completa está em `lib/brand-logos.ts`.
+ *
+ * O cartão é claro porque três das cinco logos são pretas: no cartão escuro
+ * que a faixa usava, elas sumiriam.
  */
+
+/** Altura de exibição do logo, antes da correção ótica de cada marca. */
+const ALTURA_BASE = 36
 
 /**
  * O texto que explica o recorte.
@@ -27,6 +36,66 @@ export function descreverCorte(total: number, exibidas: number): string {
   return exibidas === 1 ? 'a única com oferta ativa' : 'todas as que têm oferta ativa'
 }
 
+/**
+ * O conteúdo do cartão: logo se houver arquivo, nome escrito se não houver.
+ *
+ * O fallback não é decoração — a faixa é dado vivo. Ela mostra as marcas com
+ * mais ofertas ativas, e a próxima coleta pode trazer para cá uma marca cujo
+ * logo não temos. Sem este caminho, o cartão sairia vazio.
+ */
+export function ConteudoDoCartao({ marca }: { marca: Marca }) {
+  const logo = logoDaMarca(marca.nome)
+
+  if (!logo) {
+    return (
+      <span className="text-center text-base font-bold uppercase leading-tight tracking-[-0.02em] text-ink">
+        {marca.nome}
+      </span>
+    )
+  }
+
+  return (
+    <Image
+      src={logo.arquivo}
+      // O nome é o texto alternativo: é o que o logo diz. Junto com o `sr-only`
+      // abaixo, forma o nome acessível do link.
+      alt={marca.nome}
+      width={logo.largura}
+      height={logo.altura}
+      /*
+        Sem o otimizador. São marcas pequenas, exibidas em tamanho fixo, e o
+        otimizador do Next recusa SVG sem `dangerouslyAllowSVG` ligado no
+        projeto inteiro — o que valeria a pena se a imagem viesse de fora, mas
+        estas são nossas e estão em `public/`.
+      */
+      unoptimized
+      /*
+        A altura vai em `style`, não em classe.
+
+        `max-h-[${...}px]` montado em tempo de execução não é gerado pelo
+        Tailwind e sai sem altura nenhuma, em silêncio — a mesma armadilha que
+        `CLASSE_DO_TOM` existe para evitar. Aqui o valor é numérico e por marca,
+        então não há mapa que sirva: é `style` mesmo.
+      */
+      // Arredondado: `36 * 1.45` em ponto flutuante sai `52.199999999999996`,
+      // e esse número inteiro ia parar no HTML servido.
+      style={{ maxHeight: `${Math.round(ALTURA_BASE * (logo.escala ?? 1))}px` }}
+      /*
+        Cor neutralizada, e original de volta no hover.
+
+        Decidido comparando os dois tratamentos na tela: com a cor de origem, o
+        vermelho e azul da Growth puxa o olho para um cartão de cinco enquanto
+        as outras quatro são quase pretas, e a fileira deixa de ler como um
+        conjunto. Não é o motivo do #151 — aqui a cor é do próprio logo, e
+        identifica de fato. É composição: cinco identidades desenhadas para
+        dominar sozinhas, lado a lado, brigam entre si. O hover devolve a cor a
+        quem se interessou por aquela marca.
+      */
+      className="w-auto max-w-full object-contain grayscale transition-[filter] group-hover:grayscale-0"
+    />
+  )
+}
+
 export default function FaixaDeMarcas({
   marcas,
   total,
@@ -36,7 +105,7 @@ export default function FaixaDeMarcas({
   /** Quantas marcas o catálogo tem ao todo, para o texto do recorte. */
   total: number
 }) {
-  // Sem marca não há faixa. Nem esqueleto, nem "em breve": a seção some.
+  // Sem marca não há faixa. Nem esqueleto, nem promessa: a seção some.
   if (marcas.length === 0) return null
 
   return (
@@ -74,15 +143,13 @@ export default function FaixaDeMarcas({
                 // A busca já filtra por marca (#46), então este destino existe
                 // hoje. O índice `/marcas` é o #153, e o link para ele entra lá.
                 href={`/produtos?q=${encodeURIComponent(marca.nome)}`}
-                className={`flex h-[72px] items-center justify-center rounded-xl px-3 text-center transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${CLASSE_DO_TOM[tomDaMarca(marca)]}`}
+                className="group flex h-[72px] items-center justify-center rounded-xl border border-line-strong bg-surface-muted px-4 transition-colors hover:border-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
               >
-                <span className="text-lg font-bold uppercase leading-tight tracking-[-0.02em] text-white">
-                  {marca.nome}
-                </span>
+                <ConteudoDoCartao marca={marca} />
                 {/*
-                  O cartão mostra só o nome, como na maquete. As contagens vão
-                  para o nome acessível do link, para quem navega por leitor de
-                  tela saber o tamanho da cobertura sem poluir a faixa.
+                  As contagens vão para o nome acessível do link, para quem
+                  navega por leitor de tela saber o tamanho da cobertura sem
+                  poluir a faixa.
                 */}
                 <span className="sr-only">
                   {` — ${marca.produtos} ${marca.produtos === 1 ? 'produto' : 'produtos'}, ${marca.ofertas} ${marca.ofertas === 1 ? 'oferta ativa' : 'ofertas ativas'}`}

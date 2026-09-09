@@ -66,18 +66,11 @@ for (const [nome, viewport] of VIEWPORTS) {
       ).toBeLessThanOrEqual(largura.visivel)
     })
 
-    test('as cinco seções com dado continuam presentes e na ordem', async ({ page }) => {
-      await page.goto('/')
-      const main = page.getByRole('main')
-
-      await expect(main.getByRole('heading', { level: 1 })).toBeVisible()
-      await expect(page.getByRole('region', { name: 'Marcas acompanhadas' })).toBeVisible()
-      await expect(page.getByRole('region', { name: 'Whey Protein' })).toBeVisible()
-      await expect(
-        page.getByRole('region', { name: 'Mesma categoria, preço por dose diferente' }),
-      ).toBeVisible()
-      await expect(main.getByRole('heading', { name: /maiores descontos/i })).toBeVisible()
-    })
+    /*
+      A presença das seções saiu daqui para o `home.spec.ts`, que é o contrato
+      da página inteira. Este spec cuida de composição responsiva; afirmar as
+      mesmas seções nos dois era duas fontes para a mesma verdade.
+    */
 
     test('a ordem de tabulação segue a ordem de leitura', async ({ page }) => {
       await page.goto('/')

@@ -27,9 +27,12 @@ test.describe('home → resultados de busca', () => {
     await page.getByRole('button', { name: /buscar preços/i }).click()
 
     await expect(page).toHaveURL(/\/produtos\?q=whey/)
-    // Três desde o #157: a fixture ganhou um terceiro whey comprável para a
-    // categoria ter trio, que é o que o bloco comparador da home exige.
-    await expect(page.locator('article')).toHaveCount(3)
+    /*
+      Quatro whey compráveis na fixture, e cada um existe por um motivo:
+      dois desde sempre, o terceiro no #157 (o bloco comparador exige trio) e
+      o quarto no #198 (produto sem marca, que o card renderiza diferente).
+    */
+    await expect(page.locator('article')).toHaveCount(4)
   })
 
   test('o termo volta no campo depois de navegar', async ({ page }) => {

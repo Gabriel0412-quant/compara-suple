@@ -302,3 +302,72 @@ test.describe('os cards têm todos o mesmo tamanho', () => {
     expect(altura, 'área útil da imagem abaixo de 88px').toBeGreaterThanOrEqual(88)
   })
 })
+
+test.describe('setas de navegação da prateleira', () => {
+  /*
+    Largura escolhida para os cards da fixture transbordarem: quatro cards de
+    ~268px passam de 900px de viewport. Em 1440px eles cabem, e as setas
+    corretamente não aparecem — o teste em desktop provaria o contrário do que
+    interessa.
+  */
+  test.use({ viewport: { width: 900, height: 900 } })
+
+  function setas(page: import('@playwright/test').Page) {
+    return prateleira(page).getByRole('button')
+  }
+
+  test('aparecem quando há produto fora da tela', async ({ page }) => {
+    await page.goto('/')
+    await expect(setas(page)).toHaveCount(2)
+    await expect(prateleira(page).getByRole('button', { name: /ver próximos/i })).toBeVisible()
+  })
+
+  test('a de voltar começa desabilitada, e a de avançar não', async ({ page }) => {
+    await page.goto('/')
+    // Seta que parece clicável e não move nada é a mesma falha do controle sem
+    // ação, em escala menor.
+    await expect(prateleira(page).getByRole('button', { name: /ver anteriores/i })).toBeDisabled()
+    await expect(prateleira(page).getByRole('button', { name: /ver próximos/i })).toBeEnabled()
+  })
+
+  test('avançar rola a faixa, e habilita o voltar', async ({ page }) => {
+    await page.goto('/')
+    const lista = prateleira(page).getByRole('list')
+    const antes = await lista.evaluate(el => el.scrollLeft)
+
+    await prateleira(page).getByRole('button', { name: /ver próximos/i }).click()
+    await expect
+      .poll(async () => lista.evaluate(el => el.scrollLeft), { timeout: 4000 })
+      .toBeGreaterThan(antes)
+
+    await expect(prateleira(page).getByRole('button', { name: /ver anteriores/i })).toBeEnabled()
+  })
+
+  test('no fim da faixa, avançar desabilita', async ({ page }) => {
+    await page.goto('/')
+    const lista = prateleira(page).getByRole('list')
+    await lista.evaluate(el => el.scrollTo({ left: el.scrollWidth }))
+
+    await expect(prateleira(page).getByRole('button', { name: /ver próximos/i })).toBeDisabled()
+    await expect(prateleira(page).getByRole('button', { name: /ver anteriores/i })).toBeEnabled()
+  })
+
+  test('alcançáveis por teclado, com alvo de toque cheio', async ({ page }) => {
+    await page.goto('/')
+    const avancar = prateleira(page).getByRole('button', { name: /ver próximos/i })
+    await avancar.focus()
+    await expect(avancar).toBeFocused()
+
+    const caixa = await avancar.boundingBox()
+    expect(caixa!.height).toBeGreaterThanOrEqual(44)
+    expect(caixa!.width).toBeGreaterThanOrEqual(44)
+  })
+
+  test('cabem em 1440px sem aparecer, quando não há o que rolar', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.goto('/')
+    // A fixture tem quatro whey, que cabem em 1440px. Seta sem função não
+    // entra na tela — é a mesma regra do "Entrar" removido do header.
+    await expect(setas(page)).toHaveCount(0)
+  })
+})

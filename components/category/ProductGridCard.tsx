@@ -19,17 +19,23 @@ export function ProductGridCard({
   } = estadoDoCard(product)
 
   return (
-    <article className="flex flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-sm transition-shadow hover:shadow-md">
+    <article className="flex h-full flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-sm transition-shadow hover:shadow-md">
       <Link
         href={`/produto/${product.slug}`}
-        className="relative flex aspect-square items-center justify-center bg-surface-muted p-4"
+        className="relative flex h-24 shrink-0 items-center justify-center overflow-hidden bg-surface-muted"
       >
         {product.thumbnail ? (
           /* eslint-disable-next-line @next/next/no-img-element */
           <img
             src={product.thumbnail}
             alt={product.name}
-            className="max-h-full max-w-full object-contain"
+            /*
+              Sem padding na caixa: com `p-2.5` numa caixa de 80px sobravam
+              60px úteis para a foto, pequeno demais para reconhecer a
+              embalagem. A caixa passa a 96px sem respiro interno, o que dá
+              36px a mais de imagem por 16px a mais de card.
+            */
+            className="h-full w-full object-contain"
           />
         ) : (
           <span className="text-sm text-ink-4">sem imagem</span>
@@ -41,20 +47,20 @@ export function ProductGridCard({
         )}
       </Link>
 
-      <div className="p-5 flex flex-col flex-1">
+      <div className="flex flex-1 flex-col px-4 py-3">
         {product.brand && (
-          <span className="mb-1 font-mono text-sm uppercase tracking-[0.1em] text-ink-3 sm:text-[10px]">
+          <span className="mb-0.5 font-mono text-sm uppercase tracking-[0.1em] text-ink-3 sm:text-[10px]">
             {product.brand}
           </span>
         )}
 
-        <Link href={`/produto/${product.slug}`} className="block mb-3">
-          <h2 className="line-clamp-2 text-base font-semibold text-ink transition-colors hover:text-brand-strong sm:text-sm">
+        <Link href={`/produto/${product.slug}`} className="mb-2 block">
+          <h2 className="line-clamp-2 min-h-10 text-base font-semibold text-ink transition-colors hover:text-brand-strong sm:min-h-9 sm:text-sm">
             {product.name}
           </h2>
         </Link>
 
-        <div className="mb-3 flex flex-wrap gap-x-2 font-mono text-sm text-ink-3 sm:text-xs">
+        <div className="mb-2 flex flex-wrap gap-x-2 font-mono text-sm text-ink-3 sm:text-xs">
           {product.sizeGrams && (
             <span>
               {product.sizeGrams >= 1000
@@ -66,22 +72,36 @@ export function ProductGridCard({
         </div>
 
         <div className="mt-auto">
-          <div className="mb-3">
-            <div className="flex items-baseline gap-2">
-              <span className="font-mono text-2xl font-semibold text-ink">
+          <div className="mb-2">
+            {/*
+              Preço e preço riscado na mesma linha, como na maquete 1b.
+
+              O riscado ficava numa linha própria, que só existe em card com
+              desconto — e era isso que fazia o preço de um card sentar 20px
+              acima do vizinho na mesma prateleira. Num site de comparação,
+              preço desalinhado entre cards obriga a procurar o número em vez
+              de correr o olho pela linha.
+
+              Assim a estrutura é sempre duas linhas: preço (mais riscado
+              quando houver) e preço normalizado.
+            */}
+            <div className="flex flex-wrap items-baseline gap-x-2">
+              <span className="font-mono text-xl font-semibold text-ink">
                 {formatBRL(product.featuredPrice)}
               </span>
-              {precoNormalizado ? (
-                <span className="font-mono text-sm font-semibold text-brand-strong sm:text-xs">
-                  {precoNormalizado}
+              {hasDiscount && (
+                <span className="font-mono text-sm text-ink-4 line-through sm:text-xs">
+                  {formatBRL(product.featuredOriginalPrice!)}
                 </span>
-              ) : (
-                <span className="text-sm text-ink-4 sm:text-xs">sem dose ou peso informado</span>
               )}
             </div>
-            {hasDiscount && (
-              <span className="font-mono text-sm text-ink-4 line-through sm:text-xs">
-                {formatBRL(product.featuredOriginalPrice!)}
+            {precoNormalizado ? (
+              <span className="block font-mono text-sm font-semibold text-brand-strong sm:text-xs">
+                {precoNormalizado}
+              </span>
+            ) : (
+              <span className="block text-sm text-ink-4 sm:text-xs">
+                sem dose ou peso informado
               </span>
             )}
             <p className="mt-1 text-sm text-ink-4 sm:text-[11px]">
@@ -95,6 +115,18 @@ export function ProductGridCard({
               com link próprio — em vez de a legenda chamar o destaque de
               "menor preço", que era falso em 7 de 13 variantes.
             */}
+            {/*
+              Espaço reservado, e a reserva faz trabalho: esta linha existe em
+              uns cards e não em outros, e sem ela o preço de um card senta
+              24px acima do vizinho na mesma prateleira. Num comparador, preço
+              desalinhado obriga a procurar o número em vez de correr o olho
+              pela linha — custa mais que os 24px de altura.
+
+              Medi as duas versões: sem reserva o card tem 350px e os preços
+              desencontram; com reserva tem 360px e alinham. Os 10px voltaram
+              da altura da imagem.
+            */}
+            <div className="min-h-6">
             {temMaisBarata && (
               <a
                 href={`/go/${product.lowestOfferId}?de=${superficie}&por=menor_preco`}
@@ -105,6 +137,7 @@ export function ProductGridCard({
                 Menor preço: {formatBRL(product.lowestPrice!)} →
               </a>
             )}
+            </div>
           </div>
 
           <div className="flex gap-2">

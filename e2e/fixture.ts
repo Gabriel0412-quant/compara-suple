@@ -148,6 +148,27 @@ export const PRODUTOS = [
     brand: { name: 'Dux Nutrition', slug: 'dux-nutrition' },
     variant: [variante(61, [oferta(601, 199.9)], { size_grams: 900, servings: 30 })],
   },
+  {
+    /*
+      Produto sem marca.
+
+      O catálogo real tem `brand_id` nulo em parte das linhas, e o card
+      renderiza o rótulo de marca condicionalmente — mas nenhum produto desta
+      fixture exercitava o ramo. Isso escondeu uma trava: com todos os cards
+      tendo marca, as alturas naturais coincidiam, e remover o `h-full` do
+      card (que é o que garante altura igual dentro do slot esticado) passava
+      pelos testes. Descoberto na verificação de mutação do #198.
+
+      Sem marca o card é uma linha mais curto, o que torna o `h-full`
+      necessário de fato — e a trava, capaz de pegar a regressão.
+    */
+    id: 7,
+    slug: 'whey-sem-marca',
+    name: 'Whey Protein Concentrado 1kg sem marca cadastrada',
+    created_at: '2026-01-07T00:00:00+00:00',
+    brand: null,
+    variant: [variante(71, [oferta(701, 175.5)], { size_grams: 1000, servings: 30 })],
+  },
 ] as const
 
 /** Toda oferta do catálogo, achatada — o que a tabela `offer` devolveria. */

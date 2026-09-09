@@ -217,3 +217,88 @@ test.describe('a home fala uma língua visual só', () => {
     expect(verdes, 'o verde do layout antigo voltou à home').toBe(0)
   })
 })
+
+test.describe('os cards têm todos o mesmo tamanho', () => {
+  /*
+    Antes desta trava, os cards da mesma prateleira mediam 562, 514 e 514px.
+
+    A causa era dupla: o `<article>` não preenchia o `<li>` esticado pelo flex,
+    e a linha "Menor preço" existe em uns cards e não em outros. O resultado
+    era uma fileira com três alturas diferentes e os preços em três linhas
+    distintas — num comparador, isso obriga a procurar o número em vez de
+    correr o olho.
+  */
+
+  /** Orçamento de altura, medido em 1440px. Era 562px antes do ajuste. */
+  const ALTURA_MAXIMA = 380
+
+  async function medir(page: import('@playwright/test').Page) {
+    return page.evaluate(() => {
+      const secao = document.querySelector('section[aria-labelledby="prateleira-whey-protein-titulo"]')
+      return [...(secao?.querySelectorAll('li') ?? [])].map(li => {
+        const art = li.querySelector('article')!
+        const preco = [...art.querySelectorAll('span')].find(s => /^R\$/.test(s.textContent ?? ''))
+        const botao = [...art.querySelectorAll('a')].find(a => /ir à loja/i.test(a.textContent ?? ''))
+        return {
+          altura: Math.round(art.getBoundingClientRect().height),
+          precoY: Math.round(preco?.getBoundingClientRect().top ?? -1),
+          botaoY: Math.round(botao?.getBoundingClientRect().top ?? -1),
+        }
+      })
+    })
+  }
+
+  test('altura idêntica entre cards da mesma prateleira', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    await page.goto('/')
+    const cards = await medir(page)
+
+    expect(cards.length, 'prateleira sem cards para comparar').toBeGreaterThan(1)
+    const alturas = [...new Set(cards.map(c => c.altura))]
+    expect(alturas, `alturas diferentes na mesma fileira: ${alturas.join(', ')}px`).toHaveLength(1)
+  })
+
+  test('preço e botão de saída na mesma linha em todos', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    await page.goto('/')
+    const cards = await medir(page)
+
+    // Preço desalinhado é o sintoma que mais atrapalha a comparação, e vem de
+    // linhas opcionais (riscado, "menor preço") mudando a altura do bloco.
+    expect([...new Set(cards.map(c => c.precoY))], 'preços em linhas diferentes').toHaveLength(1)
+    expect([...new Set(cards.map(c => c.botaoY))], 'botões em linhas diferentes').toHaveLength(1)
+  })
+
+  test('o card cabe no orçamento de altura', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    await page.goto('/')
+    const cards = await medir(page)
+
+    for (const card of cards) {
+      expect(
+        card.altura,
+        `card com ${card.altura}px; o orçamento é ${ALTURA_MAXIMA}px. ` +
+          'Se cresceu de propósito, mova o orçamento junto e diga por quê.',
+      ).toBeLessThanOrEqual(ALTURA_MAXIMA)
+    }
+  })
+
+  test('a imagem do produto tem área útil de verdade', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    await page.goto('/')
+    /*
+      Encolher o card é fácil demais tirando da imagem. Com `p-2.5` numa caixa
+      de 80px sobravam 60px úteis, pequeno para reconhecer a embalagem — que é
+      metade do motivo de o card ter foto.
+    */
+    const altura = await page.evaluate(() => {
+      const secao = document.querySelector('section[aria-labelledby="prateleira-whey-protein-titulo"]')
+      const caixa = secao?.querySelector('li article a.relative') as HTMLElement | null
+      if (!caixa) return 0
+      const estilo = getComputedStyle(caixa)
+      const respiro = parseFloat(estilo.paddingTop) + parseFloat(estilo.paddingBottom)
+      return Math.round(caixa.getBoundingClientRect().height - respiro)
+    })
+    expect(altura, 'área útil da imagem abaixo de 88px').toBeGreaterThanOrEqual(88)
+  })
+})

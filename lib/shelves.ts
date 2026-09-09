@@ -28,8 +28,22 @@ import {
  */
 export const CATEGORIAS_DA_HOME = ['whey-protein', 'creatina', 'pre-treino'] as const
 
-/** Quantos produtos cada prateleira mostra. Quatro é o que a maquete comporta. */
-export const PRODUTOS_POR_PRATELEIRA = 4
+/**
+ * Quantos produtos cada prateleira carrega.
+ *
+ * Era 4, que é quantos a maquete 1b desenha visíveis — e foi um erro de
+ * leitura meu: a maquete mostra quatro *na tela*, com setas ao lado, o que
+ * pressupõe mais produtos fora dela. Carregando só quatro, os quatro cabiam
+ * em 1440px, não havia transbordo, e as setas se escondiam corretamente por
+ * não terem para onde rolar.
+ *
+ * Medido em produção em 08/09/2026: whey tem 11 produtos e creatina 7. Com o
+ * corte em 4, sete whey nunca apareciam em lugar nenhum da home.
+ *
+ * Doze cobre as categorias atuais com folga e ainda é um teto: prateleira não
+ * é catálogo, e quem quer ver tudo tem o "Ver todos".
+ */
+export const PRODUTOS_POR_PRATELEIRA = 12
 
 export type Prateleira = {
   categoria: Category

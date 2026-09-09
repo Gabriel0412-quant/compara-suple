@@ -97,7 +97,24 @@ describe('montagem das prateleiras', () => {
     expect(prateleiras.map(p => p.categoria.slug)).toEqual([...CATEGORIAS_DA_HOME])
   })
 
-  it('corta em quatro produtos, mas conta todos', () => {
+  it('carrega mais produtos do que caberiam na tela, para as setas terem função', () => {
+    /*
+      A prateleira carregava 4, que é quantos a maquete desenha visíveis — e
+      quatro cabem em 1440px, então não havia transbordo e as setas se
+      escondiam por não terem para onde rolar. Medido em produção: whey tem 11
+      produtos, e sete nunca apareciam.
+    */
+    expect(PRODUTOS_POR_PRATELEIRA).toBeGreaterThan(4)
+
+    const doze = Array.from({ length: 20 }, (_, i) =>
+      whey({ id: i + 1, name: `Whey Protein ${i}`, featuredPrice: 100 + i, offerCount: 2 }),
+    )
+    const [prateleira] = montarPrateleiras(doze, ['whey-protein'])
+    expect(prateleira.produtos).toHaveLength(PRODUTOS_POR_PRATELEIRA)
+    expect(prateleira.totalProdutos).toBe(20)
+  })
+
+  it('corta no limite, mas conta todos', () => {
     /*
       Os preços entram fora de ordem de propósito.
 
@@ -111,9 +128,9 @@ describe('montagem das prateleiras', () => {
     const seis = precos.map((preco, i) =>
       whey({ id: i + 1, name: `Whey Protein ${i}`, featuredPrice: preco, offerCount: 2 }),
     )
-    const [prateleira] = montarPrateleiras(seis, ['whey-protein'])
+    const [prateleira] = montarPrateleiras(seis, ['whey-protein'], 4)
 
-    expect(prateleira.produtos).toHaveLength(PRODUTOS_POR_PRATELEIRA)
+    expect(prateleira.produtos).toHaveLength(4)
     expect(prateleira.totalProdutos, 'o total precisa refletir a categoria, não a vitrine').toBe(6)
     expect(prateleira.totalOfertas).toBe(12)
     // Os quatro exibidos são os mais baratos, não os quatro primeiros da lista.

@@ -6,6 +6,8 @@ import {
   slugDoProduto,
   aplicarFiltros,
   ROTA_DA_BUSCA,
+  SEM_FILTRO,
+  alternar,
   buscaPorMarca,
   chipsDeFiltro,
   facetasDeCategoria,
@@ -68,9 +70,9 @@ describe('leitura da URL', () => {
       }),
     ).toEqual({
       termo: 'whey',
-      categoria: 'creatina',
-      marca: 'growth-supplements',
-      sabor: 'chocolate',
+      categorias: ['creatina'],
+      marcas: ['growth-supplements'],
+      sabores: ['chocolate'],
       soPromocao: true,
       precoMax: 150,
       dosePrecoMax: 2.5,
@@ -79,8 +81,8 @@ describe('leitura da URL', () => {
   })
 
   it('família de sabor desconhecida vira ausência', () => {
-    expect(parseFiltros({ sabor: 'tutti-frutti' }).sabor).toBeNull()
-    expect(parseFiltros({ sabor: 'chocolate' }).sabor).toBe('chocolate')
+    expect(parseFiltros({ sabor: 'tutti-frutti' }).sabores).toEqual([])
+    expect(parseFiltros({ sabor: 'chocolate' }).sabores).toEqual(['chocolate'])
   })
 
   it('categoria desconhecida vira ausência, não resultado vazio', () => {
@@ -88,8 +90,8 @@ describe('leitura da URL', () => {
       Link velho ou slug renomeado não pode produzir uma tela sem nada, que
       parece bug. `?categoria=inventada` mostra o catálogo inteiro.
     */
-    expect(parseFiltros({ categoria: 'inventada' }).categoria).toBeNull()
-    expect(parseFiltros({ categoria: 'whey-protein' }).categoria).toBe('whey-protein')
+    expect(parseFiltros({ categoria: 'inventada' }).categorias).toEqual([])
+    expect(parseFiltros({ categoria: 'whey-protein' }).categorias).toEqual(['whey-protein'])
   })
 
   it('ordem desconhecida cai em relevância', () => {
@@ -124,11 +126,12 @@ describe('leitura da URL', () => {
     expect(parseFiltros({ q: '  whey  ' }).termo).toBe('whey')
   })
 
-  it('sem marca na URL, o filtro de marca é nulo e não string vazia', () => {
-    // Sem a guarda, `slugDaMarca('')` devolveria `''`, que é diferente de
-    // `null` e faria a tela achar que há uma marca escolhida.
-    expect(parseFiltros({}).marca).toBeNull()
-    expect(parseFiltros({ marca: '' }).marca).toBeNull()
+  it('sem marca na URL, a lista fica vazia e não com uma string vazia dentro', () => {
+    // Sem a limpeza, `slugDaMarca('')` devolveria `''`, e a lista teria um
+    // item — a tela acharia que há uma marca escolhida e mostraria um chip
+    // sem rótulo.
+    expect(parseFiltros({}).marcas).toEqual([])
+    expect(parseFiltros({ marca: '' }).marcas).toEqual([])
   })
 })
 
@@ -152,8 +155,23 @@ describe('escrita da URL', () => {
     expect(serializarFiltros(f({ ordem: 'relevancia' }))).toBe('/produtos')
   })
 
+  it('com duas categorias, o caminho não dá conta e ela volta para a query', () => {
+    /*
+      A regra que mantém o índice limpo.
+
+      Uma categoria é uma página com texto próprio, e mora em
+      `/categoria/<slug>`. Duas categorias são um recorte de busca, que não tem
+      página própria — e insistir no caminho daria uma URL dizendo "Creatina"
+      enquanto lista creatina e whey.
+    */
+    const duas = f({ categorias: ['creatina', 'whey-protein'] })
+    expect(serializarFiltros(duas, '/categoria/creatina')).toBe(
+      '/categoria/creatina?categoria=creatina%2Cwhey-protein',
+    )
+  })
+
   it('a base decide a rota, e a categoria sai da query quando está no caminho', () => {
-    const filtros = f({ categoria: 'whey-protein', marca: 'max-titanium' })
+    const filtros = f({ categorias: ['whey-protein'], marcas: ['max-titanium'] })
 
     // Na busca livre, a categoria é mais um parâmetro.
     expect(serializarFiltros(filtros)).toBe(
@@ -175,7 +193,7 @@ describe('escrita da URL', () => {
     expect(serializarFiltros(FILTROS_VAZIOS)).toBe(ROTA_DA_BUSCA)
     expect(serializarFiltros(FILTROS_VAZIOS, '/categoria/creatina')).toBe('/categoria/creatina')
     // Só a categoria, na rota dela, não deixa query nenhuma para trás.
-    expect(serializarFiltros(f({ categoria: 'creatina' }), '/categoria/creatina')).toBe(
+    expect(serializarFiltros(f({ categorias: ['creatina'] }), '/categoria/creatina')).toBe(
       '/categoria/creatina',
     )
   })
@@ -183,9 +201,9 @@ describe('escrita da URL', () => {
   it('ida e volta preserva o estado', () => {
     const original = f({
       termo: 'whey',
-      categoria: 'creatina',
-      marca: 'max-titanium',
-      sabor: 'morango',
+      categorias: ['creatina'],
+      marcas: ['max-titanium'],
+      sabores: ['morango'],
       soPromocao: true,
       precoMax: 150,
       dosePrecoMax: 2.5,
@@ -209,13 +227,129 @@ describe('link para a busca por marca', () => {
 
   it('a ida e volta bate com o que o parser lê', () => {
     const url = new URL(buscaPorMarca('max-titanium'), 'http://x')
-    expect(parseFiltros(Object.fromEntries(url.searchParams)).marca).toBe('max-titanium')
+    expect(parseFiltros(Object.fromEntries(url.searchParams)).marcas).toEqual(['max-titanium'])
   })
 
   it('não carrega filtro nenhum além da marca', () => {
     // O cartão promete "produtos desta marca", não "desta marca com o filtro
     // que estava valendo antes".
     expect(new URL(buscaPorMarca('growth-supplements'), 'http://x').searchParams.size).toBe(1)
+  })
+})
+
+describe('escolher vários no mesmo grupo', () => {
+  const catalogo = [
+    produto({ name: 'Whey A', brand: 'Growth Supplements', flavor: 'Chocolate' }),
+    produto({ name: 'Whey B', brand: 'Max Titanium', flavor: 'Morango' }),
+    produto({ name: 'Creatina C', brand: 'Dux Nutrition', flavor: 'Sem sabor' }),
+  ]
+  const nomes = (l: CategoryProduct[]) => l.map(p => p.name).sort()
+
+  /*
+    Dentro do grupo é "ou"; entre grupos é "e".
+
+    É o que a pessoa espera de caixas marcáveis, e o contrário devolveria zero
+    sempre: nenhum produto é de duas marcas ao mesmo tempo. O par de testes
+    abaixo é o que separa as duas relações — trocar uma pela outra faz o
+    primeiro passar e o segundo falhar, ou o inverso.
+  */
+  it('duas marcas marcadas trazem as duas', () => {
+    expect(
+      nomes(aplicarFiltros(catalogo, f({ marcas: ['growth-supplements', 'max-titanium'] }))),
+    ).toEqual(['Whey A', 'Whey B'])
+  })
+
+  it('marca e sabor juntos continuam se somando', () => {
+    // Growth ou Max, **e** chocolate: sobra só a Growth.
+    expect(
+      nomes(
+        aplicarFiltros(
+          catalogo,
+          f({ marcas: ['growth-supplements', 'max-titanium'], sabores: ['chocolate'] }),
+        ),
+      ),
+    ).toEqual(['Whey A'])
+  })
+
+  it('lista vazia não filtra nada', () => {
+    expect(nomes(aplicarFiltros(catalogo, f({ marcas: [] })))).toHaveLength(3)
+  })
+
+  it('a lista vai numa chave só, separada por vírgula', () => {
+    expect(parseFiltros({ marca: 'growth-supplements,max-titanium' }).marcas).toEqual([
+      'growth-supplements',
+      'max-titanium',
+    ])
+    expect(
+      serializarFiltros(f({ marcas: ['growth-supplements', 'max-titanium'] })),
+    ).toBe('/produtos?marca=growth-supplements%2Cmax-titanium')
+  })
+
+  it('a chave repetida ainda é lida, para link velho não quebrar', () => {
+    expect(parseFiltros({ marca: ['Growth Supplements', 'Max Titanium'] }).marcas).toEqual([
+      'growth-supplements',
+      'max-titanium',
+    ])
+  })
+
+  it('espaço e vazio na lista não viram filtro', () => {
+    /*
+      `?marca=growth, ,max` acontece quando alguém edita a URL à mão ou quando
+      um link é montado com uma lista que tinha buraco. Sem a limpeza, o item
+      vazio vira um filtro que não casa com nada e a tela zera, com um chip sem
+      rótulo do lado.
+    */
+    expect(parseFiltros({ marca: 'growth, ,max' }).marcas).toEqual(['growth', 'max'])
+    expect(parseFiltros({ marca: ',,' }).marcas).toEqual([])
+    expect(parseFiltros({ categoria: 'creatina, ' }).categorias).toEqual(['creatina'])
+  })
+
+  it('marca que não sobra nada depois do slug não entra na lista', () => {
+    // `slugDaMarca('!!!')` devolve string vazia. Sem o filtro, a lista teria um
+    // item vazio e a tela mostraria um chip mudo.
+    expect(parseFiltros({ marca: '!!!' }).marcas).toEqual([])
+    expect(parseFiltros({ marca: '!!!,Growth Supplements' }).marcas).toEqual([
+      'growth-supplements',
+    ])
+  })
+
+  it('valor repetido na URL entra uma vez só', () => {
+    // Dois cliques que gerassem o mesmo slug dariam dois chips idênticos, e
+    // remover um deixaria o outro.
+    expect(parseFiltros({ marca: 'growth,growth' }).marcas).toEqual(['growth'])
+    /*
+      O caso que exige a aparagem antes da remoção de repetidos.
+
+      `growth` e ` growth` são o mesmo filtro escrito com um espaço a mais. Sem
+      aparar antes, o `Set` os trata como distintos e a tela mostra dois chips
+      idênticos — remover um deixa o outro, e a pessoa clica duas vezes sem
+      entender por quê.
+    */
+    expect(parseFiltros({ marca: 'growth, growth' }).marcas).toEqual(['growth'])
+  })
+
+  it('valor inválido some sem levar os válidos junto', () => {
+    expect(parseFiltros({ categoria: 'creatina,inventada' }).categorias).toEqual(['creatina'])
+    expect(parseFiltros({ sabor: 'chocolate,tutti-frutti' }).sabores).toEqual(['chocolate'])
+  })
+})
+
+describe('alternar', () => {
+  it('acrescenta o que não está e tira o que está', () => {
+    expect(alternar(['a'], 'b')).toEqual(['a', 'b'])
+    expect(alternar(['a', 'b'], 'a')).toEqual(['b'])
+  })
+
+  it('preserva a ordem de quem fica', () => {
+    // Sem isso a URL se reescreve a cada clique, e o histórico do navegador
+    // enche de entradas que são o mesmo estado.
+    expect(alternar(['a', 'b', 'c'], 'b')).toEqual(['a', 'c'])
+  })
+
+  it('não altera a lista recebida', () => {
+    const original = ['a']
+    alternar(original, 'b')
+    expect(original).toEqual(['a'])
   })
 })
 
@@ -229,14 +363,14 @@ describe('cada filtro', () => {
   const nomes = (l: CategoryProduct[]) => l.map(p => p.name).sort()
 
   it('categoria filtra pelo nome do produto', () => {
-    expect(nomes(aplicarFiltros(catalogo, f({ categoria: 'whey-protein' })))).toEqual([
+    expect(nomes(aplicarFiltros(catalogo, f({ categorias: ['whey-protein'] })))).toEqual([
       'Whey Isolado',
       'Whey Protein Concentrado',
     ])
   })
 
   it('marca casa pelo slug, não pela string crua', () => {
-    expect(nomes(aplicarFiltros(catalogo, f({ marca: 'max-titanium' })))).toEqual([
+    expect(nomes(aplicarFiltros(catalogo, f({ marcas: ['max-titanium'] })))).toEqual([
       'Creatina Monohidratada',
       'Whey Isolado',
     ])
@@ -301,8 +435,8 @@ describe('cada filtro', () => {
       produto({ name: 'Creatina D', flavor: 'Sem sabor' }),
       produto({ name: 'Creatina E', flavor: 'Natural' }),
     ]
-    expect(nomes(aplicarFiltros(comSabor, f({ sabor: 'chocolate' })))).toEqual(['Whey A', 'Whey B'])
-    expect(nomes(aplicarFiltros(comSabor, f({ sabor: 'sem-sabor' })))).toEqual([
+    expect(nomes(aplicarFiltros(comSabor, f({ sabores: ['chocolate'] })))).toEqual(['Whey A', 'Whey B'])
+    expect(nomes(aplicarFiltros(comSabor, f({ sabores: ['sem-sabor'] })))).toEqual([
       'Creatina D',
       'Creatina E',
     ])
@@ -313,7 +447,7 @@ describe('cada filtro', () => {
     // filtro de sabor ativo, ele continua aparecendo.
     const exotico = [produto({ name: 'Whey Tutti-frutti', flavor: 'Tutti-frutti' })]
     expect(nomes(aplicarFiltros(exotico, f()))).toEqual(['Whey Tutti-frutti'])
-    expect(aplicarFiltros(exotico, f({ sabor: 'chocolate' }))).toEqual([])
+    expect(aplicarFiltros(exotico, f({ sabores: ['chocolate'] }))).toEqual([])
   })
 
   it('produto sem sabor informado não é "sem sabor"', () => {
@@ -323,12 +457,12 @@ describe('cada filtro', () => {
       produto cujo sabor ninguém preencheu.
     */
     const semDado = [produto({ name: 'Sem dado', flavor: null })]
-    expect(aplicarFiltros(semDado, f({ sabor: 'sem-sabor' }))).toEqual([])
+    expect(aplicarFiltros(semDado, f({ sabores: ['sem-sabor'] }))).toEqual([])
   })
 
   it('os filtros se acumulam', () => {
     expect(
-      nomes(aplicarFiltros(catalogo, f({ categoria: 'whey-protein', marca: 'max-titanium' }))),
+      nomes(aplicarFiltros(catalogo, f({ categorias: ['whey-protein'], marcas: ['max-titanium'] }))),
     ).toEqual(['Whey Isolado'])
   })
 
@@ -461,7 +595,7 @@ describe('contagem das facetas', () => {
     precisa saber é quantos produtos apareceriam ao trocar.
   */
   it('a categoria não conta a si mesma, mas conta os outros filtros', () => {
-    const facetas = facetasDeCategoria(catalogo, f({ categoria: 'whey-protein' }))
+    const facetas = facetasDeCategoria(catalogo, f({ categorias: ['whey-protein'] }))
     expect(facetas).toEqual([
       { valor: 'whey-protein', rotulo: 'Whey Protein', n: 2 },
       { valor: 'creatina', rotulo: 'Creatina', n: 1 },
@@ -469,7 +603,7 @@ describe('contagem das facetas', () => {
   })
 
   it('a categoria respeita o filtro de marca', () => {
-    const facetas = facetasDeCategoria(catalogo, f({ marca: 'growth-supplements' }))
+    const facetas = facetasDeCategoria(catalogo, f({ marcas: ['growth-supplements'] }))
     // Growth tem um whey e uma creatina; Max Titanium não entra na conta.
     expect(facetas).toEqual([
       { valor: 'creatina', rotulo: 'Creatina', n: 1 },
@@ -478,7 +612,7 @@ describe('contagem das facetas', () => {
   })
 
   it('a marca não conta a si mesma, mas conta a categoria', () => {
-    const facetas = facetasDeMarca(catalogo, f({ marca: 'growth-supplements', categoria: 'whey-protein' }))
+    const facetas = facetasDeMarca(catalogo, f({ marcas: ['growth-supplements'], categorias: ['whey-protein'] }))
     expect(facetas).toEqual([
       { valor: 'growth-supplements', rotulo: 'Growth Supplements', n: 1 },
       { valor: 'max-titanium', rotulo: 'Max Titanium', n: 1 },
@@ -546,7 +680,7 @@ describe('contagem das facetas', () => {
       produto({ name: 'Whey C', flavor: 'Morango', brand: 'Max Titanium' }),
     ]
     expect(
-      facetasDeSabor(comSabor, f({ sabor: 'chocolate', marca: 'growth-supplements' })),
+      facetasDeSabor(comSabor, f({ sabores: ['chocolate'], marcas: ['growth-supplements'] })),
     ).toEqual([
       { valor: 'chocolate', rotulo: 'Chocolate', n: 1 },
       { valor: 'morango', rotulo: 'Morango', n: 1 },
@@ -571,9 +705,9 @@ describe('contagem das facetas', () => {
 describe('chips de filtro ativo', () => {
   const COMPLETO = f({
     termo: 'whey',
-    categoria: 'creatina',
-    marca: 'max-titanium',
-    sabor: 'chocolate',
+    categorias: ['creatina'],
+    marcas: ['max-titanium'],
+    sabores: ['chocolate'],
     soPromocao: true,
     precoMax: 150,
     dosePrecoMax: 2.5,
@@ -613,8 +747,67 @@ describe('chips de filtro ativo', () => {
     expect(restante).toEqual(esperado)
   })
 
+  it('cada valor vira um chip, e o × tira só aquele valor', () => {
+    /*
+      Um chip por grupo — "Marca (2)" — obrigaria a abrir o painel para
+      desmarcar uma das duas, e o chip existe justamente para quem não está com
+      o painel à vista.
+    */
+    const filtros = f({ marcas: ['growth-supplements', 'max-titanium'] })
+    const chips = chipsDeFiltro(filtros, [])
+    expect(chips.map(c => c.rotulo)).toEqual(['growth-supplements', 'max-titanium'])
+
+    const restante = parseFiltros(
+      Object.fromEntries(new URL(chips[0].href, 'http://x').searchParams),
+    )
+    // Tirar a Growth deixa a Max Titanium, e não limpa o grupo inteiro.
+    expect(restante.marcas).toEqual(['max-titanium'])
+  })
+
+  /*
+    O mesmo contrato da marca, para os outros dois grupos: remover um valor não
+    pode limpar o grupo inteiro.
+  */
+  it('com duas categorias marcadas, o × tira só uma', () => {
+    const filtros = f({ categorias: ['creatina', 'whey-protein'] })
+    const alvo = chipsDeFiltro(filtros, []).find(c => c.rotulo === 'Creatina')!
+    const restante = parseFiltros(Object.fromEntries(new URL(alvo.href, 'http://x').searchParams))
+    expect(restante.categorias).toEqual(['whey-protein'])
+  })
+
+  it('com dois sabores marcados, o × tira só um', () => {
+    const filtros = f({ sabores: ['chocolate', 'morango'] })
+    const alvo = chipsDeFiltro(filtros, []).find(c => c.rotulo === 'Chocolate')!
+    const restante = parseFiltros(Object.fromEntries(new URL(alvo.href, 'http://x').searchParams))
+    expect(restante.sabores).toEqual(['morango'])
+  })
+
+  it('limpar tira todos os filtros e mantém a ordenação', () => {
+    /*
+      `SEM_FILTRO` é a lista de campos que "Limpar" zera, e ela mora na lib
+      porque a tela e o painel precisam concordar. Esquecer um campo aqui
+      limparia pela metade: a tela voltaria a mostrar tudo menos aquele
+      recorte, sem chip que o explique.
+    */
+    const cheio = f({
+      termo: 'whey',
+      categorias: ['creatina'],
+      marcas: ['max-titanium'],
+      sabores: ['chocolate'],
+      soPromocao: true,
+      precoMax: 150,
+      dosePrecoMax: 2.5,
+      ordem: 'dose',
+    })
+    const limpo = { ...cheio, ...SEM_FILTRO }
+    expect(semFiltro(limpo)).toBe(true)
+    expect(chipsDeFiltro(limpo, [])).toEqual([])
+    // A ordenação sobrevive: não é filtro, e ninguém pediu para desfazê-la.
+    expect(limpo.ordem).toBe('dose')
+  })
+
   it('cada chip remove só o próprio filtro', () => {
-    const filtros = f({ termo: 'whey', categoria: 'creatina', soPromocao: true })
+    const filtros = f({ termo: 'whey', categorias: ['creatina'], soPromocao: true })
     const chips = chipsDeFiltro(filtros, [])
 
     const daCategoria = chips.find(c => c.rotulo === 'Creatina')!
@@ -628,7 +821,7 @@ describe('chips de filtro ativo', () => {
   it('a marca aparece com o nome do banco, não com o slug', () => {
     // Duas facetas, e a certa não é a primeira: com a busca quebrada, o chip
     // exibiria "Growth Supplements" para um filtro de Integralmédica.
-    const chips = chipsDeFiltro(f({ marca: 'integralmedica' }), [
+    const chips = chipsDeFiltro(f({ marcas: ['integralmedica'] }), [
       { valor: 'growth-supplements', rotulo: 'Growth Supplements', n: 9 },
       { valor: 'integralmedica', rotulo: 'Integralmédica', n: 3 },
     ])
@@ -639,8 +832,8 @@ describe('chips de filtro ativo', () => {
     const chips = chipsDeFiltro(
       f({
         termo: 'whey',
-        categoria: 'creatina',
-        sabor: 'chocolate',
+        categorias: ['creatina'],
+        sabores: ['chocolate'],
         soPromocao: true,
         precoMax: 150,
         dosePrecoMax: 2.5,
@@ -658,19 +851,19 @@ describe('chips de filtro ativo', () => {
   })
 
   it('sabor sem rótulo conhecido cai no valor em vez de sumir', () => {
-    expect(chipsDeFiltro(f({ sabor: 'inventado' }), [])[0].rotulo).toBe('inventado')
+    expect(chipsDeFiltro(f({ sabores: ['inventado'] }), [])[0].rotulo).toBe('inventado')
   })
 
   it('categoria sem rótulo conhecido cai no slug em vez de sumir', () => {
     // `parseFiltros` barra slug inválido, mas o tipo permite montar o estado à
     // mão — e um chip sem rótulo seria um X flutuando sem texto.
-    expect(chipsDeFiltro(f({ categoria: 'categoria-que-nao-existe' }), [])[0].rotulo).toBe(
+    expect(chipsDeFiltro(f({ categorias: ['categoria-que-nao-existe'] }), [])[0].rotulo).toBe(
       'categoria-que-nao-existe',
     )
   })
 
   it('sem a faceta, o chip cai no slug em vez de sumir', () => {
-    expect(chipsDeFiltro(f({ marca: 'integralmedica' }), [])[0].rotulo).toBe('integralmedica')
+    expect(chipsDeFiltro(f({ marcas: ['integralmedica'] }), [])[0].rotulo).toBe('integralmedica')
   })
 
   it('ordenação não é filtro e não vira chip', () => {
@@ -680,13 +873,13 @@ describe('chips de filtro ativo', () => {
 
   it.each([
     ['termo', { termo: 'whey' }],
-    ['categoria', { categoria: 'creatina' }],
-    ['marca', { marca: 'max-titanium' }],
-    ['sabor', { sabor: 'chocolate' }],
+    ['categoria', { categorias: ['creatina'] }],
+    ['marca', { marcas: ['max-titanium'] }],
+    ['sabor', { sabores: ['chocolate'] }],
     ['promoção', { soPromocao: true }],
     ['preço', { precoMax: 150 }],
     ['dose', { dosePrecoMax: 2.5 }],
-  ] as const)('%s sozinho já basta para a tela não estar limpa', (_nome, mudanca) => {
+  ])('%s sozinho já basta para a tela não estar limpa', (_nome, mudanca) => {
     // Campo a campo: `semFiltro` decide se a tela mostra "Limpar" e se o
     // texto diz "todos os produtos" ou "N resultados". Esquecer um campo faz
     // a tela afirmar que não há filtro enquanto há.

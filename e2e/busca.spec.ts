@@ -19,11 +19,22 @@ const chip = (page: import('@playwright/test').Page, rotulo: string | RegExp) =>
     name: rotulo instanceof RegExp ? rotulo : new RegExp(`^${rotulo} .*remover filtro`, 'i'),
   })
 
+/*
+  Cada grupo tem nome próprio, e o teste usa isso.
+
+  Localizar por `a[href*="marca="]` não serve: depois de marcar uma marca, o
+  link de toda opção do painel carrega `marca=` junto, inclusive os de
+  categoria. O nome da lista é o que separa os grupos.
+*/
+const grupo = (page: import('@playwright/test').Page, nome: string) =>
+  painel(page).getByRole('list', { name: nome }).getByRole('checkbox')
+
+
 test.describe('filtros da busca', () => {
   test('a contagem da faceta é o que o clique entrega', async ({ page }) => {
     await page.goto('/produtos')
-    const opcao = painel(page).getByRole('listitem').locator('a').first()
-    const rotulo = (await opcao.locator('span').first().textContent())!.trim()
+    const opcao = grupo(page, 'Categoria').first()
+    const rotulo = (await opcao.innerText()).trim().split('\n')[0]
     /*
       A promessa da faceta é um número, e o teste cobra esse número.
 
@@ -31,10 +42,11 @@ test.describe('filtros da busca', () => {
       produziria uma contagem que não bate com o resultado do clique. Aqui a
       asserção liga as duas pontas.
     */
-    const n = Number((await opcao.locator('span').last().textContent())!.trim())
+    const n = Number((await opcao.locator('span').last().innerText()).trim())
     expect(n, `faceta "${rotulo}" sem contagem`).toBeGreaterThan(0)
 
     await opcao.click()
+    await page.waitForURL(/categoria=/)
     await expect(cards(page)).toHaveCount(n)
     await expect(chip(page, rotulo)).toBeVisible()
   })
@@ -144,8 +156,8 @@ test.describe('sem JavaScript', () => {
 
   test('os filtros continuam funcionando', async ({ page }) => {
     await page.goto('/produtos')
-    const opcao = painel(page).getByRole('listitem').locator('a').first()
-    const rotulo = (await opcao.locator('span').first().textContent())!.trim()
+    const opcao = grupo(page, 'Categoria').first()
+    const rotulo = (await opcao.innerText()).trim().split('\n')[0]
 
     await opcao.click()
     await expect(chip(page, rotulo)).toBeVisible()
@@ -161,6 +173,90 @@ test.describe('sem JavaScript', () => {
     // aplicar o teto apagaria a categoria escolhida.
     await expect(page).toHaveURL(/categoria=whey-protein/)
     await expect(chip(page, 'Whey Protein')).toBeVisible()
+  })
+})
+
+test.describe('escolher vários no mesmo filtro', () => {
+
+  test('duas marcas marcadas somam os resultados', async ({ page }) => {
+    await page.goto('/produtos')
+    const opcoes = grupo(page, 'Marca')
+    if ((await opcoes.count()) < 2) test.skip(true, 'catálogo com uma marca só')
+
+    const rotuloA = (await opcoes.nth(0).innerText()).trim().split('\n')[0]
+    await opcoes.nth(0).click()
+    // Espera explícita: sem ela a contagem sai antes da navegação, e o teste
+    // compara o catálogo inteiro com ele mesmo.
+    await page.waitForURL(/marca=/)
+    const soA = await cards(page).count()
+
+    const segunda = grupo(page, 'Marca').filter({ hasNotText: rotuloA }).first()
+    const rotuloB = (await segunda.innerText()).trim().split('\n')[0]
+    await segunda.click()
+    await page.waitForURL(/marca=[^&]+%2C/)
+
+    /*
+      Dentro do grupo a relação é "ou", e é isto que o teste separa: com "e", o
+      resultado seria zero, porque nenhum produto é de duas marcas.
+    */
+    const somadas = await cards(page).count()
+    expect(somadas, 'marcar a segunda marca não somou nada').toBeGreaterThan(soA)
+    await expect(page).toHaveURL(/marca=[^&]+%2C/)
+    await expect(chip(page, rotuloA)).toBeVisible()
+    await expect(chip(page, rotuloB)).toBeVisible()
+  })
+
+  test('a caixa marcada mostra que está marcada', async ({ page }) => {
+    // Sem o estado visível, a lista parece escolha única e ninguém descobre
+    // que dá para marcar duas.
+    await page.goto('/produtos')
+    const opcao = grupo(page, 'Marca').first()
+    await expect(opcao).toHaveAttribute('aria-checked', 'false')
+    await opcao.click()
+    await expect(painel(page).getByRole('checkbox', { checked: true })).toHaveCount(1)
+  })
+
+  test('desmarcar uma marca mantém a outra', async ({ page }) => {
+    await page.goto('/produtos')
+    const opcoes = grupo(page, 'Marca')
+    if ((await opcoes.count()) < 2) test.skip(true, 'catálogo com uma marca só')
+
+    const rotuloA = (await opcoes.nth(0).innerText()).trim().split('\n')[0]
+    await opcoes.nth(0).click()
+    await page.waitForURL(/marca=/)
+    const segunda = grupo(page, 'Marca').filter({ hasNotText: rotuloA }).first()
+    const rotuloB = (await segunda.innerText()).trim().split('\n')[0]
+    await segunda.click()
+    await page.waitForURL(/marca=[^&]+%2C/)
+
+    /*
+      Espera a URL que o próprio chip promete.
+
+      Sem isso a asserção corre antes da navegação e vê o estado anterior — o
+      chip ainda na tela, o teste acusando um bug que não existe.
+    */
+    const alvo = (await chip(page, rotuloA).getAttribute('href'))!
+    await chip(page, rotuloA).click()
+    await page.waitForURL(u => u.search === new URL(alvo, u.origin).search)
+
+    // Tirar uma não pode limpar o grupo inteiro.
+    await expect(chip(page, rotuloA)).toHaveCount(0)
+    await expect(chip(page, rotuloB)).toBeVisible()
+  })
+
+  test('duas categorias saem da rota indexável para a busca', async ({ page }) => {
+    await page.goto('/categoria/whey-protein')
+    const outra = grupo(page, 'Categoria').filter({ hasNotText: /whey/i }).first()
+    if ((await outra.count()) === 0) test.skip(true, 'catálogo com uma categoria só')
+
+    await outra.click()
+    /*
+      Uma categoria é uma página com texto próprio; duas são um recorte de
+      busca, que não tem página. Insistir no caminho daria uma URL dizendo
+      "Whey Protein" enquanto lista whey e creatina.
+    */
+    await expect(page).toHaveURL(/^[^?]*\/produtos\?/)
+    await expect(page).toHaveURL(/categoria=[^&]+%2C/)
   })
 })
 
@@ -180,11 +276,7 @@ test.describe('a categoria é a mesma tela, na rota indexável', () => {
 
   test('trocar de categoria continua numa rota de categoria', async ({ page }) => {
     await page.goto('/categoria/whey-protein')
-    const outra = painel(page)
-      .getByRole('listitem')
-      .locator('a[href^="/categoria/"]')
-      .filter({ hasNotText: /whey/i })
-      .first()
+    const outra = grupo(page, 'Categoria').filter({ hasNotText: /whey/i }).first()
 
     if ((await outra.count()) === 0) test.skip(true, 'catálogo com uma categoria só')
     await outra.click()
@@ -213,8 +305,8 @@ test.describe('a categoria é a mesma tela, na rota indexável', () => {
 
   test('filtrar por marca dentro da categoria não sai da rota', async ({ page }) => {
     await page.goto('/categoria/whey-protein')
-    const marca = painel(page).getByRole('listitem').locator('a[href*="marca="]').first()
-    const rotulo = (await marca.locator('span').first().textContent())!.trim()
+    const marca = grupo(page, 'Marca').first()
+    const rotulo = (await marca.innerText()).trim().split('\n')[0]
     await marca.click()
 
     await expect(page).toHaveURL(/\/categoria\/whey-protein\?marca=/)

@@ -63,8 +63,17 @@ export default async function CategoryPage({ params, searchParams }: Props) {
 
     `/categoria/creatina?categoria=whey-protein` seria uma página dizendo
     "Creatina" no título e listando whey. O caminho é o que a URL promete.
+
+    Ela não é a única, porém: com multisseleção, chegar aqui com uma segunda
+    categoria na query é legítimo — é o estado logo antes de o próximo clique
+    mandar a pessoa para a busca. As duas valem, com a do caminho na frente.
   */
-  const filtros = { ...parseFiltros(await searchParams), categoria: cat.slug }
+  const daQuery = parseFiltros(await searchParams)
+  const filtros = {
+    ...daQuery,
+    // A do caminho na frente, e sem repetir se a query também a trouxe.
+    categorias: [cat.slug, ...daQuery.categorias.filter(c => c !== cat.slug)],
+  }
 
   const [catalogo, { lastUpdated }] = await Promise.all([
     getAllProductCards(),

@@ -5,7 +5,9 @@ import { PainelDeFiltros } from '@/components/busca/PainelDeFiltros'
 import { ProductGridCard } from '@/components/category/ProductGridCard'
 import type { CategoryProduct } from '@/lib/categories'
 import {
+  ORDENS,
   ROTA_DA_BUSCA,
+  alternar,
   aplicarFiltros,
   chipsDeFiltro,
   facetasDeCategoria,
@@ -42,11 +44,12 @@ export function TelaDeBusca({
   filtros: Filtros
   catalogo: CategoryProduct[]
   base?: string
-  hrefDaCategoria?: (valor: string | null) => string
+  hrefDaCategoria?: (valor: string) => string
 }) {
   const resultados = ordenar(aplicarFiltros(catalogo, filtros), filtros.ordem)
   const marcas = facetasDeMarca(catalogo, filtros)
   const chips = chipsDeFiltro(filtros, marcas)
+  const tetos = tetosDoCatalogo(catalogo)
 
   return (
     <div className="flex flex-col gap-8 md:flex-row md:gap-10">
@@ -57,9 +60,44 @@ export function TelaDeBusca({
         sabores={facetasDeSabor(catalogo, filtros)}
         base={base}
         hrefDaCategoria={hrefDaCategoria}
+        tetos={tetos}
       />
 
       <div className="min-w-0 flex-1">
+        {/*
+          A ordenação fica no topo da coluna de resultados, à direita, como na
+          maquete 3a — e não no painel lateral, onde estava.
+
+          O lugar diz o que a coisa faz: o painel encolhe a lista, a ordenação
+          reorganiza a mesma lista. Misturar os dois no mesmo bloco faz "Menor
+          R$/dose" parecer mais um recorte.
+        */}
+        {resultados.length > 0 && (
+          <div className="mb-4 flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
+            <span className="font-mono text-[11px] uppercase tracking-[0.1em] text-ink-4">
+              Ordenar por
+            </span>
+            <ul className="flex flex-wrap items-center gap-1">
+              {ORDENS.map(o => (
+                <li key={o.valor}>
+                  <Link
+          prefetch={false}
+                    href={serializarFiltros({ ...filtros, ordem: o.valor }, base)}
+                    aria-current={filtros.ordem === o.valor ? 'true' : undefined}
+                    className={`flex min-h-8 items-center rounded-full border px-3 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${
+                      filtros.ordem === o.valor
+                        ? 'border-brand bg-surface-warm font-semibold text-brand-ink'
+                        : 'border-line-strong bg-surface text-ink-2 hover:border-brand hover:text-brand-strong'
+                    }`}
+                  >
+                    {o.rotulo}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         <ChipsDeFiltro chips={chips} filtros={filtros} />
 
         {resultados.length === 0 ? (
@@ -84,12 +122,14 @@ export function TelaDeBusca({
             </p>
             <div className="flex flex-wrap gap-2">
               <Link
+          prefetch={false}
                 href={ROTA_DA_BUSCA}
                 className="flex min-h-11 items-center rounded-xl bg-brand px-4 text-sm font-semibold text-white transition-colors hover:bg-brand-strong"
               >
                 Limpar filtros
               </Link>
               <Link
+          prefetch={false}
                 href="/comparar"
                 className="flex min-h-11 items-center rounded-xl border border-line-strong px-4 text-sm font-semibold text-ink-2 transition-colors hover:border-brand hover:text-brand-strong"
               >
@@ -138,10 +178,40 @@ export function contarResultados(catalogo: CategoryProduct[], filtros: Filtros):
   return aplicarFiltros(catalogo, filtros).length
 }
 
-/** O link que troca a categoria mantendo a rota indexável de cada uma. */
+/**
+ * O link que marca ou desmarca uma categoria, escolhendo a rota certa.
+ *
+ * Com exatamente uma categoria marcada, o destino é `/categoria/<slug>` — a
+ * URL indexável, com texto próprio. Com nenhuma ou com duas, o caminho não
+ * consegue representar o recorte, e o destino é a busca.
+ *
+ * É a regra que mantém o índice do Google limpo: uma categoria é uma página
+ * com conteúdo; combinação de categorias é resultado de filtro.
+ */
 export function trocarDeCategoria(filtros: Filtros) {
-  return (valor: string | null) =>
-    valor === null
-      ? serializarFiltros({ ...filtros, categoria: null }, ROTA_DA_BUSCA)
-      : serializarFiltros({ ...filtros, categoria: valor }, `/categoria/${valor}`)
+  return (valor: string) => {
+    const categorias = alternar(filtros.categorias, valor)
+    const base = categorias.length === 1 ? `/categoria/${categorias[0]}` : ROTA_DA_BUSCA
+    return serializarFiltros({ ...filtros, categorias }, base)
+  }
+}
+
+/**
+ * Os extremos do catálogo, para os tetos terem escala real.
+ *
+ * Um slider de preço que vai até um número fixo fica sem sentido quando o
+ * catálogo muda: metade da barra vazia, ou o produto mais caro fora do
+ * alcance. Arredonda para cima para o valor máximo ser alcançável.
+ */
+export function tetosDoCatalogo(catalogo: CategoryProduct[]): { preco: number; dose: number } {
+  const precos = catalogo.map(p => p.featuredPrice).filter(v => v > 0)
+  const doses = catalogo
+    .map(p => p.featuredPerDose)
+    .filter((v): v is number => v !== null && v > 0)
+  return {
+    preco: precos.length > 0 ? Math.ceil(Math.max(...precos)) : 1,
+    // Uma casa a mais no arredondamento: doses vivem entre R$ 0,20 e R$ 10, e
+    // arredondar para o inteiro acima jogaria fora metade da escala.
+    dose: doses.length > 0 ? Math.ceil(Math.max(...doses) * 10) / 10 : 1,
+  }
 }

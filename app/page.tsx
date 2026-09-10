@@ -2,6 +2,7 @@ import Link from 'next/link'
 
 import CampoBusca from '@/components/CampoBusca'
 import FaixaDeMarcas from '@/components/home/FaixaDeMarcas'
+import { FaixaDeCaptura } from '@/components/home/FaixaDeCaptura'
 import { BlocoComparador } from '@/components/home/BlocoComparador'
 import { PrateleiraDeCategoria } from '@/components/home/PrateleiraDeCategoria'
 import { PrateleiraDeDescontos } from '@/components/home/PrateleiraDeDescontos'
@@ -144,6 +145,8 @@ export default async function Home() {
       }
 
       <BlocoComparador dados={comparador} />
+
+      <FaixaDeCaptura />
 
       {/*
         A faixa de números saiu daqui.

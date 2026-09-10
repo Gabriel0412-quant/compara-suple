@@ -146,6 +146,14 @@ export type CategoryProduct = {
   servings: number | null
   sizeGrams: number | null
   featuredPerDose: number | null
+  /**
+   * O sabor como o anúncio o escreveu, sem agrupar.
+   *
+   * Vem da variante principal, mesma fonte de `servings` e `sizeGrams`. O
+   * filtro agrupa por família em `lib/sabores.ts`; aqui fica o texto original,
+   * porque é o que o card mostra.
+   */
+  flavor: string | null
 }
 
 type RawVariant = {
@@ -176,6 +184,7 @@ function rowToCard(p: RawProduct): CategoryProduct {
   const primaryVariant = p.variants?.[0]
   const servings = primaryVariant?.servings ?? null
   const sizeGrams = primaryVariant?.size_grams ?? null
+  const flavor = primaryVariant?.flavor ?? null
   const brand = Array.isArray(p.brand) ? p.brand[0] : p.brand
 
   return {
@@ -192,6 +201,7 @@ function rowToCard(p: RawProduct): CategoryProduct {
     lowestOfferId: lowest?.id ?? null,
     servings,
     sizeGrams,
+    flavor,
     featuredPerDose: servings && featured ? featured.price / servings : null,
   }
 }

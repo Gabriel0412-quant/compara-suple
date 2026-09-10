@@ -16,6 +16,7 @@ function card(over: Partial<CategoryProduct> = {}): CategoryProduct {
     name: 'Whey Protein Concentrado A',
     brand: 'Growth',
     thumbnail: null,
+    flavor: null,
     offerCount: 3,
     featuredPrice: 100,
     featuredOriginalPrice: null,

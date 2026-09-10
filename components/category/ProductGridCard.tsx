@@ -3,6 +3,25 @@ import { formatBRL } from '@/lib/products'
 import type { CategoryProduct } from '@/lib/categories'
 import { estadoDoCard } from '@/lib/card'
 
+/**
+ * Altura da caixa da imagem: 378px.
+ *
+ * O número sai de uma proporção, não de um chute. O bloco de informação mede
+ * 252px e é conteúdo, não folga — marca, nome em duas linhas, peso e doses,
+ * preço, R$/dose, "Destaque entre N ofertas", a linha reservada do menor preço
+ * e os dois botões. Para a imagem valer 60% do card, ela precisa ser
+ * `252 / 0.4 × 0.6 = 378`, e o card fecha em 630px.
+ *
+ * Altura fixa, e não `aspect-*`: o card mede 245px na prateleira da home e
+ * ~400px no grid de `/categoria`. Amarrada à largura, a proporção mudaria de
+ * tela para tela; amarrada à altura, os 60% valem nas quatro superfícies,
+ * porque o bloco de informação tem a mesma altura em todas.
+ *
+ * Escrita por extenso e não interpolada: classe do Tailwind montada em tempo
+ * de execução não é gerada e sai sem altura, em silêncio.
+ */
+const ALTURA_DA_IMAGEM = 'h-[378px]'
+
 export function ProductGridCard({
   product,
   superficie = 'lista',
@@ -20,9 +39,16 @@ export function ProductGridCard({
 
   return (
     <article className="flex h-full flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-sm transition-shadow hover:shadow-md">
+      {/*
+        Fundo branco, não creme.
+
+        Quase toda foto de produto do ML já vem recortada em branco, então o
+        creme aparecia como uma moldura em volta de um quadrado branco em vez
+        de fundo. Em branco, a foto encosta no card sem costura visível.
+      */}
       <Link
         href={`/produto/${product.slug}`}
-        className="relative flex h-24 shrink-0 items-center justify-center overflow-hidden bg-surface-muted"
+        className={`relative flex ${ALTURA_DA_IMAGEM} shrink-0 items-center justify-center overflow-hidden bg-surface`}
       >
         {product.thumbnail ? (
           /* eslint-disable-next-line @next/next/no-img-element */
@@ -30,10 +56,12 @@ export function ProductGridCard({
             src={product.thumbnail}
             alt={product.name}
             /*
-              Sem padding na caixa: com `p-2.5` numa caixa de 80px sobravam
-              60px úteis para a foto, pequeno demais para reconhecer a
-              embalagem. A caixa passa a 96px sem respiro interno, o que dá
-              36px a mais de imagem por 16px a mais de card.
+              Sem respiro interno: a caixa já é o respiro. `object-contain`
+              mantém a proporção da foto e centraliza, então embalagem alta e
+              embalagem larga convivem na mesma prateleira sem distorcer.
+
+              As miniaturas do ML medem de 688 a 829px de largura, então a
+              caixa pode crescer sem borrar — foi medido antes de crescer.
             */
             className="h-full w-full object-contain"
           />

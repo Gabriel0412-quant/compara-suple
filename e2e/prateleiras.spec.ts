@@ -229,8 +229,16 @@ test.describe('os cards têm todos o mesmo tamanho', () => {
     correr o olho.
   */
 
-  /** Orçamento de altura, medido em 1440px. Era 562px antes do ajuste. */
-  const ALTURA_MAXIMA = 380
+  /**
+   * Orçamento de altura, medido em 1440px.
+   *
+   * Foi 562px, caiu para 380 no #199 e subiu para 640 no #207, quando a caixa
+   * da imagem passou de 96px para 378 e o card fechou em 630. O orçamento não
+   * é "o card não pode crescer": é "o card não cresce sem alguém decidir". As
+   * duas primeiras vezes ele cresceu por acidente de conteúdo; desta vez foi
+   * escolha, e o número se move junto com a escolha.
+   */
+  const ALTURA_MAXIMA = 640
 
   async function medir(page: import('@playwright/test').Page) {
     return page.evaluate(() => {
@@ -283,23 +291,65 @@ test.describe('os cards têm todos o mesmo tamanho', () => {
     }
   })
 
-  test('a imagem do produto tem área útil de verdade', async ({ page }) => {
+  test('em tela larga o card mede um quinto da prateleira', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 })
     await page.goto('/')
     /*
-      Encolher o card é fácil demais tirando da imagem. Com `p-2.5` numa caixa
-      de 80px sobravam 60px úteis, pequeno para reconhecer a embalagem — que é
-      metade do motivo de o card ter foto.
+      A prateleira mede 1280px e os cards eram fixos em 268: cinco deles mais
+      quatro vãos davam 1396, e o quinto aparecia cortado ao meio. Não era
+      convite a rolar — era um card partido na borda de uma lista que já tem
+      setas para dizer que rola.
+
+      A asserção é sobre a largura, não sobre quantos cards aparecem. O
+      catálogo do fixture tem quatro produtos por prateleira de propósito, e
+      inflá-lo para cinco quebraria as contagens exatas que outros testes
+      afirmam. Medir a regra — largura igual a um quinto do que sobra depois
+      dos quatro vãos — prova a mesma coisa com os produtos que existem.
     */
-    const altura = await page.evaluate(() => {
-      const secao = document.querySelector('section[aria-labelledby="prateleira-whey-protein-titulo"]')
-      const caixa = secao?.querySelector('li article a.relative') as HTMLElement | null
-      if (!caixa) return 0
-      const estilo = getComputedStyle(caixa)
-      const respiro = parseFloat(estilo.paddingTop) + parseFloat(estilo.paddingBottom)
-      return Math.round(caixa.getBoundingClientRect().height - respiro)
+    const m = await page.evaluate(() => {
+      const ul = document.querySelector('ul[id^="prateleira-"]') as HTMLElement | null
+      const li = ul?.querySelector(':scope > li') as HTMLElement | null
+      if (!ul || !li) return null
+      const vao = parseFloat(getComputedStyle(ul).columnGap)
+      return {
+        card: li.getBoundingClientRect().width,
+        esperado: (ul.getBoundingClientRect().width - 4 * vao) / 5,
+      }
     })
-    expect(altura, 'área útil da imagem abaixo de 88px').toBeGreaterThanOrEqual(88)
+
+    expect(m, 'prateleira sem card para medir').not.toBeNull()
+    expect(
+      Math.abs(m!.card - m!.esperado),
+      `card com ${m!.card.toFixed(1)}px; um quinto da prateleira é ${m!.esperado.toFixed(1)}px`,
+    ).toBeLessThanOrEqual(1)
+  })
+
+  test('a imagem fica com a maior parte do card', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    await page.goto('/')
+    /*
+      A guarda é de proporção, não de pixels.
+
+      Ela era "pelo menos 88px de área útil", o que fazia sentido quando a
+      caixa tinha 96px. Com 378, aquele piso virou letra morta: passaria com a
+      imagem em 15% do card. O que se decidiu no #207 foi a divisão — imagem em
+      60%, informação em 40% —, e é a divisão que precisa ser defendida, porque
+      é dela que sai o reconhecimento da embalagem.
+
+      O piso é 55% e não 60% para uma linha a mais de nome não derrubar a
+      suíte. Abaixo disso a decisão foi desfeita, não arredondada.
+    */
+    const proporcao = await page.evaluate(() => {
+      const secao = document.querySelector('section[aria-labelledby="prateleira-whey-protein-titulo"]')
+      const art = secao?.querySelector('li article') as HTMLElement | null
+      const caixa = art?.querySelector('a.relative') as HTMLElement | null
+      if (!art || !caixa) return 0
+      return caixa.getBoundingClientRect().height / art.getBoundingClientRect().height
+    })
+    expect(
+      Math.round(proporcao * 100),
+      'a imagem deixou de ser a maior parte do card',
+    ).toBeGreaterThanOrEqual(55)
   })
 })
 

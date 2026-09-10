@@ -230,6 +230,53 @@ test.describe('as seções sem dado não estão na página', () => {
     await expect(page.locator('main .animate-pulse')).toHaveCount(0)
   })
 
+  test('a faixa de captura e o rodapé leem como uma peça só', async ({ page }) => {
+    /*
+      A faixa nasceu como cartão arredondado, mais estreito e num tom mais
+      claro que o rodapé, com creme aparecendo entre os dois. Lia como dois
+      blocos empilhados.
+
+      As três medidas que fazem a emenda são estas, e nenhuma delas é visível
+      no código de um arquivo só: a cor sai da `FaixaDeCaptura`, o recuo sai
+      dos dois, e o vão só existe quando renderizados juntos. Por isso o teste
+      é aqui e não num unitário.
+    */
+    for (const largura of [1440, 1024, 390]) {
+      await page.setViewportSize({ width: largura, height: 900 })
+      await page.goto('/')
+
+      const medida = await page.evaluate(() => {
+        const faixa = document.querySelector('section[aria-labelledby="faixa-de-captura"]')
+        const rodape = document.querySelector('footer')
+        if (!faixa || !rodape) return null
+        const interno = (e: Element) => e.querySelector(':scope > div')!.getBoundingClientRect()
+        const f = faixa.getBoundingClientRect()
+        return {
+          corFaixa: getComputedStyle(faixa).backgroundColor,
+          corRodape: getComputedStyle(rodape).backgroundColor,
+          larguraFaixa: f.width,
+          larguraRodape: rodape.getBoundingClientRect().width,
+          vao: rodape.getBoundingClientRect().top - (f.top + f.height),
+          esquerdaFaixa: interno(faixa).left,
+          esquerdaRodape: interno(rodape).left,
+          direitaFaixa: interno(faixa).right,
+          direitaRodape: interno(rodape).right,
+        }
+      })
+
+      expect(medida, 'faixa de captura ou rodapé ausente').not.toBeNull()
+      const m = medida!
+      expect(m.corFaixa, `cores diferentes em ${largura}px`).toBe(m.corRodape)
+      expect(m.larguraFaixa, `larguras diferentes em ${largura}px`).toBe(m.larguraRodape)
+      // Vão maior que zero deixa o fundo creme da página aparecer entre as duas.
+      expect(Math.abs(m.vao), `vão de ${m.vao}px em ${largura}px`).toBeLessThanOrEqual(1)
+      // O conteúdo das duas tem que alinhar, senão a emenda aparece mesmo com
+      // a cor igual: a coluna do alerta sairia deslocada da logo.
+      expect(Math.abs(m.esquerdaFaixa - m.esquerdaRodape), `recuo esquerdo em ${largura}px`).toBeLessThanOrEqual(1)
+      expect(Math.abs(m.direitaFaixa - m.direitaRodape), `recuo direito em ${largura}px`).toBeLessThanOrEqual(1)
+    }
+  })
+
   test('os guias aparecem como texto, e nenhum deles é link', async ({ page }) => {
     await page.goto('/')
     /*

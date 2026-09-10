@@ -5,6 +5,7 @@ import {
   ORDENS,
   slugDoProduto,
   aplicarFiltros,
+  buscaPorMarca,
   chipsDeFiltro,
   facetasDeCategoria,
   facetasDeMarca,
@@ -163,6 +164,29 @@ describe('escrita da URL', () => {
     })
     const url = new URL(serializarFiltros(original), 'http://x')
     expect(parseFiltros(Object.fromEntries(url.searchParams))).toEqual(original)
+  })
+})
+
+describe('link para a busca por marca', () => {
+  it('leva ao filtro de marca, e não à busca por texto', () => {
+    /*
+      A faixa de marcas da home e o índice `/marcas` usam esta função em vez de
+      montar a string. Montar à mão dá um segundo lugar para o nome do
+      parâmetro divergir de `parseFiltros`, e componente não é alcançado pela
+      mutação — o serializador é.
+    */
+    expect(buscaPorMarca('growth-supplements')).toBe('/produtos?marca=growth-supplements')
+  })
+
+  it('a ida e volta bate com o que o parser lê', () => {
+    const url = new URL(buscaPorMarca('max-titanium'), 'http://x')
+    expect(parseFiltros(Object.fromEntries(url.searchParams)).marca).toBe('max-titanium')
+  })
+
+  it('não carrega filtro nenhum além da marca', () => {
+    // O cartão promete "produtos desta marca", não "desta marca com o filtro
+    // que estava valendo antes".
+    expect(new URL(buscaPorMarca('growth-supplements'), 'http://x').searchParams.size).toBe(1)
   })
 })
 

@@ -25,7 +25,7 @@ test.describe('a faixa de marcas', () => {
 
     for (let i = 0; i < total; i++) {
       const href = await cartoes.nth(i).getAttribute('href')
-      expect(href, 'cartão sem destino').toMatch(/^\/produtos\?q=/)
+      expect(href, 'cartão sem destino').toMatch(/^\/produtos\?marca=/)
 
       /*
         O cartão identifica a marca de dois jeitos, e os dois contam.
@@ -47,29 +47,50 @@ test.describe('a faixa de marcas', () => {
           : ((await cartoes.nth(i).locator('span').first().textContent()) ?? '').trim()
       expect(nome.length, 'cartão sem nome visível nem no logo nem escrito').toBeGreaterThan(0)
 
-      // O nome tem que ser o da marca daquele destino, e não um rótulo solto:
-      // é o mesmo termo que o href promete filtrar.
-      const termo = decodeURIComponent(new URL(href!, 'http://x').searchParams.get('q') ?? '')
-      expect(nome, `cartão nomeia "${nome}" mas leva a "${termo}"`).toBe(termo)
+      /*
+        O nome tem que ser o da marca daquele destino, e não um rótulo solto.
+
+        A comparação é contra o slug, porque desde o #220 o destino é
+        `?marca=<slug>` e não `?q=<nome>`. O slug do nome exibido tem que ser o
+        slug do link — é o que impede o cartão da Growth de levar ao filtro da
+        Max Titanium.
+      */
+      const slug = new URL(href!, 'http://x').searchParams.get('marca')
+      const doNome = nome
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9\s-]/g, '')
+        .replace(/\s+/g, '-')
+      expect(slug, `cartão nomeia "${nome}" mas leva a "${slug}"`).toBe(doNome)
 
       const resposta = await request.get(href!)
       expect(resposta.status(), `${href} não responde 200`).toBe(200)
     }
   })
 
-  test('o cartão leva à listagem filtrada por aquela marca', async ({ page }) => {
+  test('o cartão leva à listagem já filtrada por aquela marca', async ({ page }) => {
     await page.goto('/')
     const primeiro = page.getByRole('region', { name: FAIXA }).getByRole('listitem').locator('a').first()
-    // O nome esperado sai do próprio href, que é o contrato: o cartão promete
-    // levar à listagem daquela marca, e o campo volta com o mesmo termo.
+    const nome = (await primeiro.locator('img').getAttribute('alt'))!
     const href = await primeiro.getAttribute('href')
-    const termo = decodeURIComponent(new URL(href!, 'http://x').searchParams.get('q') ?? '')
-    expect(termo, 'href sem termo de busca').not.toBe('')
+    expect(new URL(href!, 'http://x').searchParams.get('marca'), 'href sem slug de marca').toBeTruthy()
 
     await primeiro.click()
-    await expect(page).toHaveURL(/\/produtos\?q=/)
-    // O termo volta preenchido no campo, que é o contrato do CampoBusca (#46).
-    await expect(page.getByRole('searchbox').first()).toHaveValue(termo)
+    await expect(page).toHaveURL(/\/produtos\?marca=/)
+    /*
+      O filtro tem que chegar aplicado, e visível.
+
+      Levar à listagem sem o filtro valendo seria pior que não levar: a pessoa
+      clicou numa marca e receberia o catálogo inteiro sem nada dizendo isso.
+      O chip é o que prova as duas coisas.
+    */
+    await expect(
+      page.getByRole('link', { name: new RegExp(`^${nome} .*remover filtro`, 'i') }),
+    ).toBeVisible()
+    const cards = page.getByRole('main').getByRole('article')
+    expect(await cards.count(), 'marca da faixa sem produto na listagem').toBeGreaterThan(0)
   })
 
   test('o caminho para o catálogo inteiro de marcas continua na faixa', async ({ page }) => {

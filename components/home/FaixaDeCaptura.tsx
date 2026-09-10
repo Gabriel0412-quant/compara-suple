@@ -34,15 +34,33 @@ const GUIAS = [
 
 export function FaixaDeCaptura() {
   return (
+    /*
+      A faixa é a parte de cima do rodapé, não um bloco em cima dele.
+
+      Ela nasceu como cartão arredondado, mais estreito e num tom mais claro
+      que o rodapé, com creme aparecendo entre os dois — e lia como duas coisas
+      empilhadas. Para ler como uma só, os três precisam bater: mesma cor de
+      fundo (`surface-darker`, a do rodapé), mesmo recuo lateral (`px-4
+      md:px-10`, o do rodapé) e mesmo container interno (`max-w-7xl`), para as
+      duas colunas alinharem com a logo e a navegação de baixo.
+
+      O que separa as duas metades é um fio (`border-line-dark`), não uma
+      mudança de cor nem de largura.
+
+      Ela continua um `<section>` do `main` da home, e não parte do `<Footer />`,
+      porque o rodapé é do `layout` e aparece nas nove páginas. O campo que não
+      envia está na home por decisão do #213; espalhá-lo pelo site inteiro seria
+      outra decisão, e ninguém tomou.
+    */
     <section
       aria-labelledby="faixa-de-captura"
-      className="px-4 pb-0 pt-8 md:px-10"
+      className="bg-surface-darker px-4 pt-12 text-ink-on-dark md:px-10"
     >
       <h2 id="faixa-de-captura" className="sr-only">
         Alerta de preço e guias
       </h2>
 
-      <div className="mx-auto grid max-w-7xl gap-10 rounded-t-3xl bg-surface-dark px-8 py-12 text-ink-on-dark md:grid-cols-2 md:gap-0 md:px-12">
+      <div className="mx-auto grid max-w-7xl gap-10 border-b border-line-dark pb-10 md:grid-cols-2 md:gap-0">
         <div className="md:pr-12">
           <h3 className="text-2xl font-bold tracking-[-0.02em]">Alerta de preço por e-mail</h3>
           <p className="mt-3 max-w-md text-sm leading-relaxed text-ink-on-dark-3">

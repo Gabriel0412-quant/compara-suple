@@ -72,18 +72,27 @@ test.describe('a faixa de marcas', () => {
     await expect(page.getByRole('searchbox').first()).toHaveValue(termo)
   })
 
-  test('o recorte é explicado, e não promete mais do que mostra', async ({ page }) => {
+  test('o caminho para o catálogo inteiro de marcas continua na faixa', async ({ page }) => {
+    /*
+      Este teste substitui o do texto do recorte, removido no #205.
+
+      A faixa mostra cinco marcas e não diz mais que são "as 5 com mais ofertas
+      ativas". Isso só é honesto porque a saída está do lado: `/marcas` abre
+      declarando a ordem, e é ela que impede as cinco de serem lidas como o
+      catálogo inteiro. Se este link sair, o recorte volta a precisar de
+      legenda — e é isso que o teste protege.
+    */
     await page.goto('/')
     const secao = page.getByRole('region', { name: FAIXA })
-    const texto = await secao.innerText()
-    const cartoes = await secao.getByRole('listitem').count()
+    const paraTodas = secao.getByRole('link', { name: /ver todas as marcas/i })
 
-    expect(texto, 'a faixa não diz por que essas marcas').toMatch(
-      /com mais ofertas ativas|todas as que têm oferta ativa|a única com oferta ativa/,
-    )
+    await expect(paraTodas).toBeVisible()
+    await expect(paraTodas).toHaveAttribute('href', '/marcas')
 
-    const citado = texto.match(/as (\d+) com mais ofertas/)?.[1]
-    if (citado) expect(Number(citado)).toBeLessThanOrEqual(cartoes)
+    await paraTodas.click()
+    await expect(page).toHaveURL(/\/marcas$/)
+    // O critério que saiu da home tem que estar aqui, senão ele sumiu mesmo.
+    await expect(page.getByRole('main')).toContainText(/mais ofertas para a que tem menos/i)
   })
 
   test('não afirma parceria nem uso de logotipo oficial', async ({ page }) => {

@@ -30,11 +30,7 @@ export default async function Home() {
     prateleirasDaHome(),
     comparadorDaHome(),
   ])
-  /*
-    A faixa mostra as cinco primeiras, mas o texto do recorte precisa do total
-    para não afirmar um corte que não houve — dizer "as 5 com mais ofertas"
-    com três marcas no catálogo seria inventar uma seleção.
-  */
+  // A faixa mostra as cinco primeiras; `/marcas` mostra o resto.
   const marcasEmDestaque = marcas.slice(0, 5)
   /*
     `TopOfferCard` e o `topOffers` saíram junto com a coluna direita do hero.
@@ -112,7 +108,7 @@ export default async function Home() {
         </div>
       </section>
 
-      <FaixaDeMarcas marcas={marcasEmDestaque} total={marcas.length} />
+      <FaixaDeMarcas marcas={marcasEmDestaque} />
 
       {/*
         Um bloco por categoria, alternando fundo para separar as faixas sem

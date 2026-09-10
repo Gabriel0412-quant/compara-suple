@@ -1,19 +1,19 @@
 import Link from 'next/link'
-import { Flame, TrendingDown } from 'lucide-react'
 
 import CampoBusca from '@/components/CampoBusca'
 import FaixaDeMarcas from '@/components/home/FaixaDeMarcas'
 import { BlocoComparador } from '@/components/home/BlocoComparador'
 import { PrateleiraDeCategoria } from '@/components/home/PrateleiraDeCategoria'
+import { PrateleiraDeDescontos } from '@/components/home/PrateleiraDeDescontos'
 import { listarMarcas } from '@/lib/brands'
 import { comparadorDaHome } from '@/lib/comparador-home'
-import { fundoDaPrateleira, prateleirasDaHome } from '@/lib/shelves'
 import {
-  getProductsOnSale,
-  listCategoriesWithProducts,
-  type CategoryProduct,
-} from '@/lib/categories'
-import { formatBRL } from '@/lib/products'
+  descontosDaPrateleira,
+  fundoDaCategoria,
+  fundoDaPrateleira,
+  prateleirasDaHome,
+} from '@/lib/shelves'
+import { getProductsOnSale, listCategoriesWithProducts } from '@/lib/categories'
 import { getCatalogStats, formatCount, formatUltimaColeta } from '@/lib/stats'
 
 export const dynamic = 'force-dynamic'
@@ -35,13 +35,16 @@ export default async function Home() {
   /*
     `TopOfferCard` e o `topOffers` saíram junto com a coluna direita do hero.
 
-    Não era perda de informação: `topOffers` era `onSale.slice(0, 2)` e
-    `fallingProducts` é `onSale.slice(0, 6)` — os dois primeiros produtos
-    apareciam duas vezes na mesma página, no hero e na faixa logo abaixo. O
-    card do hero da maquete 1b é outro (maior queda do dia), e nasce no #128
-    com o dado que o sustente.
+    Não era perda de informação: os dois primeiros produtos apareciam duas
+    vezes na mesma página, no hero e na faixa logo abaixo. O card do hero da
+    maquete 1b é outro (maior queda do dia), e nasce no #128 com o dado que o
+    sustente.
+
+    O limite passou de 6 para o mesmo das outras prateleiras: eram seis porque
+    o grid tinha duas fileiras de três. Numa prateleira que rola, o corte não
+    tem por que ser diferente do das categorias.
   */
-  const fallingProducts = onSale.slice(0, 6)
+  const descontos = descontosDaPrateleira(onSale)
 
   return (
     <div className="min-h-screen bg-surface-muted text-ink">
@@ -111,9 +114,17 @@ export default async function Home() {
       <FaixaDeMarcas marcas={marcasEmDestaque} />
 
       {/*
-        Um bloco por categoria, alternando fundo para separar as faixas sem
-        precisar de linha divisória — como na maquete 1b.
+        Prateleiras alternando fundo para separar as faixas sem precisar de
+        linha divisória — como na maquete 1b.
+
+        Os descontos vêm primeiro e ocupam o índice 0 da alternância, então as
+        categorias começam em 1. O deslocamento é o que mantém a alternância
+        íntegra: sem ele, a primeira categoria repetiria o fundo dos descontos
+        e as duas faixas colariam numa só.
       */}
+      <div className={fundoDaPrateleira(0)}>
+        <PrateleiraDeDescontos produtos={descontos} />
+      </div>
       {/*
         Fora da mutação: é laço de renderização, não regra.
 
@@ -126,7 +137,7 @@ export default async function Home() {
       {
         // Stryker disable next-line all
         prateleiras.map((prateleira, i) => (
-          <div key={prateleira.categoria.slug} className={fundoDaPrateleira(i)}>
+          <div key={prateleira.categoria.slug} className={fundoDaCategoria(i)}>
             <PrateleiraDeCategoria prateleira={prateleira} />
           </div>
         ))
@@ -142,181 +153,7 @@ export default async function Home() {
         justamente por isso: o mesmo dado dito duas vezes na mesma dobra não
         informa mais, só ocupa altura antes do conteúdo.
       */}
-      {/* 5. Em queda agora — REDESIGN: fundo claro, cards brancos, alta legibilidade */}
-      <FallingProductsSection products={fallingProducts} />
-
-      {/* 7. Footer */}
       </main>
     </div>
   )
-}
-
-// ---------- Em queda agora — NOVO DESIGN ----------
-// Fundo claro com pulse de "atualizando agora" verde
-// Cards brancos com sombra, alta legibilidade
-
-function FallingProductsSection({ products }: { products: CategoryProduct[] }) {
-  return (
-    <section className="border-y border-line bg-surface px-4 py-14">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
-          <div>
-            {/*
-              O título dizia "Em queda agora", com selo "EM QUEDA" pulsando.
-
-              Isso afirma variação de preço no tempo, e o dado por trás é
-              `original_price` do próprio anúncio: desconto em relação ao preço
-              anunciado, não queda observada entre coletas. É a mesma afirmação
-              que o #128 está bloqueado por não poder sustentar até o EP10
-              (#114) entregar histórico com cobertura — só que já estava no ar.
-
-              O subtítulo sempre foi honesto. O título e o selo passam a
-              nomear o que o dado é. O ponto pulsante saiu junto: ele sugeria
-              tempo real, e a coleta é diária.
-            */}
-            <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-warm px-3 py-1 font-mono text-sm font-semibold uppercase tracking-[0.1em] text-brand-ink sm:text-[11px]">
-              <Flame className="h-3.5 w-3.5" aria-hidden="true" />
-              Desconto
-            </div>
-            <h2 className="flex flex-wrap items-center gap-2 text-3xl font-bold tracking-[-0.03em] text-ink">
-              <TrendingDown className="h-7 w-7 text-brand" aria-hidden="true" />
-              Maiores descontos
-            </h2>
-            <p className="mt-2 text-sm text-ink-3">
-              Produtos com maior desconto em relação ao preço anunciado no Mercado Livre, na
-              última coleta.
-            </p>
-          </div>
-          <Link
-            href="/ofertas"
-            className="flex min-h-11 items-center self-start rounded-lg border border-brand px-4 text-sm font-semibold text-brand-strong transition-colors hover:bg-brand hover:text-white sm:self-auto"
-          >
-            Ver todas as ofertas →
-          </Link>
-        </div>
-
-        {/* Grid */}
-        {products.length === 0 ? (
-          <div className="rounded-2xl border border-line bg-surface-muted p-10 text-center text-sm text-ink-3">
-            Nenhuma promoção rolando agora. Verificamos o ML diariamente — quando rolar desconto, aparece aqui.
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {products.map(p => (
-              <FallingCard key={p.id} product={p} />
-            ))}
-          </div>
-        )}
-      </div>
-    </section>
-  )
-}
-
-export function FallingCard({ product }: { product: CategoryProduct }) {
-  const discount = discountFor(product)
-
-  return (
-    <article
-      className="group flex flex-col overflow-hidden rounded-2xl border border-line bg-surface transition-all hover:border-brand hover:shadow-md"
-    >
-      <Link href={`/produto/${product.slug}`} className="flex gap-3 p-4 items-start">
-        {/* Thumbnail */}
-        <div className="relative flex h-20 w-20 shrink-0 items-center justify-center rounded-lg bg-surface-muted p-1.5">
-          {product.thumbnail ? (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img
-              src={product.thumbnail}
-              alt={product.name}
-              className="max-h-full max-w-full object-contain"
-            />
-          ) : (
-            <span className="text-xs text-ink-4">sem img</span>
-          )}
-        </div>
-
-        {/* Info */}
-        <div className="flex-1 min-w-0">
-          {product.brand && (
-            <p className="truncate font-mono text-sm uppercase tracking-[0.1em] text-ink-3 sm:text-[10px]">
-              {product.brand}
-            </p>
-          )}
-          <h3 className="line-clamp-2 text-base font-bold leading-tight text-ink transition-colors group-hover:text-brand-strong sm:text-sm">
-            {product.name}
-          </h3>
-          {product.featuredPerDose && (
-            <p className="mt-1 text-sm text-ink-3 sm:text-[11px]">
-              {formatBRL(product.featuredPerDose)}/dose
-            </p>
-          )}
-        </div>
-      </Link>
-
-      {/* Footer com preço + desconto, destacado em laranja */}
-      <div className="flex items-end justify-between gap-2 border-t border-line bg-surface-warm px-4 py-3">
-        <FallingCardPrice product={product} discount={discount} />
-        <DiscountBadge percentage={discount?.percentage ?? null} />
-        {product.featuredOfferId && (
-          <a
-            href={`/go/${product.featuredOfferId}?de=home&por=destaque`}
-            target="_blank"
-            rel="noopener noreferrer sponsored"
-            aria-label={`Ver oferta de ${product.name} no Mercado Livre (abre em nova aba)`}
-            className="flex min-h-11 items-center rounded-lg bg-brand px-3 text-sm font-semibold text-white transition-colors hover:bg-brand-strong"
-          >
-            {/*
-              Era "Comprar →", como no ProductGridCard antes do #155 — e este
-              escapou porque é outro componente, e meu teste de lá estava
-              escopado à prateleira. O rótulo sugere que o checkout acontece
-              aqui; a compra é na loja.
-            */}
-            Ir à loja →
-          </a>
-        )}
-      </div>
-    </article>
-  )
-}
-
-type Discount = { originalPrice: number; economy: number; percentage: number }
-
-export function discountFor(product: CategoryProduct): Discount | null {
-  const originalPrice = product.featuredOriginalPrice
-  if (originalPrice == null || originalPrice <= product.featuredPrice) return null
-  return {
-    originalPrice,
-    economy: originalPrice - product.featuredPrice,
-    percentage: Math.round((1 - product.featuredPrice / originalPrice) * 100),
-  }
-}
-
-export function FallingCardPrice({ product, discount }: { product: CategoryProduct; discount: Discount | null }) {
-  return (
-    <div>
-      <div className="flex items-baseline gap-1.5">
-        <span className="font-mono text-xl font-semibold text-ink">{formatBRL(product.featuredPrice)}</span>
-        <FeaturedOriginalPrice price={discount?.originalPrice ?? null} />
-      </div>
-      {discount && (
-        <p className="mt-0.5 font-mono text-sm font-semibold text-brand-strong sm:text-[11px]">
-          Economiza {formatBRL(discount.economy)}
-        </p>
-      )}
-    </div>
-  )
-}
-
-export function DiscountBadge({ percentage }: { percentage: number | null }) {
-  if (percentage === null) return null
-  return (
-    <span className="rounded-lg bg-brand px-2.5 py-1 font-mono text-sm font-semibold text-white shadow-sm">
-      -{percentage}%
-    </span>
-  )
-}
-
-function FeaturedOriginalPrice({ price }: { price: number | null }) {
-  if (price === null) return null
-  return <span className="font-mono text-sm text-ink-4 line-through sm:text-xs">{formatBRL(price)}</span>
 }

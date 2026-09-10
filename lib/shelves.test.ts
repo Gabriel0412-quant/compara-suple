@@ -3,10 +3,12 @@ import { describe, expect, it } from 'vitest'
 import type { CategoryProduct } from './categories'
 import {
   CATEGORIAS_DA_HOME,
+  PRODUTOS_POR_PRATELEIRA,
   compararPorPrecoDestacado,
+  descontosDaPrateleira,
+  fundoDaCategoria,
   fundoDaPrateleira,
   montarPrateleiras,
-  PRODUTOS_POR_PRATELEIRA,
 } from './shelves'
 
 function card(over: Partial<CategoryProduct> = {}): CategoryProduct {
@@ -227,5 +229,51 @@ describe('fundo alternado', () => {
     for (let i = 0; i < 4; i++) {
       expect(fundoDaPrateleira(i)).toMatch(/^bg-[a-z-]+$/)
     }
+  })
+
+  /*
+    A categoria não começa no zero.
+
+    Desde o #211 a prateleira de descontos vem antes, e ocupa o índice 0. Se a
+    primeira categoria recomeçasse do zero, ela repetiria o fundo dos descontos
+    e as duas faixas colariam numa só — que é exatamente o que a alternância
+    existe para evitar.
+  */
+  it('a primeira categoria não repete o fundo da prateleira que vem antes', () => {
+    expect(fundoDaCategoria(0)).not.toBe(fundoDaPrateleira(0))
+  })
+
+  it('as categorias seguem alternando entre si', () => {
+    for (let i = 0; i < 6; i++) {
+      expect(fundoDaCategoria(i)).not.toBe(fundoDaCategoria(i + 1))
+    }
+  })
+})
+
+describe('corte da prateleira de descontos', () => {
+  const lista = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({ id: i }) as unknown as CategoryProduct)
+
+  it('corta no mesmo limite das prateleiras de categoria', () => {
+    expect(descontosDaPrateleira(lista(30))).toHaveLength(PRODUTOS_POR_PRATELEIRA)
+  })
+
+  it('com menos produtos que o limite, devolve todos', () => {
+    // O caso que discrimina: se a função devolvesse sempre `PRODUTOS_POR_
+    // PRATELEIRA` itens, o teste acima passaria e este não.
+    expect(descontosDaPrateleira(lista(3))).toHaveLength(3)
+  })
+
+  it('preserva a ordem que veio, que é a do desconto', () => {
+    // `getProductsOnSale` já ordena; reordenar aqui desfaria o critério em
+    // silêncio, e a prateleira mostraria "maiores descontos" fora de ordem.
+    const entrada = lista(5)
+    expect(descontosDaPrateleira(entrada)).toEqual(entrada)
+  })
+
+  it('não altera o array recebido', () => {
+    const entrada = lista(30)
+    descontosDaPrateleira(entrada)
+    expect(entrada).toHaveLength(30)
   })
 })

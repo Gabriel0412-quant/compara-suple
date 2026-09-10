@@ -122,14 +122,25 @@ describe('atalhos de categoria da home', () => {
 
 describe('saídas de compra nas superfícies públicas', () => {
   it('a home, o comparador e a tabela de ofertas preservam a superfície no /go', () => {
-    const home = readFileSync(resolve(process.cwd(), 'app/page.tsx'), 'utf8')
+    /*
+      A home deixou de montar o link ela mesma no #211.
+
+      Ela tinha um card próprio na seção de descontos, com o `/go/` escrito à
+      mão e `de=home` cravado na string. Agora as duas prateleiras usam o
+      `ProductGridCard`, então a superfície viaja como prop e o link é montado
+      num lugar só. O que este teste guarda continua sendo o mesmo — que
+      nenhuma superfície perca a atribuição no caminho —, mas passa a olhar
+      para os dois pontos que hoje a sustentam: quem declara a superfície e
+      quem a escreve na URL.
+    */
+    const prateleira = readFileSync(resolve(process.cwd(), 'components/home/Prateleira.tsx'), 'utf8')
+    const card = readFileSync(resolve(process.cwd(), 'components/category/ProductGridCard.tsx'), 'utf8')
     const comparador = readFileSync(resolve(process.cwd(), 'app/comparar/page.tsx'), 'utf8')
     const ofertas = readFileSync(resolve(process.cwd(), 'components/product/OffersSection.tsx'), 'utf8')
 
-    expect(home).toContain('href={`/go/${product.featuredOfferId}?de=home&por=destaque`}')
-    expect(home).toContain(
-      'aria-label={`Ver oferta de ${product.name} no Mercado Livre (abre em nova aba)`}',
-    )
+    expect(prateleira).toContain('superficie="home"')
+    expect(card).toContain('href={`/go/${product.featuredOfferId}?de=${superficie}&por=destaque`}')
+    expect(card).toContain('href={`/go/${product.lowestOfferId}?de=${superficie}&por=menor_preco`}')
     expect(comparador).toContain('superficie="comparador"')
     expect(ofertas).toContain('href={`/go/${loja.offerId}?de=${superficie}&por=${isCheapest ? \'menor_preco\' : \'destaque\'}`}')
   })

@@ -163,3 +163,64 @@ test.describe('sem JavaScript', () => {
     await expect(chip(page, 'Whey Protein')).toBeVisible()
   })
 })
+
+test.describe('a categoria é a mesma tela, na rota indexável', () => {
+  test('o chip de categoria da home cai na tela de busca, já filtrado', async ({ page }) => {
+    await page.goto('/')
+    const atalho = page.getByRole('main').locator('a[href^="/categoria/"]').first()
+    const nome = (await atalho.innerText()).trim()
+    await atalho.click()
+
+    await expect(page).toHaveURL(/\/categoria\//)
+    // A prova de que é a mesma tela: o painel de filtros da busca está aqui.
+    await expect(painel(page)).toBeVisible()
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(new RegExp(nome, 'i'))
+    expect(await cards(page).count()).toBeGreaterThan(0)
+  })
+
+  test('trocar de categoria continua numa rota de categoria', async ({ page }) => {
+    await page.goto('/categoria/whey-protein')
+    const outra = painel(page)
+      .getByRole('listitem')
+      .locator('a[href^="/categoria/"]')
+      .filter({ hasNotText: /whey/i })
+      .first()
+
+    if ((await outra.count()) === 0) test.skip(true, 'catálogo com uma categoria só')
+    await outra.click()
+    /*
+      O grupo de categoria leva a `/categoria/<slug>`, não a `?categoria=`.
+
+      As duas mostrariam a mesma tela, mas só a primeira é indexável — e é ela
+      que a malha de links do #113 segue. Trocar por parâmetro tiraria do
+      índice as únicas listagens com texto próprio.
+    */
+    await expect(page).toHaveURL(/\/categoria\/[a-z-]+$/)
+  })
+
+  test('a rota de categoria é indexável, e a busca filtrada não', async ({ page }) => {
+    await page.goto('/categoria/whey-protein')
+    /*
+      É o motivo de a rota existir em vez de redirecionar para
+      `/produtos?categoria=`. Se este par se inverter, o site perde do índice as
+      páginas de listagem com conteúdo próprio.
+    */
+    await expect(page.locator('meta[name="robots"][content*="noindex"]')).toHaveCount(0)
+
+    await page.goto('/produtos?categoria=whey-protein')
+    await expect(page.locator('meta[name="robots"][content*="noindex"]')).toHaveCount(1)
+  })
+
+  test('filtrar por marca dentro da categoria não sai da rota', async ({ page }) => {
+    await page.goto('/categoria/whey-protein')
+    const marca = painel(page).getByRole('listitem').locator('a[href*="marca="]').first()
+    const rotulo = (await marca.locator('span').first().textContent())!.trim()
+    await marca.click()
+
+    await expect(page).toHaveURL(/\/categoria\/whey-protein\?marca=/)
+    // A categoria não vira parâmetro: ela já está no caminho, e repetir daria
+    // duas URLs para a mesma página.
+    await expect(page).not.toHaveURL(/categoria=/)
+    await expect(chip(page, rotulo)).toBeVisible()
+  })
+})

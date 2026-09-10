@@ -66,7 +66,6 @@ const AGUARDANDO_REDESENHO: { arquivo: string; issue: string }[] = [
   { arquivo: 'app/produto/[slug]/not-found.tsx', issue: '#163' },
   { arquivo: 'components/product/OffersSection.tsx', issue: '#163' },
   { arquivo: 'app/comparar/page.tsx', issue: '#165' },
-  { arquivo: 'app/categoria/[slug]/page.tsx', issue: '#167' },
   { arquivo: 'app/categoria/[slug]/not-found.tsx', issue: '#167' },
   { arquivo: 'app/ofertas/page.tsx', issue: '#169' },
   { arquivo: 'components/ComoComparamos.tsx', issue: '#163' },

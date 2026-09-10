@@ -20,6 +20,12 @@ import { SABORES, familiaDoSabor, saborPorValor } from './sabores'
  * que permite testar as regras sem subir Postgres.
  */
 
+/** Onde a busca livre mora. */
+export const ROTA_DA_BUSCA = '/produtos'
+
+/** Prefixo da versão indexável da mesma tela, com uma categoria fixa. */
+export const ROTA_DA_CATEGORIA = '/categoria/'
+
 export type Ordem = 'relevancia' | 'dose' | 'preco'
 
 export const ORDENS: { valor: Ordem; rotulo: string }[] = [
@@ -126,10 +132,20 @@ export function parseFiltros(params: Params): Filtros {
  * relevancia`. Uma URL curta é a que a pessoa compartilha e a que aparece
  * inteira na barra.
  */
-export function serializarFiltros(filtros: Filtros): string {
+export function serializarFiltros(filtros: Filtros, base = ROTA_DA_BUSCA): string {
   const p = new URLSearchParams()
   if (filtros.termo) p.set('q', filtros.termo)
-  if (filtros.categoria) p.set('categoria', filtros.categoria)
+  /*
+    Em `/categoria/<slug>` a categoria está no caminho, não na query.
+
+    Repeti-la daria `/categoria/whey-protein?categoria=whey-protein`, que é a
+    mesma página com duas URLs — e duas URLs para a mesma coisa é exatamente o
+    que aquela rota existe para evitar, já que ela é a versão indexável desta
+    tela.
+  */
+  if (filtros.categoria && !base.startsWith(ROTA_DA_CATEGORIA)) {
+    p.set('categoria', filtros.categoria)
+  }
   if (filtros.marca) p.set('marca', filtros.marca)
   if (filtros.sabor) p.set('sabor', filtros.sabor)
   if (filtros.soPromocao) p.set('promocao', '1')
@@ -137,7 +153,7 @@ export function serializarFiltros(filtros: Filtros): string {
   if (filtros.dosePrecoMax !== null) p.set('dose_max', String(filtros.dosePrecoMax))
   if (filtros.ordem !== 'relevancia') p.set('ordem', filtros.ordem)
   const query = p.toString()
-  return query === '' ? '/produtos' : `/produtos?${query}`
+  return query === '' ? base : `${base}?${query}`
 }
 
 /**

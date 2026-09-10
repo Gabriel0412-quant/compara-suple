@@ -2,6 +2,7 @@ import Link from 'next/link'
 
 import {
   ORDENS,
+  ROTA_DA_BUSCA,
   serializarFiltros,
   type Faceta,
   type Filtros,
@@ -86,20 +87,32 @@ export function PainelDeFiltros({
   categorias,
   marcas,
   sabores,
+  base = ROTA_DA_BUSCA,
+  hrefDaCategoria,
 }: {
   filtros: Filtros
   categorias: Faceta[]
   marcas: Faceta[]
   sabores: Faceta[]
+  /** Rota a que os links voltam. Em `/categoria/<slug>`, é ela mesma. */
+  base?: string
+  /**
+   * Como o grupo de categoria monta o link, quando a categoria não é um
+   * parâmetro e sim a rota. Ausente, ela é tratada como filtro comum.
+   */
+  hrefDaCategoria?: (valor: string | null) => string
 }) {
-  const comFiltro = (mudanca: Partial<Filtros>) => serializarFiltros({ ...filtros, ...mudanca })
+  const comFiltro = (mudanca: Partial<Filtros>) =>
+    serializarFiltros({ ...filtros, ...mudanca }, base)
+  const paraCategoria =
+    hrefDaCategoria ?? ((valor: string | null) => comFiltro({ categoria: valor }))
 
   return (
     <aside aria-label="Filtros" className="w-full shrink-0 md:w-64">
       <div className="mb-2 flex items-center justify-between gap-2">
         <h2 className="font-mono text-xs uppercase tracking-[0.12em] text-ink-4">Filtros</h2>
         <Link
-          href={serializarFiltros({ ...filtros, ...LIMPO })}
+          href={serializarFiltros({ ...filtros, ...LIMPO }, ROTA_DA_BUSCA)}
           className="rounded-md text-xs font-semibold text-brand-strong hover:text-brand-deep focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
         >
           Limpar
@@ -138,7 +151,7 @@ export function PainelDeFiltros({
                 key={c.valor}
                 faceta={c}
                 ativa={filtros.categoria === c.valor}
-                href={comFiltro({ categoria: filtros.categoria === c.valor ? null : c.valor })}
+                href={paraCategoria(filtros.categoria === c.valor ? null : c.valor)}
               />
             ))}
           </ul>
@@ -187,9 +200,15 @@ export function PainelDeFiltros({
         reescreve a query inteira: sem eles, filtrar por preço apagaria a
         categoria escolhida.
       */}
-      <form action="/produtos" method="get" className="border-b border-line py-4">
+      <form action={base} method="get" className="border-b border-line py-4">
         {filtros.termo && <input type="hidden" name="q" value={filtros.termo} />}
-        {filtros.categoria && <input type="hidden" name="categoria" value={filtros.categoria} />}
+        {/*
+          A categoria só viaja em `hidden` quando é parâmetro. Na rota de
+          categoria ela está no caminho, e repeti-la aqui duplicaria a URL.
+        */}
+        {filtros.categoria && base === ROTA_DA_BUSCA && (
+          <input type="hidden" name="categoria" value={filtros.categoria} />
+        )}
         {filtros.marca && <input type="hidden" name="marca" value={filtros.marca} />}
         {filtros.sabor && <input type="hidden" name="sabor" value={filtros.sabor} />}
         {filtros.soPromocao && <input type="hidden" name="promocao" value="1" />}
@@ -262,6 +281,10 @@ export function PainelDeFiltros({
  *
  * Ordenar não é filtrar — limpar os filtros e devolver a lista para
  * "relevância" tiraria da pessoa uma escolha que ela não pediu para desfazer.
+ *
+ * Limpar sempre volta para `/produtos`, inclusive na rota de categoria: a
+ * categoria é um filtro como os outros do ponto de vista de quem clica em
+ * "Limpar", e mantê-la seria limpar pela metade.
  */
 const LIMPO: Partial<Filtros> = {
   termo: '',

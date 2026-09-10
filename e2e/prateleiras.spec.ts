@@ -232,13 +232,13 @@ test.describe('os cards têm todos o mesmo tamanho', () => {
   /**
    * Orçamento de altura, medido em 1440px.
    *
-   * Foi 562px, caiu para 380 no #199 e subiu para 640 no #207, quando a caixa
-   * da imagem passou de 96px para 378 e o card fechou em 630. O orçamento não
-   * é "o card não pode crescer": é "o card não cresce sem alguém decidir". As
-   * duas primeiras vezes ele cresceu por acidente de conteúdo; desta vez foi
-   * escolha, e o número se move junto com a escolha.
+   * Foi 562px, caiu para 380 no #199, subiu para 640 no #207 quando a imagem
+   * passou a 378px, e voltou para 460 no #209, que cortou 30% da altura do
+   * card. O orçamento não é "o card não pode crescer": é "o card não cresce
+   * sem alguém decidir". Nas duas primeiras vezes ele cresceu por acidente de
+   * conteúdo; nas duas últimas foi escolha, e o número se moveu junto.
    */
-  const ALTURA_MAXIMA = 640
+  const ALTURA_MAXIMA = 460
 
   async function medir(page: import('@playwright/test').Page) {
     return page.evaluate(() => {
@@ -336,8 +336,11 @@ test.describe('os cards têm todos o mesmo tamanho', () => {
       60%, informação em 40% —, e é a divisão que precisa ser defendida, porque
       é dela que sai o reconhecimento da embalagem.
 
-      O piso é 55% e não 60% para uma linha a mais de nome não derrubar a
-      suíte. Abaixo disso a decisão foi desfeita, não arredondada.
+      O piso acompanha a decisão: era 55% quando a imagem valia 60%, e passa a
+      40% no #209, que cortou a altura do card em 30% e deixou a imagem em 43%.
+      Continua sendo um piso e não o alvo — a folga existe para uma linha a
+      mais de nome não derrubar a suíte. Abaixo dele a imagem voltou a ser
+      detalhe do card, que é o estado que o #207 saiu de.
     */
     const proporcao = await page.evaluate(() => {
       const secao = document.querySelector('section[aria-labelledby="prateleira-whey-protein-titulo"]')
@@ -348,8 +351,8 @@ test.describe('os cards têm todos o mesmo tamanho', () => {
     })
     expect(
       Math.round(proporcao * 100),
-      'a imagem deixou de ser a maior parte do card',
-    ).toBeGreaterThanOrEqual(55)
+      'a imagem voltou a ser detalhe do card',
+    ).toBeGreaterThanOrEqual(40)
   })
 })
 

@@ -4,23 +4,32 @@ import type { CategoryProduct } from '@/lib/categories'
 import { estadoDoCard } from '@/lib/card'
 
 /**
- * Altura da caixa da imagem: 378px.
+ * Altura da caixa da imagem: 189px.
  *
- * O número sai de uma proporção, não de um chute. O bloco de informação mede
- * 252px e é conteúdo, não folga — marca, nome em duas linhas, peso e doses,
- * preço, R$/dose, "Destaque entre N ofertas", a linha reservada do menor preço
- * e os dois botões. Para a imagem valer 60% do card, ela precisa ser
- * `252 / 0.4 × 0.6 = 378`, e o card fecha em 630px.
+ * O #207 pôs a imagem em 60% do card, o que levou o card a 630px — alto
+ * demais na tela. Este número corta 30% da altura total: 630 vira 443.
+ *
+ * O corte inteiro sai da imagem porque não há de onde mais tirar. O bloco de
+ * informação mede 252px e é quase todo conteúdo: 12 de respiro, 14 de marca,
+ * 40 de nome em duas linhas, 16 de peso e doses, 28 de preço, 16 de R$/dose,
+ * 16 de "Destaque entre N ofertas", 24 reservados para a linha do menor preço,
+ * 44 de botão e 12 de respiro. Medido no navegador, não estimado. Encolher
+ * qualquer um deles é apagar informação ou desalinhar preço entre cards, que
+ * foi o que o #199 consertou.
+ *
+ * Com isso a imagem fica em 43% do card, contra os 27% de antes do #207 e os
+ * 60% que ele tinha alcançado. É o meio-termo entre "reconhecer a embalagem"
+ * e "a prateleira não comer a dobra inteira".
  *
  * Altura fixa, e não `aspect-*`: o card mede 245px na prateleira da home e
  * ~400px no grid de `/categoria`. Amarrada à largura, a proporção mudaria de
- * tela para tela; amarrada à altura, os 60% valem nas quatro superfícies,
- * porque o bloco de informação tem a mesma altura em todas.
+ * tela para tela; amarrada à altura, ela vale nas quatro superfícies, porque o
+ * bloco de informação tem a mesma altura em todas.
  *
  * Escrita por extenso e não interpolada: classe do Tailwind montada em tempo
  * de execução não é gerada e sai sem altura, em silêncio.
  */
-const ALTURA_DA_IMAGEM = 'h-[378px]'
+const ALTURA_DA_IMAGEM = 'h-[189px]'
 
 export function ProductGridCard({
   product,

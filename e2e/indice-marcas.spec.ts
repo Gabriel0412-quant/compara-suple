@@ -46,7 +46,7 @@ test.describe('rota /marcas', () => {
 
     for (let i = 0; i < (await links.count()); i++) {
       const href = await links.nth(i).getAttribute('href')
-      expect(href, 'linha sem destino').toMatch(/^\/produtos\?q=/)
+      expect(href, 'linha sem destino').toMatch(/^\/produtos\?marca=/)
       const resposta = await request.get(href!)
       expect(resposta.status(), `${href} não responde 200`).toBe(200)
     }
@@ -54,14 +54,34 @@ test.describe('rota /marcas', () => {
 
   test('o filtro leva à listagem daquela marca, com resultado', async ({ page }) => {
     await page.goto('/marcas')
-    const primeiro = page.getByRole('main').getByRole('listitem').locator('a').first()
+    const linha = page.getByRole('main').getByRole('listitem').first()
+    const nome = (await linha.locator('a > span > span').first().textContent())!.trim()
+    const primeiro = linha.locator('a')
     const href = await primeiro.getAttribute('href')
-    const termo = decodeURIComponent(new URL(href!, 'http://x').searchParams.get('q') ?? '')
+    const slug = new URL(href!, 'http://x').searchParams.get('marca')
+    expect(slug, 'href sem slug de marca').toBeTruthy()
 
     await primeiro.click()
-    await expect(page).toHaveURL(/\/produtos\?q=/)
-    await expect(page.getByRole('searchbox').first()).toHaveValue(termo)
-    // Marca listada aqui tem oferta ativa, então a busca não pode voltar vazia.
+    await expect(page).toHaveURL(/\/produtos\?marca=/)
+    /*
+      O que confirma o filtro é o chip, não o campo de busca.
+
+      Até o #220 o link era `?q=<nome da marca>` e o termo voltava no
+      `searchbox`. Agora é filtro de verdade: o campo fica vazio e quem declara
+      o recorte é o chip, com o nome como o banco o escreve.
+    */
+    await expect(page.getByText('Filtros ativos')).toBeVisible()
+    /*
+      Localiza o chip pelo nome acessível inteiro, não só pela marca.
+
+      O nome da marca aparece em dois links da página: o chip e a opção no
+      painel lateral. O `— remover filtro` é `sr-only` justamente para dar ao
+      chip um nome acessível que diz o que ele faz, e é ele que desambigua.
+    */
+    await expect(
+      page.getByRole('link', { name: new RegExp(`^${nome} .*remover filtro`, 'i') }),
+    ).toBeVisible()
+    // Marca listada aqui tem oferta ativa, então a listagem não pode voltar vazia.
     await expect(page.getByRole('main').getByRole('article').first()).toBeVisible()
   })
 

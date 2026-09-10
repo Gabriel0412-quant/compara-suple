@@ -59,7 +59,9 @@ test.describe('home → resultados de busca', () => {
     await expect(page.locator('article')).toHaveCount(0)
     await expect(page.getByText(/nenhum produto para/i)).toBeVisible()
 
-    await page.getByRole('link', { name: /limpar busca/i }).click()
+    // "Limpar busca" virou "Limpar filtros" no #220: o estado vazio passou a
+    // cobrir busca e filtros, e o botão limpa os dois.
+    await page.getByRole('link', { name: /limpar filtros/i }).click()
     await expect(page).toHaveURL(/\/produtos$/)
     await expect(page.locator('article')).toHaveCount(TOTAIS.produtosCompraveis)
   })

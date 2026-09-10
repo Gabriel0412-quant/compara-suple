@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { Breadcrumb } from '@/components/Breadcrumb'
 import { CLASSE_DO_TOM, iniciaisDaMarca } from '@/components/brand/tons'
 import { listarMarcas, tomDaMarca, type Marca } from '@/lib/brands'
+import { buscaPorMarca } from '@/lib/filtros'
 import { formatCount, formatUltimaColeta, getCatalogStats } from '@/lib/stats'
 
 export const dynamic = 'force-dynamic'
@@ -39,9 +40,9 @@ function LinhaDaMarca({ marca, maximo }: { marca: Marca; maximo: number }) {
   return (
     <li>
       <Link
-        // A busca já filtra por marca (#46), então este destino existe hoje e
-        // responde 200 mesmo para marca com um produto só.
-        href={`/produtos?q=${encodeURIComponent(marca.nome)}`}
+        // Filtro de marca, não busca por texto — mesma troca do #220 feita na
+        // faixa da home. O slug é o que `parseFiltros` lê.
+        href={buscaPorMarca(marca.slug)}
         className="group flex items-center gap-4 rounded-xl border border-line bg-surface p-4 transition-colors hover:border-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
       >
         <span

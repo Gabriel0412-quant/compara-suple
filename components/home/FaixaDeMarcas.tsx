@@ -2,6 +2,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 
 import { logoDaMarca } from '@/lib/brand-logos'
+import { buscaPorMarca } from '@/lib/filtros'
 import { type Marca } from '@/lib/brands'
 
 /**
@@ -130,9 +131,16 @@ export default function FaixaDeMarcas({
           {marcas.map(marca => (
             <li key={marca.slug}>
               <Link
-                // A busca já filtra por marca (#46), então este destino existe
-                // hoje. O índice `/marcas` é o #153, e o link para ele entra lá.
-                href={`/produtos?q=${encodeURIComponent(marca.nome)}`}
+                /*
+                  Filtro de marca, não busca por texto.
+
+                  Era `?q=Growth Supplements`, que dependia de o nome da marca
+                  aparecer no nome do produto para casar. Desde o #220 existe
+                  filtro de verdade, e `?marca=` é o mesmo slug que
+                  `parseFiltros` lê — então o cartão leva à busca já filtrada,
+                  com o chip da marca visível e removível.
+                */
+                href={buscaPorMarca(marca.slug)}
                 className="group flex h-[72px] items-center justify-center rounded-xl border border-line-strong bg-surface-muted px-4 transition-colors hover:border-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
               >
                 <ConteudoDoCartao marca={marca} />

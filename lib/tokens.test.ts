@@ -61,7 +61,6 @@ const EXCECOES: { arquivo: string; valores: string[]; porque: string }[] = [
  * acrescentada — arquivo novo já nasce nos tokens.
  */
 const AGUARDANDO_REDESENHO: { arquivo: string; issue: string }[] = [
-  { arquivo: 'app/produtos/page.tsx', issue: '#161' },
   { arquivo: 'app/produto/[slug]/page.tsx', issue: '#163' },
   { arquivo: 'app/produto/[slug]/loading.tsx', issue: '#163' },
   { arquivo: 'app/produto/[slug]/not-found.tsx', issue: '#163' },

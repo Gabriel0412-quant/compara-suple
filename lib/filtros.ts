@@ -92,6 +92,20 @@ export function parseFiltros(params: Params): Filtros {
   return {
     termo: primeiro(params.q),
     categoria: getCategoryBySlug(categoria) ? categoria : null,
+    /*
+      A marca não é validada, e a categoria é. A assimetria é deliberada.
+
+      Categoria é lista fechada e estática: um slug fora dela é link velho ou
+      erro de digitação, e ignorá-lo devolve o catálogo em vez de uma tela
+      vazia que parece bug.
+
+      Marca vem do catálogo e muda a cada coleta. Não há lista para validar
+      contra — e, mais importante, "marca sem nenhum produto" é uma resposta
+      verdadeira: a marca existia e saiu do ar, ou combina com outro filtro que
+      a zera. Ignorar o filtro nesse caso mostraria o catálogo inteiro para
+      quem pediu uma marca, o que é pior que mostrar zero com o chip na tela
+      dizendo o que foi pedido.
+    */
     marca: marca === '' ? null : slugDaMarca(marca),
     // Mesma regra da categoria: família desconhecida vira ausência, não
     // resultado vazio.
@@ -124,6 +138,19 @@ export function serializarFiltros(filtros: Filtros): string {
   if (filtros.ordem !== 'relevancia') p.set('ordem', filtros.ordem)
   const query = p.toString()
   return query === '' ? '/produtos' : `/produtos?${query}`
+}
+
+/**
+ * O link da busca já filtrada por uma marca.
+ *
+ * Existe para ninguém montar `/produtos?marca=...` à mão. A URL é contrato
+ * entre quem escreve e `parseFiltros`, que lê — e um segundo lugar montando a
+ * string é um segundo lugar para o nome do parâmetro divergir. É também o que
+ * mantém o link coberto: a faixa da home e o índice `/marcas` são componentes
+ * que a mutação não alcança, e o serializador é.
+ */
+export function buscaPorMarca(slug: string): string {
+  return serializarFiltros({ ...FILTROS_VAZIOS, marca: slug })
 }
 
 /** O produto está em promoção quando o preço anunciado sustenta o desconto. */

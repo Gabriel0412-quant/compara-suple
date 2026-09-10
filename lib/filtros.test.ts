@@ -5,6 +5,7 @@ import {
   ORDENS,
   slugDoProduto,
   aplicarFiltros,
+  ROTA_DA_BUSCA,
   buscaPorMarca,
   chipsDeFiltro,
   facetasDeCategoria,
@@ -149,6 +150,34 @@ describe('escrita da URL', () => {
   it('omite tudo que está no padrão', () => {
     expect(serializarFiltros(FILTROS_VAZIOS)).toBe('/produtos')
     expect(serializarFiltros(f({ ordem: 'relevancia' }))).toBe('/produtos')
+  })
+
+  it('a base decide a rota, e a categoria sai da query quando está no caminho', () => {
+    const filtros = f({ categoria: 'whey-protein', marca: 'max-titanium' })
+
+    // Na busca livre, a categoria é mais um parâmetro.
+    expect(serializarFiltros(filtros)).toBe(
+      '/produtos?categoria=whey-protein&marca=max-titanium',
+    )
+
+    /*
+      Na rota de categoria, ela já está no caminho. Repetir daria
+      `/categoria/whey-protein?categoria=whey-protein` — a mesma página com
+      duas URLs, que é o que aquela rota existe para evitar por ser a versão
+      indexável desta tela.
+    */
+    expect(serializarFiltros(filtros, '/categoria/whey-protein')).toBe(
+      '/categoria/whey-protein?marca=max-titanium',
+    )
+  })
+
+  it('sem filtro nenhum, devolve a base limpa', () => {
+    expect(serializarFiltros(FILTROS_VAZIOS)).toBe(ROTA_DA_BUSCA)
+    expect(serializarFiltros(FILTROS_VAZIOS, '/categoria/creatina')).toBe('/categoria/creatina')
+    // Só a categoria, na rota dela, não deixa query nenhuma para trás.
+    expect(serializarFiltros(f({ categoria: 'creatina' }), '/categoria/creatina')).toBe(
+      '/categoria/creatina',
+    )
   })
 
   it('ida e volta preserva o estado', () => {

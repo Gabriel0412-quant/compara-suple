@@ -132,6 +132,42 @@ export function fundoDaPrateleira(indice: number): string {
   return indice % 2 === 0 ? 'bg-surface-muted' : 'bg-surface'
 }
 
+/**
+ * Quantas prateleiras vêm antes das categorias na home.
+ *
+ * Hoje é uma: a de maiores descontos, que o #211 pôs no topo. O número existe
+ * para a alternância de fundo não recomeçar do zero na primeira categoria —
+ * se recomeçasse, ela repetiria o fundo dos descontos e as duas faixas
+ * colariam numa só, que é justamente o que a alternância evita.
+ */
+export const PRATELEIRAS_ANTES_DAS_CATEGORIAS = 1
+
+/**
+ * O fundo da n-ésima prateleira de categoria, já deslocado.
+ *
+ * Mora aqui, e não na página, pelo mesmo motivo de `fundoDaPrateleira`: é a
+ * decisão que dá para errar. Na página ela seria uma soma solta dentro de um
+ * `.map()` que a mutação não alcança, porque nenhum teste unitário renderiza a
+ * home.
+ */
+export function fundoDaCategoria(indice: number): string {
+  return fundoDaPrateleira(indice + PRATELEIRAS_ANTES_DAS_CATEGORIAS)
+}
+
+/**
+ * Os produtos que entram na prateleira de maiores descontos.
+ *
+ * Recebe a lista já ordenada por `getProductsOnSale` e só aplica o corte. Eram
+ * seis porque o grid antigo tinha duas fileiras de três; numa prateleira que
+ * rola, o corte não tem por que ser diferente do das categorias.
+ */
+export function descontosDaPrateleira(
+  produtos: CategoryProduct[],
+  limite = PRODUTOS_POR_PRATELEIRA,
+): CategoryProduct[] {
+  return produtos.slice(0, limite)
+}
+
 export async function prateleirasDaHome(): Promise<Prateleira[]> {
   return montarPrateleiras(await getAllProductCards())
 }

@@ -9,9 +9,14 @@ import { expect, test } from '@playwright/test'
  * e o teclado funcionam.
  */
 
-const PRIMEIRA = 'Whey Protein'
+/*
+  A primeira prateleira da home passou a ser "Maiores descontos" no #211, então
+  esta constante nomeia a de categoria, não a primeira da página.
+*/
+const CATEGORIA = 'Whey Protein'
+const DESCONTOS = 'Maiores descontos'
 
-function prateleira(page: import('@playwright/test').Page, nome = PRIMEIRA) {
+function prateleira(page: import('@playwright/test').Page, nome = CATEGORIA) {
   return page.getByRole('region', { name: nome })
 }
 
@@ -422,5 +427,66 @@ test.describe('setas de navegação da prateleira', () => {
     // A fixture tem quatro whey, que cabem em 1440px. Seta sem função não
     // entra na tela — é a mesma regra do "Entrar" removido do header.
     await expect(setas(page)).toHaveCount(0)
+  })
+})
+
+test.describe('a prateleira de maiores descontos', () => {
+  test('é a primeira da home, acima das categorias', async ({ page }) => {
+    await page.goto('/')
+    /*
+      A posição foi pedida, então é ela que o teste guarda — e não a existência,
+      que `home.spec.ts` já cobre. Comparar o topo das duas seções é o que
+      sobrevive a mudança de fundo, de espaçamento e de quantas categorias
+      existem.
+    */
+    const descontos = await prateleira(page, DESCONTOS).boundingBox()
+    const categoria = await prateleira(page, CATEGORIA).boundingBox()
+
+    expect(descontos, 'prateleira de descontos ausente').not.toBeNull()
+    expect(categoria, 'prateleira de categoria ausente').not.toBeNull()
+    expect(
+      descontos!.y,
+      `descontos em y=${descontos!.y}, ${CATEGORIA} em y=${categoria!.y}`,
+    ).toBeLessThan(categoria!.y)
+  })
+
+  test('é a mesma prateleira das categorias, com os mesmos cards', async ({ page }) => {
+    await page.goto('/')
+    const secao = prateleira(page, DESCONTOS)
+    await expect(secao).toBeVisible()
+
+    /*
+      O bloco antigo era um grid de cards próprios — outro card, outro preço,
+      outro botão. "Igual ao bloco de Whey Protein" quer dizer o mesmo
+      componente, e o que prova isso é a estrutura: lista rolável de cards com
+      os dois botões do `ProductGridCard`.
+    */
+    const cards = secao.getByRole('listitem')
+    expect(await cards.count(), 'prateleira de descontos sem card').toBeGreaterThan(0)
+    await expect(cards.first().getByRole('link', { name: /comparar/i })).toBeVisible()
+    await expect(cards.first().getByRole('link', { name: /ir à loja/i })).toBeVisible()
+
+    const lista = secao.getByRole('list')
+    expect(
+      await lista.evaluate(el => getComputedStyle(el).overflowX),
+      'a lista de descontos não rola como as outras',
+    ).toBe('auto')
+  })
+
+  test('declara de onde o desconto sai, e leva às ofertas', async ({ page, request }) => {
+    await page.goto('/')
+    const secao = prateleira(page, DESCONTOS)
+
+    /*
+      Sem a legenda, "Maiores descontos" volta a ser uma afirmação sem origem —
+      foi por isso que "Em queda agora" caiu. O desconto é contra o preço
+      anunciado do próprio anúncio, não contra preço observado no tempo.
+    */
+    await expect(secao).toContainText(/preço anunciado no Mercado Livre/i)
+
+    const verTodas = secao.getByRole('link', { name: /ver todas as ofertas/i })
+    const href = await verTodas.getAttribute('href')
+    expect(href).toBe('/ofertas')
+    expect((await request.get(href!)).status()).toBe(200)
   })
 })

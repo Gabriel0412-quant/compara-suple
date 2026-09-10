@@ -25,7 +25,7 @@ const config = {
   testRunner: 'vitest',
   plugins: ['@stryker-mutator/vitest-runner'],
   vitest: { configFile: 'vitest.config.ts' },
-  mutate: ['lib/brands.ts', 'lib/brand-logos.ts', 'lib/filtros.ts', 'lib/card.ts', 'lib/comparador-home.ts', 'lib/shelves.ts', 'lib/affiliate.ts', 'lib/ml/offer-url.ts', 'lib/ml/affiliate-links.ts', 'lib/ml/affiliate-links-cli.ts', 'scripts/ml-affiliate-links.ts', ...ingestRanges, ...routeRanges, ...eventosRanges, ...homeRanges, ...comparadorRanges, ...offersSectionRanges, ...faixaMarcasRanges],
+  mutate: ['lib/brands.ts', 'lib/brand-logos.ts', 'lib/filtros.ts', 'lib/sabores.ts', 'lib/card.ts', 'lib/comparador-home.ts', 'lib/shelves.ts', 'lib/affiliate.ts', 'lib/ml/offer-url.ts', 'lib/ml/affiliate-links.ts', 'lib/ml/affiliate-links-cli.ts', 'scripts/ml-affiliate-links.ts', ...ingestRanges, ...routeRanges, ...eventosRanges, ...homeRanges, ...comparadorRanges, ...offersSectionRanges, ...faixaMarcasRanges],
   concurrency: 2,
   reporters: ['clear-text', 'json', 'html'],
   jsonReporter: { fileName: 'coverage/mutation/mutation.json' },

@@ -5,6 +5,7 @@ import {
   getCategoryBySlug,
   type CategoryProduct,
 } from './categories'
+import { SABORES, familiaDoSabor, saborPorValor } from './sabores'
 
 /**
  * O estado de filtro da página de busca, e as regras que operam sobre ele.
@@ -40,6 +41,8 @@ export type Filtros = {
   categoria: string | null
   /** Slug da marca, ou `null`. */
   marca: string | null
+  /** Valor da família de sabor (`lib/sabores.ts`), ou `null`. */
+  sabor: string | null
   soPromocao: boolean
   /** Teto de preço da oferta destacada, em reais. */
   precoMax: number | null
@@ -52,6 +55,7 @@ export const FILTROS_VAZIOS: Filtros = {
   termo: '',
   categoria: null,
   marca: null,
+  sabor: null,
   soPromocao: false,
   precoMax: null,
   dosePrecoMax: null,
@@ -82,12 +86,16 @@ function numeroPositivo(valor: string): number | null {
 export function parseFiltros(params: Params): Filtros {
   const categoria = primeiro(params.categoria)
   const marca = primeiro(params.marca)
+  const sabor = primeiro(params.sabor)
   const ordem = primeiro(params.ordem) as Ordem
 
   return {
     termo: primeiro(params.q),
     categoria: getCategoryBySlug(categoria) ? categoria : null,
     marca: marca === '' ? null : slugDaMarca(marca),
+    // Mesma regra da categoria: família desconhecida vira ausência, não
+    // resultado vazio.
+    sabor: saborPorValor(sabor) ? sabor : null,
     // Só `1` liga. Assim `?promocao=0` e `?promocao=` desligam, em vez de
     // ligarem por serem "presentes".
     soPromocao: primeiro(params.promocao) === '1',
@@ -109,6 +117,7 @@ export function serializarFiltros(filtros: Filtros): string {
   if (filtros.termo) p.set('q', filtros.termo)
   if (filtros.categoria) p.set('categoria', filtros.categoria)
   if (filtros.marca) p.set('marca', filtros.marca)
+  if (filtros.sabor) p.set('sabor', filtros.sabor)
   if (filtros.soPromocao) p.set('promocao', '1')
   if (filtros.precoMax !== null) p.set('preco_max', String(filtros.precoMax))
   if (filtros.dosePrecoMax !== null) p.set('dose_max', String(filtros.dosePrecoMax))
@@ -154,6 +163,16 @@ const REGRAS = {
     f.categoria === null || categoriaDoProduto(p.name)?.slug === f.categoria,
   marca: (p: CategoryProduct, f: Filtros) =>
     f.marca === null || slugDoProduto(p) === f.marca,
+  /*
+    O sabor casa por família, não por string.
+
+    "Milkshake de chocolate" entra no filtro de Chocolate, e "Natural" e
+    "Neutro" entram em "Sem sabor". Produto cujo sabor não cai em família
+    nenhuma some quando alguém filtra — mesmo tratamento da dose ausente: não
+    dá para afirmar que é chocolate quem o catálogo não diz que é.
+  */
+  sabor: (p: CategoryProduct, f: Filtros) =>
+    f.sabor === null || familiaDoSabor(p.flavor)?.valor === f.sabor,
   promocao: (p: CategoryProduct, f: Filtros) => !f.soPromocao || temPromocao(p),
   preco: (p: CategoryProduct, f: Filtros) =>
     f.precoMax === null || p.featuredPrice <= f.precoMax,
@@ -233,6 +252,29 @@ export function facetasDeCategoria(
   return [...contagem.values()].sort((a, b) => b.n - a.n || a.rotulo.localeCompare(b.rotulo, 'pt-BR'))
 }
 
+/**
+ * Mesma regra das outras facetas, para sabor.
+ *
+ * A ordem aqui é a de `SABORES` e não a da contagem: sabor é uma lista curta e
+ * estável, e alguém que já sabe onde "Chocolate" fica não deve perdê-lo de
+ * lugar porque a coleta mudou o número. Categoria e marca ordenam por
+ * contagem porque são listas que crescem.
+ */
+export function facetasDeSabor(produtos: CategoryProduct[], filtros: Filtros): Faceta[] {
+  const base = aplicarFiltros(produtos, filtros, 'sabor')
+  const contagem = new Map<string, number>()
+  for (const p of base) {
+    const familia = familiaDoSabor(p.flavor)
+    if (!familia) continue
+    contagem.set(familia.valor, (contagem.get(familia.valor) ?? 0) + 1)
+  }
+  return SABORES.filter(s => contagem.has(s.valor)).map(s => ({
+    valor: s.valor,
+    rotulo: s.rotulo,
+    n: contagem.get(s.valor)!,
+  }))
+}
+
 /** Mesma regra da categoria, para marca. */
 export function facetasDeMarca(produtos: CategoryProduct[], filtros: Filtros): Faceta[] {
   const base = aplicarFiltros(produtos, filtros, 'marca')
@@ -271,6 +313,9 @@ export function chipsDeFiltro(filtros: Filtros, marcas: Faceta[]): ChipDeFiltro[
     const marca = marcas.find(m => m.valor === filtros.marca)
     chips.push({ rotulo: marca?.rotulo ?? filtros.marca, href: sem({ marca: null }) })
   }
+  if (filtros.sabor) {
+    chips.push({ rotulo: saborPorValor(filtros.sabor)?.rotulo ?? filtros.sabor, href: sem({ sabor: null }) })
+  }
   if (filtros.soPromocao) chips.push({ rotulo: 'Só em promoção', href: sem({ soPromocao: false }) })
   if (filtros.precoMax !== null) {
     chips.push({ rotulo: `Até R$ ${filtros.precoMax}`, href: sem({ precoMax: null }) })
@@ -290,6 +335,7 @@ export function semFiltro(filtros: Filtros): boolean {
     filtros.termo === '' &&
     filtros.categoria === null &&
     filtros.marca === null &&
+    filtros.sabor === null &&
     !filtros.soPromocao &&
     filtros.precoMax === null &&
     filtros.dosePrecoMax === null

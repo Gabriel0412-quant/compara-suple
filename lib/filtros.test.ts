@@ -8,6 +8,7 @@ import {
   chipsDeFiltro,
   facetasDeCategoria,
   facetasDeMarca,
+  facetasDeSabor,
   ordenar,
   parseFiltros,
   semFiltro,
@@ -34,6 +35,7 @@ function produto(over: Partial<CategoryProduct> = {}): CategoryProduct {
     name: 'Whey Protein Concentrado',
     brand: 'Growth Supplements',
     thumbnail: null,
+    flavor: null,
     offerCount: 3,
     featuredPrice: 100,
     featuredOriginalPrice: null,
@@ -56,6 +58,7 @@ describe('leitura da URL', () => {
         q: 'whey',
         categoria: 'creatina',
         marca: 'Growth Supplements',
+        sabor: 'chocolate',
         promocao: '1',
         preco_max: '150',
         dose_max: '2,5',
@@ -65,11 +68,17 @@ describe('leitura da URL', () => {
       termo: 'whey',
       categoria: 'creatina',
       marca: 'growth-supplements',
+      sabor: 'chocolate',
       soPromocao: true,
       precoMax: 150,
       dosePrecoMax: 2.5,
       ordem: 'dose',
     })
+  })
+
+  it('família de sabor desconhecida vira ausência', () => {
+    expect(parseFiltros({ sabor: 'tutti-frutti' }).sabor).toBeNull()
+    expect(parseFiltros({ sabor: 'chocolate' }).sabor).toBe('chocolate')
   })
 
   it('categoria desconhecida vira ausência, não resultado vazio', () => {
@@ -146,6 +155,7 @@ describe('escrita da URL', () => {
       termo: 'whey',
       categoria: 'creatina',
       marca: 'max-titanium',
+      sabor: 'morango',
       soPromocao: true,
       precoMax: 150,
       dosePrecoMax: 2.5,
@@ -221,6 +231,46 @@ describe('cada filtro', () => {
   it('promoção exige preço anterior, e ausência não é promoção', () => {
     expect(temPromocao(produto({ featuredOriginalPrice: null }))).toBe(false)
     expect(temPromocao(produto({ featuredPrice: 100, featuredOriginalPrice: 150 }))).toBe(true)
+  })
+
+  /*
+    O caso que separa "casa por família" de "casa por string".
+
+    "Milkshake de chocolate" e "Chocolate" são dois textos diferentes vindos de
+    dois anúncios. Um filtro que comparasse string devolveria só um deles, e a
+    pessoa que clicou em "Chocolate (2)" veria um produto.
+  */
+  it('sabor casa por família, não pelo texto do anúncio', () => {
+    const comSabor = [
+      produto({ name: 'Whey A', flavor: 'Chocolate' }),
+      produto({ name: 'Whey B', flavor: 'Milkshake de chocolate' }),
+      produto({ name: 'Whey C', flavor: 'Morango' }),
+      produto({ name: 'Creatina D', flavor: 'Sem sabor' }),
+      produto({ name: 'Creatina E', flavor: 'Natural' }),
+    ]
+    expect(nomes(aplicarFiltros(comSabor, f({ sabor: 'chocolate' })))).toEqual(['Whey A', 'Whey B'])
+    expect(nomes(aplicarFiltros(comSabor, f({ sabor: 'sem-sabor' })))).toEqual([
+      'Creatina D',
+      'Creatina E',
+    ])
+  })
+
+  it('sabor fora de qualquer família some quando alguém filtra', () => {
+    // Não dá para afirmar que é chocolate quem o catálogo não diz que é. Sem
+    // filtro de sabor ativo, ele continua aparecendo.
+    const exotico = [produto({ name: 'Whey Tutti-frutti', flavor: 'Tutti-frutti' })]
+    expect(nomes(aplicarFiltros(exotico, f()))).toEqual(['Whey Tutti-frutti'])
+    expect(aplicarFiltros(exotico, f({ sabor: 'chocolate' }))).toEqual([])
+  })
+
+  it('produto sem sabor informado não é "sem sabor"', () => {
+    /*
+      `flavor: null` é ausência de dado; "Sem sabor" é uma afirmação do
+      anúncio. Confundir os dois colocaria no filtro de "Sem sabor" todo
+      produto cujo sabor ninguém preencheu.
+    */
+    const semDado = [produto({ name: 'Sem dado', flavor: null })]
+    expect(aplicarFiltros(semDado, f({ sabor: 'sem-sabor' }))).toEqual([])
   })
 
   it('os filtros se acumulam', () => {
@@ -412,6 +462,50 @@ describe('contagem das facetas', () => {
     expect(facetasDeCategoria(soltos, f())).toEqual([])
   })
 
+  it('o sabor conta por família, somando os rótulos que dizem a mesma coisa', () => {
+    const comSabor = [
+      produto({ name: 'Whey A', flavor: 'Chocolate' }),
+      produto({ name: 'Whey B', flavor: 'Milkshake de chocolate' }),
+      produto({ name: 'Creatina C', flavor: 'Natural' }),
+      produto({ name: 'Creatina D', flavor: 'Neutro' }),
+      produto({ name: 'Creatina E', flavor: 'Sem sabor' }),
+      produto({ name: 'Whey F', flavor: 'Tutti-frutti' }),
+      produto({ name: 'Whey G', flavor: null }),
+    ]
+    /*
+      Cinco produtos em duas famílias, e dois de fora: o exótico e o sem dado.
+      Sem o agrupamento, isto seria uma lista de cinco linhas com n = 1.
+
+      A ordem é a de `SABORES`, não a da contagem — "Sem sabor" tem 3 e vem
+      depois de "Chocolate", que tem 2, porque sabor é lista curta e estável e
+      quem já sabe onde uma opção fica não deve perdê-la de lugar a cada coleta.
+    */
+    expect(facetasDeSabor(comSabor, f())).toEqual([
+      { valor: 'sem-sabor', rotulo: 'Sem sabor', n: 3 },
+      { valor: 'chocolate', rotulo: 'Chocolate', n: 2 },
+    ])
+  })
+
+  it('o sabor não conta a si mesmo, mas conta os outros filtros', () => {
+    const comSabor = [
+      produto({ name: 'Whey A', flavor: 'Chocolate', brand: 'Growth Supplements' }),
+      produto({ name: 'Whey B', flavor: 'Morango', brand: 'Growth Supplements' }),
+      produto({ name: 'Whey C', flavor: 'Morango', brand: 'Max Titanium' }),
+    ]
+    expect(
+      facetasDeSabor(comSabor, f({ sabor: 'chocolate', marca: 'growth-supplements' })),
+    ).toEqual([
+      { valor: 'chocolate', rotulo: 'Chocolate', n: 1 },
+      { valor: 'morango', rotulo: 'Morango', n: 1 },
+    ])
+  })
+
+  it('família sem nenhum produto não aparece na lista', () => {
+    // Opção que devolve zero é convite a um clique que esvazia a tela.
+    const so = [produto({ flavor: 'Chocolate' })]
+    expect(facetasDeSabor(so, f()).map(s => s.valor)).toEqual(['chocolate'])
+  })
+
   it('a maior contagem vem primeiro, com desempate por nome', () => {
     const empate = [
       produto({ name: 'Whey A', brand: 'Zebra' }),
@@ -426,6 +520,7 @@ describe('chips de filtro ativo', () => {
     termo: 'whey',
     categoria: 'creatina',
     marca: 'max-titanium',
+    sabor: 'chocolate',
     soPromocao: true,
     precoMax: 150,
     dosePrecoMax: 2.5,
@@ -443,6 +538,7 @@ describe('chips de filtro ativo', () => {
     ['q', '"whey"'],
     ['categoria', 'Creatina'],
     ['marca', 'max-titanium'],
+    ['sabor', 'Chocolate'],
     ['promocao', 'Só em promoção'],
     ['preco_max', 'Até R$ 150'],
     ['dose_max', 'Até R$ 2.5/dose'],
@@ -491,6 +587,7 @@ describe('chips de filtro ativo', () => {
       f({
         termo: 'whey',
         categoria: 'creatina',
+        sabor: 'chocolate',
         soPromocao: true,
         precoMax: 150,
         dosePrecoMax: 2.5,
@@ -500,10 +597,15 @@ describe('chips de filtro ativo', () => {
     expect(chips.map(c => c.rotulo)).toEqual([
       '"whey"',
       'Creatina',
+      'Chocolate',
       'Só em promoção',
       'Até R$ 150',
       'Até R$ 2.5/dose',
     ])
+  })
+
+  it('sabor sem rótulo conhecido cai no valor em vez de sumir', () => {
+    expect(chipsDeFiltro(f({ sabor: 'inventado' }), [])[0].rotulo).toBe('inventado')
   })
 
   it('categoria sem rótulo conhecido cai no slug em vez de sumir', () => {
@@ -527,6 +629,7 @@ describe('chips de filtro ativo', () => {
     ['termo', { termo: 'whey' }],
     ['categoria', { categoria: 'creatina' }],
     ['marca', { marca: 'max-titanium' }],
+    ['sabor', { sabor: 'chocolate' }],
     ['promoção', { soPromocao: true }],
     ['preço', { precoMax: 150 }],
     ['dose', { dosePrecoMax: 2.5 }],

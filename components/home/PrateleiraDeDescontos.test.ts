@@ -24,6 +24,7 @@ const produto: CategoryProduct = {
   name: 'Whey 54',
   brand: 'Growth',
   thumbnail: null,
+  flavor: null,
   offerCount: 2,
   featuredPrice: 90,
   featuredOriginalPrice: 120,

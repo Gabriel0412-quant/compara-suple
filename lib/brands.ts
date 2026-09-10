@@ -37,8 +37,12 @@ export type Marca = {
  * Max Titanium, o azul da Integralmédica. Reproduzir identidade visual de
  * terceiro num cartão que não é o logo insinua uma relação institucional que
  * não existe: não somos revendedores nem parceiros dessas marcas, só listamos
- * preço de anúncios. Então os cartões usam tons da própria casa, e a marca
- * aparece pelo nome.
+ * preço de anúncios. Então o monograma usa tons da própria casa.
+ *
+ * O #203 não revogou isso. Ele trocou o cartão da home pelo logo de verdade,
+ * que é uso nominativo e identifica a marca — o oposto de um cartão nosso
+ * vestido com a cor dela. Estes tons ficaram para o índice `/marcas`, onde o
+ * que aparece é a inicial da marca, e continuam sem imitar cor de terceiro.
  *
  * São nomes de token, não valores — o arquivo de cor continua sendo
  * `app/globals.css`, e `lib/tokens.test.ts` continua valendo.

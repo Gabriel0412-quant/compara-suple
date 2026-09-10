@@ -3,9 +3,9 @@ import { expect, test } from '@playwright/test'
 /**
  * A faixa de marcas, no HTML que o visitante recebe.
  *
- * O que se cobre aqui e não no vitest: que os cartões existem com o nome real,
- * que cada um leva a uma listagem que responde, e que nada na tela afirma
- * parceria com as marcas listadas.
+ * O que se cobre aqui e não no vitest: que os cartões existem identificando a
+ * marca real — por logo ou por nome escrito —, que cada um leva a uma listagem
+ * que responde, e que nada na tela afirma parceria com as marcas listadas.
  */
 
 const FAIXA = 'Marcas acompanhadas'
@@ -28,15 +28,29 @@ test.describe('a faixa de marcas', () => {
       expect(href, 'cartão sem destino').toMatch(/^\/produtos\?q=/)
 
       /*
-        O nome visível vem do primeiro `span`, não de `innerText()` do link.
+        O cartão identifica a marca de dois jeitos, e os dois contam.
 
-        `innerText` traz duas coisas que atrapalham: aplica o
-        `text-transform: uppercase` do CSS, devolvendo "GROWTH SUPPLEMENTS"
-        onde o dado é "Growth Supplements"; e inclui o `sr-only` com as
-        contagens, que é texto para leitor de tela, não rótulo do cartão.
+        Com logo, quem nomeia a marca é o `alt` da imagem — é o que o leitor de
+        tela lê e o que aparece se a imagem não carregar. Sem logo, é o `span`
+        do nome escrito.
+
+        E o nome escrito se lê por `textContent`, não por `innerText`.
+        `innerText` aplica o `text-transform: uppercase` do CSS e devolve
+        "BLACK SKULL" onde o dado é "Black Skull" — o que passaria despercebido
+        enquanto o teste só conferisse que o nome não é vazio, e falha assim que
+        ele passa a exigir o nome certo.
       */
-      const nome = (await cartoes.nth(i).locator('span').first().innerText()).trim()
-      expect(nome.length, 'cartão sem nome visível').toBeGreaterThan(0)
+      const logo = cartoes.nth(i).locator('img')
+      const nome =
+        (await logo.count()) > 0
+          ? ((await logo.getAttribute('alt')) ?? '')
+          : ((await cartoes.nth(i).locator('span').first().textContent()) ?? '').trim()
+      expect(nome.length, 'cartão sem nome visível nem no logo nem escrito').toBeGreaterThan(0)
+
+      // O nome tem que ser o da marca daquele destino, e não um rótulo solto:
+      // é o mesmo termo que o href promete filtrar.
+      const termo = decodeURIComponent(new URL(href!, 'http://x').searchParams.get('q') ?? '')
+      expect(nome, `cartão nomeia "${nome}" mas leva a "${termo}"`).toBe(termo)
 
       const resposta = await request.get(href!)
       expect(resposta.status(), `${href} não responde 200`).toBe(200)

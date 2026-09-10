@@ -77,11 +77,19 @@ test.describe('rota /marcas', () => {
     const contagens = (await primeiraLinha.innerText()).match(/(\d+) produtos?[^\d]+(\d+) ofertas?/)
 
     await page.goto('/')
+    /*
+      Localiza pelo nome acessível, não pelo texto do cartão.
+
+      Desde que a faixa passou a mostrar logo, o nome da marca não é mais texto
+      na tela: ele está no `alt` da imagem. `hasText` não enxerga `alt` e
+      encontraria zero cartões — em silêncio, porque `toHaveAccessibleName`
+      falharia depois por outro motivo. O nome acessível do link é
+      "<marca> — N produtos, M ofertas ativas" nos dois tipos de cartão.
+    */
+    const escapado = nome.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     const naFaixa = page
       .getByRole('region', { name: 'Marcas acompanhadas' })
-      .getByRole('listitem')
-      .filter({ hasText: new RegExp(nome, 'i') })
-      .locator('a')
+      .getByRole('link', { name: new RegExp(`^${escapado}\\b`, 'i') })
 
     await expect(naFaixa).toHaveAccessibleName(
       new RegExp(`${contagens![1]} produtos?, ${contagens![2]} ofertas?`),

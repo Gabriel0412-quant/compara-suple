@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-import FaixaDeMarcas, { descreverCorte } from './FaixaDeMarcas'
+import FaixaDeMarcas, { ConteudoDoCartao, descreverCorte } from './FaixaDeMarcas'
 import type { Marca } from '@/lib/brands'
 import { removerComentarios } from '@/lib/claims'
 
@@ -75,5 +75,55 @@ describe('estado vazio', () => {
     for (const proibido of [/em breve/i, /nenhuma marca/i, /skeleton/i, /placeholder/i]) {
       expect(fonte, `${proibido} não deveria aparecer na faixa`).not.toMatch(proibido)
     }
+  })
+})
+
+describe('conteúdo do cartão', () => {
+  const comLogo: Marca = {
+    nome: 'Growth Supplements',
+    slug: 'growth-supplements',
+    produtos: 4,
+    ofertas: 31,
+    tom: 0,
+  }
+  const semLogo: Marca = { nome: 'Dark Lab', slug: 'dark-lab', produtos: 1, ofertas: 2, tom: 0 }
+
+  /*
+    O elemento devolvido basta, como no caso do estado vazio: `type` e `props`
+    dizem qual dos dois caminhos correu, sem precisar de DOM.
+
+    O par não é decorativo. As duas marcas são reais e estão no mesmo catálogo:
+    a Growth tem logo no manifesto, a Dark Lab não. Se o fallback sumisse, só o
+    segundo caso acusaria — e é justamente ele que a home vai exercer sozinha
+    quando a próxima coleta mudar o ranking das cinco.
+  */
+
+  it('marca com logo vira imagem, com o nome no texto alternativo', () => {
+    const elemento = ConteudoDoCartao({ marca: comLogo })
+    expect(elemento.props).toMatchObject({
+      alt: 'Growth Supplements',
+      src: '/marcas/growth-supplements.png',
+    })
+  })
+
+  it('marca sem logo mostra o nome escrito, e não um cartão vazio', () => {
+    const elemento = ConteudoDoCartao({ marca: semLogo })
+    expect(elemento.props.children).toBe('Dark Lab')
+  })
+
+  it('a correção ótica da marca chega à altura exibida', () => {
+    // A Integralmédica é a única com `escala`, e é a prova de que o número do
+    // manifesto não fica parado lá: 36 × 1,45, arredondado.
+    const integral: Marca = {
+      nome: 'Integralmédica',
+      slug: 'integralmedica',
+      produtos: 3,
+      ofertas: 12,
+      tom: 0,
+    }
+    const semEscala = ConteudoDoCartao({ marca: comLogo }).props.style.maxHeight
+    const comEscala = ConteudoDoCartao({ marca: integral }).props.style.maxHeight
+    expect(semEscala).toBe('36px')
+    expect(comEscala).toBe('52px')
   })
 })

@@ -10,9 +10,10 @@ import type { TomDeMarca } from '@/lib/brands'
  * não é gerada. O elemento sai transparente, sem erro de build nem de tipo — o
  * que já aconteceu neste próprio arquivo antes de ele existir.
  *
- * Fica separado porque a faixa da home (#152) e o índice `/marcas` (#153)
- * precisam do mesmo mapa. Duas cópias significariam dois lugares para o
- * desenho divergir.
+ * Nasceu separado porque a faixa da home (#152) e o índice `/marcas` (#153)
+ * usavam o mesmo mapa. Desde o #203 a faixa mostra o logo da marca, então quem
+ * ainda pinta por tom é só o `/marcas` — o arquivo continua separado porque é
+ * onde a decisão de cor do #151 está escrita, não por causa do segundo uso.
  *
  * O `Record` completo é o que garante que nenhum tom fique de fora: acrescentar
  * uma entrada em `TONS_DE_MARCA` sem mapeá-la aqui não compila.

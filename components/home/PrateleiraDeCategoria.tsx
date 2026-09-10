@@ -62,7 +62,23 @@ export function PrateleiraDeCategoria({ prateleira }: { prateleira: Prateleira }
           className="-mx-4 flex snap-x snap-mandatory gap-3.5 overflow-x-auto scroll-smooth px-4 pb-2 md:mx-0 md:px-0"
         >
           {produtos.map(produto => (
-            <li key={produto.id} className="w-[248px] shrink-0 snap-start sm:w-[268px]">
+            /*
+              Largura fixa até `xl`, e a partir dali exatamente cinco.
+
+              A prateleira mede 1280px em tela larga (`max-w-7xl`), e cinco
+              cards de 268 com quatro vãos de 14 dão 1396 — o quinto entrava
+              pela metade. `calc((100% - 3.5rem) / 5)` divide a largura real
+              da lista pelos cinco, descontando os quatro vãos, então o corte
+              acontece no lugar certo em qualquer tela dessa faixa.
+
+              Abaixo de `xl` continua fixo de propósito: dividir por cinco num
+              container de 944px daria cards de 178px. Ali o card cortado na
+              borda é o que avisa que a lista rola.
+            */
+            <li
+              key={produto.id}
+              className="w-[248px] shrink-0 snap-start sm:w-[268px] xl:w-[calc((100%_-_3.5rem)/5)]"
+            >
               <ProductGridCard product={produto} superficie="home" />
             </li>
           ))}

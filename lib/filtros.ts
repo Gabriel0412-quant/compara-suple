@@ -43,12 +43,20 @@ export const ORDENS: { valor: Ordem; rotulo: string }[] = [
 
 export type Filtros = {
   termo: string
-  /** Slug da categoria, ou `null`. */
-  categoria: string | null
-  /** Slug da marca, ou `null`. */
-  marca: string | null
-  /** Valor da família de sabor (`lib/sabores.ts`), ou `null`. */
-  sabor: string | null
+  /*
+    Categoria, marca e sabor são listas, não valores.
+
+    A primeira versão aceitava um de cada, e isso não é um filtro: é uma
+    escolha. Quem compara whey quase sempre quer duas ou três marcas lado a
+    lado — "Growth ou Max Titanium", não "Growth, e se não, recomeço". Lista
+    vazia quer dizer "todas", que é o mesmo que não filtrar.
+  */
+  /** Slugs de categoria. Vazio quer dizer todas. */
+  categorias: string[]
+  /** Slugs de marca. Vazio quer dizer todas. */
+  marcas: string[]
+  /** Valores de família de sabor (`lib/sabores.ts`). Vazio quer dizer todos. */
+  sabores: string[]
   soPromocao: boolean
   /** Teto de preço da oferta destacada, em reais. */
   precoMax: number | null
@@ -59,9 +67,9 @@ export type Filtros = {
 
 export const FILTROS_VAZIOS: Filtros = {
   termo: '',
-  categoria: null,
-  marca: null,
-  sabor: null,
+  categorias: [],
+  marcas: [],
+  sabores: [],
   soPromocao: false,
   precoMax: null,
   dosePrecoMax: null,
@@ -73,6 +81,52 @@ type Params = Record<string, string | string[] | undefined>
 /** Primeiro valor de um parâmetro que o Next pode entregar repetido. */
 function primeiro(valor: string | string[] | undefined): string {
   return (Array.isArray(valor) ? valor[0] : valor)?.trim() ?? ''
+}
+
+/** Separador da lista na URL. */
+const SEPARADOR = ','
+
+/**
+ * Todos os valores de um filtro de lista, limpos e sem repetição.
+ *
+ * A lista vai numa chave só, separada por vírgula: `?marca=growth,max`.
+ *
+ * A forma canônica seria repetir a chave — `?marca=growth&marca=max` — e foi
+ * assim na primeira versão. Ela quebra: com a chave repetida, o roteador do
+ * Next troca a URL e **não** re-renderiza a página. Medido — o chip continuava
+ * na tela dez segundos depois do clique, e só a recarga corrigia. A requisição
+ * RSC saía e a resposta não era aplicada.
+ *
+ * A vírgula é segura como separador porque todo valor daqui é slug: `slugDaMarca`
+ * só deixa passar `a-z`, `0-9` e hífen, e os slugs de categoria e de família de
+ * sabor são escritos à mão no código. Nenhum deles pode conter vírgula.
+ *
+ * Aceita a forma repetida na leitura de propósito: link velho continua
+ * funcionando, e é barato.
+ *
+ * Só apara e tira repetição. Não descarta o vazio porque não precisa: quem
+ * chama já valida — categoria contra a lista fechada, sabor contra as
+ * famílias, marca contra o resultado do slug. Um `filter` aqui seria linha
+ * morta, e a mutação a apontaria como tal.
+ *
+ * O `trim` é que faz trabalho: sem ele, `growth, growth` viraria duas entradas
+ * — `growth` e ` growth` —, o `Set` não as juntaria, e a tela mostraria dois
+ * chips idênticos onde remover um deixa o outro.
+ */
+function todos(valor: string | string[] | undefined): string[] {
+  const lista = Array.isArray(valor) ? valor : valor === undefined ? [] : [valor]
+  const partes = lista.flatMap(v => v.split(SEPARADOR))
+  return [...new Set(partes.map(v => v.trim()))]
+}
+
+/**
+ * Liga ou desliga um valor numa lista de filtro.
+ *
+ * É o que o clique numa faceta faz: marcada, desmarca; desmarcada, acrescenta.
+ * A ordem de quem fica é preservada, para a URL não embaralhar a cada clique.
+ */
+export function alternar(lista: string[], valor: string): string[] {
+  return lista.includes(valor) ? lista.filter(v => v !== valor) : [...lista, valor]
 }
 
 function numeroPositivo(valor: string): number | null {
@@ -90,14 +144,11 @@ function numeroPositivo(valor: string): number | null {
  * slug renomeado não deve produzir uma tela que parece um bug.
  */
 export function parseFiltros(params: Params): Filtros {
-  const categoria = primeiro(params.categoria)
-  const marca = primeiro(params.marca)
-  const sabor = primeiro(params.sabor)
   const ordem = primeiro(params.ordem) as Ordem
 
   return {
     termo: primeiro(params.q),
-    categoria: getCategoryBySlug(categoria) ? categoria : null,
+    categorias: todos(params.categoria).filter(c => getCategoryBySlug(c)),
     /*
       A marca não é validada, e a categoria é. A assimetria é deliberada.
 
@@ -112,10 +163,10 @@ export function parseFiltros(params: Params): Filtros {
       quem pediu uma marca, o que é pior que mostrar zero com o chip na tela
       dizendo o que foi pedido.
     */
-    marca: marca === '' ? null : slugDaMarca(marca),
+    marcas: todos(params.marca).map(slugDaMarca).filter(m => m !== ''),
     // Mesma regra da categoria: família desconhecida vira ausência, não
     // resultado vazio.
-    sabor: saborPorValor(sabor) ? sabor : null,
+    sabores: todos(params.sabor).filter(s => saborPorValor(s)),
     // Só `1` liga. Assim `?promocao=0` e `?promocao=` desligam, em vez de
     // ligarem por serem "presentes".
     soPromocao: primeiro(params.promocao) === '1',
@@ -143,11 +194,19 @@ export function serializarFiltros(filtros: Filtros, base = ROTA_DA_BUSCA): strin
     que aquela rota existe para evitar, já que ela é a versão indexável desta
     tela.
   */
-  if (filtros.categoria && !base.startsWith(ROTA_DA_CATEGORIA)) {
-    p.set('categoria', filtros.categoria)
+  /*
+    Na rota de categoria, a categoria única está no caminho.
+
+    Só a única: com duas marcadas, o caminho não consegue representar as duas,
+    e a página deixa de ser aquela categoria. Aí ela volta para a query — e
+    quem monta a base já mandou a rota de busca junto.
+  */
+  const categoriaNoCaminho = base.startsWith(ROTA_DA_CATEGORIA) && filtros.categorias.length === 1
+  if (!categoriaNoCaminho && filtros.categorias.length > 0) {
+    p.set('categoria', filtros.categorias.join(SEPARADOR))
   }
-  if (filtros.marca) p.set('marca', filtros.marca)
-  if (filtros.sabor) p.set('sabor', filtros.sabor)
+  if (filtros.marcas.length > 0) p.set('marca', filtros.marcas.join(SEPARADOR))
+  if (filtros.sabores.length > 0) p.set('sabor', filtros.sabores.join(SEPARADOR))
   if (filtros.soPromocao) p.set('promocao', '1')
   if (filtros.precoMax !== null) p.set('preco_max', String(filtros.precoMax))
   if (filtros.dosePrecoMax !== null) p.set('dose_max', String(filtros.dosePrecoMax))
@@ -166,7 +225,7 @@ export function serializarFiltros(filtros: Filtros, base = ROTA_DA_BUSCA): strin
  * que a mutação não alcança, e o serializador é.
  */
 export function buscaPorMarca(slug: string): string {
-  return serializarFiltros({ ...FILTROS_VAZIOS, marca: slug })
+  return serializarFiltros({ ...FILTROS_VAZIOS, marcas: [slug] })
 }
 
 /** O produto está em promoção quando o preço anunciado sustenta o desconto. */
@@ -202,10 +261,24 @@ const REGRAS = {
     [p.name, p.brand].some(
       campo => campo && normalizarTexto(campo).includes(normalizarTexto(f.termo)),
     ),
-  categoria: (p: CategoryProduct, f: Filtros) =>
-    f.categoria === null || categoriaDoProduto(p.name)?.slug === f.categoria,
-  marca: (p: CategoryProduct, f: Filtros) =>
-    f.marca === null || slugDoProduto(p) === f.marca,
+  /*
+    Lista vazia não filtra, e várias marcadas somam.
+
+    Dentro de um grupo a relação é "ou": Growth **ou** Max Titanium. Entre
+    grupos continua sendo "e": Growth ou Max, **e** chocolate. É o que a pessoa
+    espera de uma lista de caixas marcáveis, e o contrário — "e" dentro do
+    grupo — devolveria zero sempre, porque nenhum produto é de duas marcas.
+  */
+  categoria: (p: CategoryProduct, f: Filtros) => {
+    if (f.categorias.length === 0) return true
+    const slug = categoriaDoProduto(p.name)?.slug
+    return slug !== undefined && f.categorias.includes(slug)
+  },
+  marca: (p: CategoryProduct, f: Filtros) => {
+    if (f.marcas.length === 0) return true
+    const slug = slugDoProduto(p)
+    return slug !== null && f.marcas.includes(slug)
+  },
   /*
     O sabor casa por família, não por string.
 
@@ -214,8 +287,11 @@ const REGRAS = {
     nenhuma some quando alguém filtra — mesmo tratamento da dose ausente: não
     dá para afirmar que é chocolate quem o catálogo não diz que é.
   */
-  sabor: (p: CategoryProduct, f: Filtros) =>
-    f.sabor === null || familiaDoSabor(p.flavor)?.valor === f.sabor,
+  sabor: (p: CategoryProduct, f: Filtros) => {
+    if (f.sabores.length === 0) return true
+    const familia = familiaDoSabor(p.flavor)?.valor
+    return familia !== undefined && f.sabores.includes(familia)
+  },
   promocao: (p: CategoryProduct, f: Filtros) => !f.soPromocao || temPromocao(p),
   preco: (p: CategoryProduct, f: Filtros) =>
     f.precoMax === null || p.featuredPrice <= f.precoMax,
@@ -346,19 +422,35 @@ export function chipsDeFiltro(filtros: Filtros, marcas: Faceta[]): ChipDeFiltro[
   const chips: ChipDeFiltro[] = []
 
   if (filtros.termo) chips.push({ rotulo: `"${filtros.termo}"`, href: sem({ termo: '' }) })
-  if (filtros.categoria) {
-    const categoria = getCategoryBySlug(filtros.categoria)
-    chips.push({ rotulo: categoria?.name ?? filtros.categoria, href: sem({ categoria: null }) })
+
+  /*
+    Um chip por valor escolhido, e cada × tira só aquele.
+
+    Com multisseleção, um chip por grupo — "Marca (2)" — obrigaria a abrir o
+    painel para desmarcar uma das duas. O chip existe justamente para quem não
+    está com o painel à vista.
+  */
+  for (const c of filtros.categorias) {
+    chips.push({
+      rotulo: getCategoryBySlug(c)?.name ?? c,
+      href: sem({ categorias: filtros.categorias.filter(v => v !== c) }),
+    })
   }
-  if (filtros.marca) {
+  for (const m of filtros.marcas) {
     // O rótulo vem da faceta, que carrega o nome como o banco o escreve —
     // "Integralmédica", não "integralmedica" do slug.
-    const marca = marcas.find(m => m.valor === filtros.marca)
-    chips.push({ rotulo: marca?.rotulo ?? filtros.marca, href: sem({ marca: null }) })
+    chips.push({
+      rotulo: marcas.find(f => f.valor === m)?.rotulo ?? m,
+      href: sem({ marcas: filtros.marcas.filter(v => v !== m) }),
+    })
   }
-  if (filtros.sabor) {
-    chips.push({ rotulo: saborPorValor(filtros.sabor)?.rotulo ?? filtros.sabor, href: sem({ sabor: null }) })
+  for (const sabor of filtros.sabores) {
+    chips.push({
+      rotulo: saborPorValor(sabor)?.rotulo ?? sabor,
+      href: sem({ sabores: filtros.sabores.filter(v => v !== sabor) }),
+    })
   }
+
   if (filtros.soPromocao) chips.push({ rotulo: 'Só em promoção', href: sem({ soPromocao: false }) })
   if (filtros.precoMax !== null) {
     chips.push({ rotulo: `Até R$ ${filtros.precoMax}`, href: sem({ precoMax: null }) })
@@ -370,15 +462,32 @@ export function chipsDeFiltro(filtros: Filtros, marcas: Faceta[]): ChipDeFiltro[
 }
 
 /**
+ * O estado que "Limpar" restaura: tudo, menos a ordenação.
+ *
+ * Mora aqui para a tela e o painel não manterem duas listas de campos que
+ * precisam concordar — esquecer um campo numa delas limparia pela metade, e a
+ * tela continuaria mostrando um recorte sem chip que o explique.
+ */
+export const SEM_FILTRO: Partial<Filtros> = {
+  termo: '',
+  categorias: [],
+  marcas: [],
+  sabores: [],
+  soPromocao: false,
+  precoMax: null,
+  dosePrecoMax: null,
+}
+
+/**
  * `true` quando nenhum filtro está ativo. A ordenação não conta como filtro:
  * ela muda a ordem do mesmo conjunto, não o conjunto.
  */
 export function semFiltro(filtros: Filtros): boolean {
   return (
     filtros.termo === '' &&
-    filtros.categoria === null &&
-    filtros.marca === null &&
-    filtros.sabor === null &&
+    filtros.categorias.length === 0 &&
+    filtros.marcas.length === 0 &&
+    filtros.sabores.length === 0 &&
     !filtros.soPromocao &&
     filtros.precoMax === null &&
     filtros.dosePrecoMax === null

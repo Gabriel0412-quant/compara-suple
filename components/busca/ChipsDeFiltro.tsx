@@ -1,6 +1,6 @@
 import Link from 'next/link'
 
-import { serializarFiltros, type ChipDeFiltro, type Filtros } from '@/lib/filtros'
+import { ROTA_DA_BUSCA, SEM_FILTRO, serializarFiltros, type ChipDeFiltro, type Filtros } from '@/lib/filtros'
 
 /**
  * Os filtros ativos, acima da grade, cada um com o × que o remove.
@@ -20,6 +20,7 @@ export function ChipsDeFiltro({ chips, filtros }: { chips: ChipDeFiltro[]; filtr
       </span>
       {chips.map(chip => (
         <Link
+          prefetch={false}
           key={chip.rotulo}
           href={chip.href}
           className="flex min-h-8 items-center gap-1.5 rounded-full border border-line-strong bg-surface px-3 text-sm text-ink-2 transition-colors hover:border-brand hover:text-brand-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
@@ -35,16 +36,8 @@ export function ChipsDeFiltro({ chips, filtros }: { chips: ChipDeFiltro[]; filtr
       ))}
       {chips.length > 1 && (
         <Link
-          href={serializarFiltros({
-            ...filtros,
-            termo: '',
-            categoria: null,
-            marca: null,
-            sabor: null,
-            soPromocao: false,
-            precoMax: null,
-            dosePrecoMax: null,
-          })}
+          prefetch={false}
+          href={serializarFiltros({ ...filtros, ...SEM_FILTRO }, ROTA_DA_BUSCA)}
           className="rounded-md px-1 text-sm font-semibold text-brand-strong hover:text-brand-deep focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
         >
           limpar tudo

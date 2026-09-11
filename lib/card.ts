@@ -19,6 +19,19 @@ export type EstadoDoCard = {
   /** Inteiro, já arredondado. Zero quando não há desconto. */
   percentualDesconto: number
   /**
+   * Quanto a pessoa deixa de gastar, em reais, na oferta destacada.
+   *
+   * O percentual sozinho não responde "quanto eu economizo": -13% de R$ 449,90
+   * poupa R$ 60,00 e -50% de R$ 99,80 poupa R$ 49,90, e a fileira ordenada por
+   * reais lê como se estivesse fora de ordem. Este é o número que a prateleira
+   * de maiores descontos usa para ordenar, e até o #227 ele não aparecia em
+   * lugar nenhum do site.
+   *
+   * `null` — e não zero — quando não há desconto: é a mesma ausência que
+   * `temDesconto` descreve, e zero seria um valor a formatar e exibir.
+   */
+  economia: number | null
+  /**
    * Preço por dose, ou por quilo, ou `null`.
    *
    * Comparar suplemento por preço absoluto engana quando as embalagens têm
@@ -65,6 +78,7 @@ export function estadoDoCard(product: CategoryProduct): EstadoDoCard {
     percentualDesconto: temDesconto
       ? Math.round((1 - product.featuredPrice / original) * 100)
       : 0,
+    economia: temDesconto ? original - product.featuredPrice : null,
     precoNormalizado:
       product.featuredPerDose !== null
         ? `${formatBRL(product.featuredPerDose)}/dose`

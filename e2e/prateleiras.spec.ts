@@ -20,6 +20,13 @@ function prateleira(page: import('@playwright/test').Page, nome = CATEGORIA) {
   return page.getByRole('region', { name: nome })
 }
 
+/** Primeiro valor em reais de um texto: "R$ 1.234,56" vira 1234.56. */
+function reais(texto: string): number {
+  const bruto = texto.match(/R\$\s*([\d.,]+)/)?.[1]
+  if (!bruto) throw new Error(`sem valor em reais em: ${texto.slice(0, 80)}`)
+  return Number(bruto.replaceAll('.', '').replace(',', '.'))
+}
+
 test.describe('a prateleira de categoria', () => {
   test('existe, tem título e leva à categoria completa', async ({ page, request }) => {
     await page.goto('/')
@@ -110,6 +117,48 @@ test.describe('o card mantém as decisões editoriais', () => {
       const riscado = await cards.nth(i).locator('.line-through').count()
       expect(riscado, 'selo de desconto sem preço anterior visível').toBeGreaterThan(0)
     }
+  })
+
+  test('o card com desconto diz quanto se economiza em reais', async ({ page }) => {
+    /*
+      O #211 trocou o card próprio da seção de descontos pelo `ProductGridCard`
+      e levou junto o "Economiza R$ X" — o único lugar do site que mostrava a
+      economia absoluta. O selo dá o percentual e o riscado dá o preço
+      anterior; nenhum dos dois responde quanto se deixa de gastar.
+
+      A fixture tem um desconto só: 89,90 vindo de 119,90.
+    */
+    await page.goto('/')
+    const cards = prateleira(page).getByRole('listitem')
+
+    let comDesconto = 0
+    for (let i = 0; i < (await cards.count()); i++) {
+      const card = cards.nth(i)
+      const temRiscado = (await card.locator('.line-through').count()) > 0
+      const economia = card.getByText(/^Economiza R\$/)
+
+      if (temRiscado) {
+        comDesconto++
+        // Casado com o riscado: o número precisa ser a diferença que a pessoa
+        // vê na tela, não um valor qualquer que comece com "Economiza".
+        const atual = reais(await card.innerText())
+        const anterior = reais(await card.locator('.line-through').innerText())
+        const dita = reais(await economia.innerText())
+
+        /*
+          Comparado por aritmética, não por string formatada: importar
+          `formatBRL` aqui arrasta `lib/db`, que exige as variáveis do Supabase
+          que o runner do Playwright não tem. E o `Intl` separa "R$" do número
+          com espaço não separável, então montar a string à mão no teste erra
+          por um caractere invisível.
+        */
+        expect(dita, `card diz economizar ${dita} com ${anterior} - ${atual}`).toBeCloseTo(anterior - atual, 2)
+      } else {
+        // Sem desconto não há o que economizar: a linha some, não vira zero.
+        await expect(economia).toHaveCount(0)
+      }
+    }
+    expect(comDesconto, 'nenhum card com desconto para exercitar a regra').toBeGreaterThan(0)
   })
 })
 

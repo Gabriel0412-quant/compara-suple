@@ -28,7 +28,7 @@ describe('estado vazio', () => {
   })
 
   it('com marca, a seção existe', () => {
-    const marca: Marca = { nome: 'Growth', slug: 'growth', produtos: 2, ofertas: 7, tom: 0 }
+    const marca: Marca = { nome: 'Growth', slug: 'growth', produtos: 2, ofertas: 7, menorPreco: 100, categorias: [], tom: 0 }
     expect(FaixaDeMarcas({ marcas: [marca] })).not.toBeNull()
   })
 
@@ -57,9 +57,11 @@ describe('conteúdo do cartão', () => {
     slug: 'growth-supplements',
     produtos: 4,
     ofertas: 31,
+    menorPreco: 100,
+    categorias: [],
     tom: 0,
   }
-  const semLogo: Marca = { nome: 'Dark Lab', slug: 'dark-lab', produtos: 1, ofertas: 2, tom: 0 }
+  const semLogo: Marca = { nome: 'Dark Lab', slug: 'dark-lab', produtos: 1, ofertas: 2, menorPreco: 100, categorias: [], tom: 0 }
 
   /*
     O elemento devolvido basta, como no caso do estado vazio: `type` e `props`
@@ -92,6 +94,8 @@ describe('conteúdo do cartão', () => {
       slug: 'integralmedica',
       produtos: 3,
       ofertas: 12,
+      menorPreco: 100,
+      categorias: [],
       tom: 0,
     }
     const semEscala = ConteudoDoCartao({ marca: comLogo }).props.style.maxHeight

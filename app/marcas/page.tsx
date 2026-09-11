@@ -2,9 +2,16 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 
 import { Breadcrumb } from '@/components/Breadcrumb'
-import { CLASSE_DO_TOM, iniciaisDaMarca } from '@/components/brand/tons'
-import { listarMarcas, tomDaMarca, type Marca } from '@/lib/brands'
-import { buscaPorMarca } from '@/lib/filtros'
+import { CartaoDeMarca } from '@/components/brand/CartaoDeMarca'
+import { OrdenarMarcas } from '@/components/brand/OrdenarMarcas'
+import {
+  descricaoDaOrdem,
+  destaqueDaMarca,
+  listarMarcas,
+  ordemDeMarcaValida,
+  ordenarMarcas,
+  ordenarMarcasPor,
+} from '@/lib/brands'
 import { formatCount, formatUltimaColeta, getCatalogStats } from '@/lib/stats'
 
 export const dynamic = 'force-dynamic'
@@ -26,73 +33,54 @@ export const metadata: Metadata = {
   alternates: { canonical: '/marcas' },
 }
 
-/** Barra de proporção, para a contagem virar comparação e não só número. */
-function Barra({ valor, maximo }: { valor: number; maximo: number }) {
-  const pct = maximo > 0 ? Math.max(2, Math.round((valor / maximo) * 100)) : 0
-  return (
-    <span aria-hidden="true" className="block h-1 rounded-full bg-line">
-      <span className="block h-1 rounded-full bg-brand" style={{ width: `${pct}%` }} />
-    </span>
-  )
-}
+export default async function MarcasPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  const [marcas, { lastUpdated }, params] = await Promise.all([
+    listarMarcas(),
+    getCatalogStats(),
+    searchParams,
+  ])
 
-function LinhaDaMarca({ marca, maximo }: { marca: Marca; maximo: number }) {
-  return (
-    <li>
-      <Link
-        // Filtro de marca, não busca por texto — mesma troca do #220 feita na
-        // faixa da home. O slug é o que `parseFiltros` lê.
-        href={buscaPorMarca(marca.slug)}
-        className="group flex items-center gap-4 rounded-xl border border-line bg-surface p-4 transition-colors hover:border-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-      >
-        <span
-          aria-hidden="true"
-          className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white ${CLASSE_DO_TOM[tomDaMarca(marca)]}`}
-        >
-          {iniciaisDaMarca(marca.nome)}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate font-semibold text-ink group-hover:text-brand-strong">
-            {marca.nome}
-          </span>
-          <span className="mt-1 block font-mono text-xs text-ink-3">
-            {formatCount(marca.produtos)} {marca.produtos === 1 ? 'produto' : 'produtos'} ·{' '}
-            {formatCount(marca.ofertas)} {marca.ofertas === 1 ? 'oferta ativa' : 'ofertas ativas'}
-          </span>
-          <span className="mt-2 block max-w-48">
-            <Barra valor={marca.ofertas} maximo={maximo} />
-          </span>
-        </span>
-      </Link>
-    </li>
-  )
-}
+  const ordem = ordemDeMarcaValida(params.ordem)
+  const naTela = ordenarMarcasPor(marcas, ordem)
 
-export default async function MarcasPage() {
-  const [marcas, { lastUpdated }] = await Promise.all([listarMarcas(), getCatalogStats()])
-  const maximo = marcas[0]?.ofertas ?? 0
+  /*
+    A escala da barra é sempre a da marca mais coberta, e não a da primeira da
+    lista. Ordenado por nome, a primeira pode ser a Dark Lab, com 3 ofertas —
+    e todas as barras encostariam na direita, o que diria o contrário do que o
+    dado diz.
+  */
+  const maximo = ordenarMarcas(marcas)[0]?.ofertas ?? 0
 
   return (
     <div className="min-h-screen bg-surface-muted">
-      <main className="mx-auto max-w-5xl px-4 py-6 md:py-10">
+      <main className="mx-auto max-w-7xl px-4 py-6 md:px-10 md:py-10">
         <Breadcrumb items={[{ label: 'Início', href: '/' }, { label: 'Marcas' }]} />
 
-        <header className="mt-6 mb-8">
-          <h1 className="text-3xl font-bold tracking-[-0.03em] text-ink md:text-4xl">
-            Marcas acompanhadas
-          </h1>
-          <p className="mt-3 max-w-2xl text-ink-2">
-            {marcas.length === 0 ? (
-              'Nenhuma marca tem oferta ativa no momento.'
-            ) : (
-              <>
-                {formatCount(marcas.length)}{' '}
-                {marcas.length === 1 ? 'marca com oferta ativa' : 'marcas com oferta ativa'} no
-                comparador, da que tem mais ofertas para a que tem menos. Última coleta{' '}
-                {formatUltimaColeta(lastUpdated)}.
-              </>
-            )}
-          </p>
+        <header className="mt-6 mb-8 flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-[-0.035em] text-ink md:text-[46px] md:leading-[1.02]">
+              Marcas acompanhadas
+            </h1>
+            <p className="mt-3 max-w-2xl text-ink-2">
+              {marcas.length === 0 ? (
+                'Nenhuma marca tem oferta ativa no momento.'
+              ) : (
+                <>
+                  {formatCount(marcas.length)}{' '}
+                  {marcas.length === 1 ? 'marca com oferta ativa' : 'marcas com oferta ativa'} no
+                  comparador, {descricaoDaOrdem(ordem)}. Última coleta{' '}
+                  {formatUltimaColeta(lastUpdated)}.
+                </>
+              )}
+            </p>
+          </div>
+
+          {/* Sem marca não há o que ordenar, e o controle some junto com a lista. */}
+          {marcas.length > 0 && <OrdenarMarcas ordem={ordem} />}
         </header>
 
         {marcas.length === 0 ? (
@@ -111,9 +99,23 @@ export default async function MarcasPage() {
             .
           </p>
         ) : (
-          <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {marcas.map(marca => (
-              <LinhaDaMarca key={marca.slug} marca={marca} maximo={maximo} />
+          /*
+            Três colunas em tela larga, como a maquete. Duas no tablet e uma no
+            celular: o painel de logo tem 168px de altura fixa, e em três
+            colunas de 375px o logo sairia menor que o da faixa da home, que é
+            o oposto do que esta página existe para fazer.
+          */
+          <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {naTela.map(marca => (
+              <CartaoDeMarca
+                key={marca.slug}
+                marca={marca}
+                maximo={maximo}
+                // O selo é calculado sobre a lista inteira, não sobre a ordem
+                // da tela: quem lidera em ofertas continua liderando quando a
+                // página está ordenada por nome.
+                destaque={destaqueDaMarca(marca, marcas)}
+              />
             ))}
           </ul>
         )}

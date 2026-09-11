@@ -58,6 +58,42 @@ describe('desconto', () => {
   })
 })
 
+describe('economia em reais', () => {
+  it('é a diferença entre o preço anterior e o cobrado', () => {
+    const e = estadoDoCard(card({ featuredPrice: 147.05, featuredOriginalPrice: 429.9 }))
+    expect(e.economia).toBeCloseTo(282.85, 2)
+    expect(formatBRL(e.economia!)).toBe(formatBRL(282.85))
+  })
+
+  it('é null sem desconto, e não zero', () => {
+    // Zero é um número a formatar: viraria "Economiza R$ 0,00" na tela. A
+    // ausência precisa ser ausência, do mesmo jeito que `precoNormalizado`.
+    expect(estadoDoCard(card({ featuredOriginalPrice: null })).economia).toBeNull()
+    expect(estadoDoCard(card({ featuredPrice: 100, featuredOriginalPrice: 100 })).economia).toBeNull()
+    expect(estadoDoCard(card({ featuredPrice: 100, featuredOriginalPrice: 80 })).economia).toBeNull()
+  })
+
+  it('sobrevive à subtração binária dos preços do catálogo', () => {
+    // 344 - 189,99 dá 154,01000000000002 em ponto flutuante. O número cru
+    // carrega o resto; quem precisa estar certo é o que a pessoa lê.
+    const e = estadoDoCard(card({ featuredPrice: 189.99, featuredOriginalPrice: 344 }))
+    expect(formatBRL(e.economia!)).toBe('R$\u00a0154,01')
+  })
+
+  it('ordena diferente do percentual — é por isso que existe', () => {
+    /*
+      Os dois primeiros cards da prateleira de maiores descontos em 10/09/2026.
+      O segundo tem o percentual maior e a economia menor: uma fixture em que a
+      regra e o acaso concordassem não provaria que a coluna certa foi usada.
+    */
+    const maior = estadoDoCard(card({ featuredPrice: 147.05, featuredOriginalPrice: 429.9 }))
+    const menor = estadoDoCard(card({ featuredPrice: 68.9, featuredOriginalPrice: 239.9 }))
+
+    expect(menor.percentualDesconto).toBeGreaterThan(maior.percentualDesconto)
+    expect(menor.economia!).toBeLessThan(maior.economia!)
+  })
+})
+
 describe('preço normalizado', () => {
   it('usa a dose quando o produto informa porções', () => {
     const e = estadoDoCard(card({ featuredPrice: 90, featuredPerDose: 3, sizeGrams: 900 }))

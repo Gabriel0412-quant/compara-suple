@@ -42,6 +42,7 @@ export function ProductGridCard({
   const {
     temDesconto: hasDiscount,
     percentualDesconto: discountPct,
+    economia,
     precoNormalizado,
     temMaisBarata,
   } = estadoDoCard(product)
@@ -141,6 +142,38 @@ export function ProductGridCard({
                 sem dose ou peso informado
               </span>
             )}
+            {/*
+              A economia em reais, que saiu no #211 junto com o card próprio da
+              seção de descontos e era o único lugar do site que mostrava o
+              número absoluto. O selo diz -66% e o riscado diz de quanto caiu;
+              nenhum dos dois diz "você deixa de gastar R$ 282,85", que é a
+              conta que a pessoa faz.
+
+              Fica abaixo do preço por dose, não acima: a tese do produto é o
+              custo por dose, e a economia é o desconto que o anúncio afirma —
+              informação do Mercado Livre, não medição nossa. A hierarquia
+              visual diz isso, com o R$/dose em `brand-strong` e esta linha em
+              tom apagado.
+
+              `lib/claims.ts` permite a frase, e `claims.test.ts` registra o
+              porquê: sai de `original_price` do anúncio, com o preço anterior
+              visível ao lado. O que continua proibido é economia agregada ou
+              prometida — "economize até R$ 1.200".
+
+              Altura reservada, como a linha de "Menor preço" logo abaixo. A
+              linha só existe em card com desconto, e sem a reserva o preço de
+              um card senta acima do vizinho na mesma prateleira — foi o que o
+              #199 consertou. Em produção 12 dos 22 produtos têm desconto, ou
+              seja a prateleira mista é o caso comum, não a exceção.
+            */}
+            <div className="min-h-5 sm:min-h-4">
+              {economia !== null && (
+                <span className="block font-mono text-sm text-ink-3 sm:text-xs">
+                  Economiza {formatBRL(economia)}
+                </span>
+              )}
+            </div>
+
             <p className="mt-1 text-sm text-ink-4 sm:text-[11px]">
               Destaque entre {product.offerCount}{' '}
               {product.offerCount === 1 ? 'oferta' : 'ofertas'}

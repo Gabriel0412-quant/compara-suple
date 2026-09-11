@@ -93,3 +93,36 @@ export function estadoDoCard(product: CategoryProduct): EstadoDoCard {
     temSaida: product.featuredOfferId !== null,
   }
 }
+
+/**
+ * A ordem da prateleira de maiores descontos: mais reais economizados primeiro.
+ *
+ * Morava dentro de `getProductsOnSale`, misturada à query, onde nenhum teste
+ * unitário a alcançava e o Stryker não a via. O #226 mostrou o custo disso: a
+ * fileira ordenava por reais e o card só mostrava o percentual, então lia como
+ * se estivesse fora de ordem — e nenhum teste podia acusar, porque a fixture
+ * de ponta a ponta tinha um único produto com desconto.
+ *
+ * Reais e não percentual, decidido em 10/09/2026: é o que a pessoa deixa de
+ * gastar. O percentual continua no selo, e desde o #227 a economia em reais
+ * aparece no card — a fileira agora mostra o número pelo qual está ordenada.
+ *
+ * Os dois desempates seguem `compararPorPrecoDestacado`, pelo mesmo motivo:
+ * economia empata com frequência, porque preço promocional é redondo. Sem o
+ * desempate por nome, dois produtos que poupam os mesmos R$ 50,00 trocam de
+ * lugar entre deploys sem nada ter mudado.
+ *
+ * O `?? 0` trata produto sem desconto, que `getProductsOnSale` já filtra —
+ * mas a função é pura e exportada, então a ordem dele é definida aqui e não
+ * pelo acaso de quem chama: sem economia vai para o fim.
+ */
+export function compararPorEconomia(a: CategoryProduct, b: CategoryProduct): number {
+  const ea = estadoDoCard(a)
+  const eb = estadoDoCard(b)
+
+  return (
+    (eb.economia ?? 0) - (ea.economia ?? 0) ||
+    eb.percentualDesconto - ea.percentualDesconto ||
+    a.name.localeCompare(b.name, 'pt-BR')
+  )
+}

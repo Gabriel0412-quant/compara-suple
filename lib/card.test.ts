@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { estadoDoCard } from './card'
+import { compararPorEconomia, estadoDoCard } from './card'
 import { formatBRL } from './products'
 import type { CategoryProduct } from './categories'
 
@@ -164,5 +164,62 @@ describe('saída para a loja', () => {
 
   it('não existe sem oferta destacada', () => {
     expect(estadoDoCard(card({ featuredOfferId: null })).temSaida).toBe(false)
+  })
+})
+
+describe('ordem da prateleira de maiores descontos', () => {
+  /** Um produto com desconto, nomeado pelo que economiza. */
+  function comDesconto(nome: string, preco: number, anterior: number) {
+    return card({ name: nome, featuredPrice: preco, featuredOriginalPrice: anterior })
+  }
+
+  it('ordena por reais, e não pelo percentual que o selo mostra', () => {
+    /*
+      Os dois primeiros da prateleira em produção, 10/09/2026. O de -71%
+      economiza menos que o de -66%: se a ordenação trocasse para percentual,
+      esta lista viraria outra — que é exatamente o que o teste precisa ver.
+    */
+    const seiscentaSeis = comDesconto('A', 147.05, 429.9)
+    const setentaEUm = comDesconto('B', 68.9, 239.9)
+
+    expect([setentaEUm, seiscentaSeis].sort(compararPorEconomia).map(p => p.name)).toEqual(['A', 'B'])
+    expect([seiscentaSeis, setentaEUm].sort(compararPorEconomia).map(p => p.name)).toEqual(['A', 'B'])
+  })
+
+  it('a ordem por reais e a por percentual são de fato diferentes aqui', () => {
+    // Trava a fixture, não o código: se alguém "arrumar" estes números para
+    // que os dois critérios concordem, o teste acima deixa de testar.
+    const a = estadoDoCard(comDesconto('A', 147.05, 429.9))
+    const b = estadoDoCard(comDesconto('B', 68.9, 239.9))
+
+    expect(a.economia!).toBeGreaterThan(b.economia!)
+    expect(a.percentualDesconto).toBeLessThan(b.percentualDesconto)
+  })
+
+  it('desempata pelo percentual quando a economia empata', () => {
+    // R$ 50,00 de economia nos dois; o de preço menor desconta mais.
+    const caro = comDesconto('A caro', 200, 250)
+    const barato = comDesconto('B barato', 100, 150)
+
+    expect([caro, barato].sort(compararPorEconomia).map(p => p.name)).toEqual(['B barato', 'A caro'])
+  })
+
+  it('desempata pelo nome quando economia e percentual empatam', () => {
+    // Sem isto, dois produtos idênticos trocam de lugar entre deploys,
+    // conforme a ordem em que o Postgres respondeu.
+    const zebra = comDesconto('Zebra', 100, 150)
+    const alfa = comDesconto('Alfa', 100, 150)
+
+    expect([zebra, alfa].sort(compararPorEconomia).map(p => p.name)).toEqual(['Alfa', 'Zebra'])
+    expect([alfa, zebra].sort(compararPorEconomia).map(p => p.name)).toEqual(['Alfa', 'Zebra'])
+  })
+
+  it('produto sem desconto vai para o fim', () => {
+    // `getProductsOnSale` filtra antes de ordenar, mas a função é pura e
+    // exportada: a ordem do caso sem economia é definida aqui.
+    const sem = card({ name: 'Sem desconto', featuredOriginalPrice: null })
+    const com = comDesconto('Com desconto', 100, 110)
+
+    expect([sem, com].sort(compararPorEconomia).map(p => p.name)).toEqual(['Com desconto', 'Sem desconto'])
   })
 })

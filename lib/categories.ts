@@ -1,3 +1,4 @@
+import { compararPorEconomia } from './card'
 import { supabase } from './db'
 import { featuredOffer, lowestPriceOffer, type Offer } from './products'
 
@@ -341,10 +342,5 @@ export async function getProductsOnSale(): Promise<CategoryProduct[]> {
       if (!p.featuredOriginalPrice) return false
       return p.featuredOriginalPrice > p.featuredPrice
     })
-    .sort((a, b) => {
-      const dA = (a.featuredOriginalPrice ?? a.featuredPrice) - a.featuredPrice
-      const dB = (b.featuredOriginalPrice ?? b.featuredPrice) - b.featuredPrice
-      // sort by absolute discount, descending
-      return dB - dA
-    })
+    .sort(compararPorEconomia)
 }

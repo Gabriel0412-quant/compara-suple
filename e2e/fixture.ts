@@ -146,7 +146,24 @@ export const PRODUTOS = [
     name: 'Whey Protein Concentrado 900g Dux Nutrition',
     created_at: '2026-01-06T00:00:00+00:00',
     brand: { name: 'Dux Nutrition', slug: 'dux-nutrition' },
-    variant: [variante(61, [oferta(601, 199.9)], { size_grams: 900, servings: 30 })],
+    /*
+      Segundo desconto da fixture, e o motivo dele é a ordem da prateleira.
+
+      Até o #226 só o produto 1 tinha `original_price`, então "Maiores
+      descontos" exibia um card só — e uma fileira de um elemento está
+      ordenada por qualquer critério. O teste passava sem testar.
+
+      Os números são escolhidos para os dois critérios DISCORDAREM:
+
+        produto 1   89,90 de 119,90   R$ 30,00   -25%
+        produto 6  199,90 de 249,90   R$ 50,00   -20%
+
+      Por reais: 6 antes de 1. Por percentual: 1 antes de 6. Se a ordenação
+      trocar de coluna, a fileira inverte e o teste acusa.
+    */
+    variant: [variante(61, [
+      oferta(601, 199.9, true, { raw: { thumbnail: 'https://exemplo.test/601.jpg', original_price: 249.9 } }),
+    ], { size_grams: 900, servings: 30 })],
   },
   {
     /*

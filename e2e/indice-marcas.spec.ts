@@ -55,8 +55,17 @@ test.describe('rota /marcas', () => {
   test('o filtro leva à listagem daquela marca, com resultado', async ({ page }) => {
     await page.goto('/marcas')
     const linha = page.getByRole('main').getByRole('listitem').first()
-    const nome = (await linha.locator('a > span > span').first().textContent())!.trim()
-    const primeiro = linha.locator('a')
+    /*
+      O nome vem do cabeçalho do cartão, não de uma posição no DOM.
+
+      Este teste lia `a > span > span`, e o #219 mudou a estrutura do cartão:
+      o seletor passou a pegar a linha inteira de nome mais selo e devolvia
+      "Growth Supplements1º EM OFERTAS". Desde o #219 o nome é um `h2`, que é
+      o que ele sempre foi — perguntar pelo papel sobrevive ao próximo
+      redesenho, perguntar pela posição não.
+    */
+    const nome = (await linha.getByRole('heading').textContent())!.trim()
+    const primeiro = linha.getByRole('link')
     const href = await primeiro.getAttribute('href')
     const slug = new URL(href!, 'http://x').searchParams.get('marca')
     expect(slug, 'href sem slug de marca').toBeTruthy()
@@ -93,7 +102,9 @@ test.describe('rota /marcas', () => {
     */
     await page.goto('/marcas')
     const primeiraLinha = page.getByRole('main').getByRole('listitem').first()
-    const nome = (await primeiraLinha.locator('a > span > span').first().innerText()).trim()
+    // Pelo papel, e por `textContent`: `innerText` aplicaria o `uppercase` do
+    // CSS e devolveria um nome que o banco não tem.
+    const nome = (await primeiraLinha.getByRole('heading').textContent())!.trim()
     const contagens = (await primeiraLinha.innerText()).match(/(\d+) produtos?[^\d]+(\d+) ofertas?/)
 
     await page.goto('/')

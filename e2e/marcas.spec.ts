@@ -165,3 +165,156 @@ for (const [nome, viewport] of [
     })
   })
 }
+
+/**
+ * A página `/marcas`, redesenhada pelo #219 sobre a maquete 1a.
+ *
+ * O que se cobre aqui e não no vitest: que o painel de logo aparece de fato,
+ * que a ordem escolhida chega na URL e muda a lista *e* a frase que a
+ * descreve, e que nada na tela afirma o que o dado não sustenta.
+ */
+test.describe('a página de marcas', () => {
+  test('um cartão por marca, com logo ou nome, levando ao filtro daquela marca', async ({
+    page,
+    request,
+  }) => {
+    await page.goto('/marcas')
+    const cartoes = page.getByRole('main').getByRole('listitem')
+    const total = await cartoes.count()
+    expect(total, 'página sem cartão nenhum').toBeGreaterThan(0)
+
+    for (let i = 0; i < total; i++) {
+      const link = cartoes.nth(i).getByRole('link')
+      /*
+        Um link por cartão, e não dois.
+
+        O cartão inteiro é o link e o "Ver ofertas" é um `<span>` com cara de
+        botão — `<a>` dentro de `<a>` é HTML inválido, e dois links para o
+        mesmo destino dariam duas paradas de tabulação por marca.
+      */
+      expect(await link.count(), 'cartão com mais de um link').toBe(1)
+
+      const href = await link.getAttribute('href')
+      expect(href, 'cartão sem destino').toMatch(/^\/produtos\?marca=/)
+      expect((await request.get(href!)).status(), `${href} não responde 200`).toBe(200)
+
+      // Identifica a marca por logo ou por nome escrito, como na faixa.
+      const logo = link.locator('img')
+      const identificacao =
+        (await logo.count()) > 0
+          ? ((await logo.getAttribute('alt')) ?? '')
+          : ((await link.locator('span').first().textContent()) ?? '')
+      expect(identificacao.trim().length, 'cartão sem marca identificada').toBeGreaterThan(0)
+    }
+  })
+
+  test('o painel de logo existe, e não é pintado com cor de terceiro', async ({ page }) => {
+    /*
+      O #151 recusou vestir um cartão nosso com a cor oficial da marca, e a
+      maquete 1a desenha exatamente isso — painéis no azul da Integralmédica,
+      no vermelho da Max Titanium. A própria maquete diz em texto que aqueles
+      painéis são placeholders do arquivo oficial, e é o arquivo que entra.
+
+      O teste guarda a consequência: todos os painéis têm o mesmo fundo. Se um
+      dia alguém pintar por marca, eles passam a ser vários.
+      */
+    await page.goto('/marcas')
+    const { paineis, cartoes, fundos } = await page.evaluate(() => {
+      const encontrados = [...document.querySelectorAll('main li a > div:first-child')]
+      return {
+        paineis: encontrados.length,
+        cartoes: document.querySelectorAll('main li').length,
+        fundos: [...new Set(encontrados.map(p => getComputedStyle(p).backgroundColor))],
+      }
+    })
+
+    /*
+      Um painel por cartão, antes de olhar a cor.
+
+      Sem esta linha o teste passa com zero painéis encontrados: um conjunto
+      vazio tem zero cores distintas, não uma — e foi o que aconteceu quando o
+      painel deixou de ser `span` e virou `div`.
+    */
+    expect(paineis, 'seletor de painel não encontra os cartões').toBe(cartoes)
+    expect(fundos.length, `painéis com fundos diferentes: ${fundos.join(', ')}`).toBe(1)
+  })
+
+  test('não afirma o que o dado não sustenta', async ({ page }) => {
+    await page.goto('/marcas')
+    const texto = await page.getByRole('main').innerText()
+
+    /*
+      Três selos da maquete não têm origem no banco e não podem aparecer:
+
+      - "maior queda" afirma variação de preço no tempo, que depende do
+        histórico do EP10 (#128);
+      - "monitorando" descreve marca sem oferta ativa, estado que a agregação
+        não produz — marca só existe aqui se tiver o que vender;
+      - "avisar quando voltar" e "sugerir marca" oferecem serviços que não
+        existem, e a faixa de captura do #213 já é uma dívida dessas.
+    */
+    for (const proibido of [
+      /maior queda/i,
+      /monitorando/i,
+      /avisar quando/i,
+      /sugerir marca/i,
+      /parceir/i,
+      /oficial/i,
+      /autorizad/i,
+    ]) {
+      expect(texto, `a página afirma o que não pode provar: ${proibido}`).not.toMatch(proibido)
+    }
+  })
+
+  test('os cartões têm todos a mesma altura', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    await page.goto('/marcas')
+    const alturas = await page.evaluate(() => [
+      ...new Set(
+        [...document.querySelectorAll('main li')].map(c =>
+          Math.round(c.getBoundingClientRect().height),
+        ),
+      ),
+    ])
+    expect(alturas, `alturas diferentes na grade: ${alturas.join(', ')}px`).toHaveLength(1)
+  })
+
+  test('ordenar muda a lista e a frase que a descreve', async ({ page }) => {
+    await page.goto('/marcas')
+    const primeiroPorOfertas = await page.getByRole('main').getByRole('listitem').first().innerText()
+    await expect(page.getByRole('main')).toContainText(/mais ofertas para a que tem menos/i)
+
+    await page.getByLabel('Ordenar por').selectOption('nome')
+    await page.getByRole('button', { name: /aplicar/i }).click()
+
+    // O estado escolhido cabe na URL, então dá para compartilhar e voltar.
+    await expect(page).toHaveURL(/\/marcas\?ordem=nome/)
+    await expect(page.getByRole('main')).toContainText(/em ordem alfabética/i)
+
+    const primeiroPorNome = await page.getByRole('main').getByRole('listitem').first().innerText()
+    expect(
+      primeiroPorNome,
+      'a lista não mudou ao trocar a ordem — a fixture parou de discriminar',
+    ).not.toBe(primeiroPorOfertas)
+  })
+
+  test('ordem forjada na URL não quebra a página nem vira rótulo', async ({ page }) => {
+    // Mesma regra de `/go/[offerId]`: valor inventado cai no padrão.
+    await page.goto('/marcas?ordem=inventado')
+    await expect(page.getByRole('main')).toContainText(/mais ofertas para a que tem menos/i)
+    await expect(page.getByRole('main').getByRole('listitem').first()).toBeVisible()
+  })
+
+  test.describe('sem JavaScript', () => {
+    test.use({ javaScriptEnabled: false })
+
+    test('a ordenação continua funcionando, porque é formulário GET', async ({ page }) => {
+      await page.goto('/marcas')
+      await page.getByLabel('Ordenar por').selectOption('preco')
+      await page.getByRole('button', { name: /aplicar/i }).click()
+
+      await expect(page).toHaveURL(/\/marcas\?ordem=preco/)
+      await expect(page.getByRole('main')).toContainText(/do menor preço de entrada para o maior/i)
+    })
+  })
+})

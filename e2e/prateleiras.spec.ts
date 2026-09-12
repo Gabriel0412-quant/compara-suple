@@ -522,6 +522,43 @@ test.describe('a prateleira de maiores descontos', () => {
     ).toBe('auto')
   })
 
+  test('ordena por reais economizados, não pelo percentual do selo', async ({ page }) => {
+    /*
+      `getProductsOnSale` sempre ordenou por desconto absoluto, mas até o #227
+      o card só mostrava o percentual — a fileira lia "-25% -20%" e parecia
+      fora de ordem. A decisão, de 10/09/2026, foi manter os reais e passar a
+      exibi-los.
+
+      A fixture tem os dois critérios discordando de propósito: o produto 6
+      economiza mais reais (R$ 50,00) com percentual menor (-20%) que o
+      produto 1 (R$ 30,00, -25%). Ordenar por percentual inverteria a fileira.
+    */
+    await page.goto('/')
+    const cards = prateleira(page, DESCONTOS).getByRole('listitem')
+
+    const n = await cards.count()
+    expect(n, 'a prateleira precisa de dois cards para ter ordem').toBeGreaterThan(1)
+
+    const economias: number[] = []
+    const percentuais: number[] = []
+    for (let i = 0; i < n; i++) {
+      const texto = await cards.nth(i).innerText()
+      economias.push(reais(texto.match(/Economiza (R\$\s*[\d.,]+)/)![1]))
+      percentuais.push(Number(texto.match(/-(\d+)%/)![1]))
+    }
+
+    expect(economias, `economias fora de ordem: ${economias.join(', ')}`)
+      .toEqual([...economias].sort((a, b) => b - a))
+
+    /*
+      E o percentual NÃO está ordenado — é o que prova que o teste acima olha
+      a coluna certa. Se um dia os dois coincidirem na fixture, esta asserção
+      cai primeiro e avisa que o teste parou de discriminar.
+    */
+    expect(percentuais, `percentuais ordenados: a fixture parou de discriminar (${percentuais.join(', ')})`)
+      .not.toEqual([...percentuais].sort((a, b) => b - a))
+  })
+
   test('declara de onde o desconto sai, e leva às ofertas', async ({ page, request }) => {
     await page.goto('/')
     const secao = prateleira(page, DESCONTOS)

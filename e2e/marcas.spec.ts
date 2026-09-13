@@ -306,6 +306,58 @@ test.describe('a página de marcas', () => {
     expect(estados.some(p => !p.cobre), 'nenhuma marca recortada para exercitar a regra').toBe(true)
   })
 
+  test('o corte do azulejo nunca come mais que a margem de fundo', async ({ page }) => {
+    /*
+      O bug do #243, travado.
+
+      Os azulejos entraram 1:1 e a faixa da home, em 1440px, tem cartões de
+      3,49 de proporção: sobrava 28,7% da altura visível, e a arte da
+      Integralmédica ocupa 39%. O raio saiu cortado em cima e embaixo.
+
+      Nada media isso — o teste de painel olhava cor, e o de altura olhava o
+      cartão. Aqui se mede o recorte: quanto do arquivo continua visível
+      depois do `object-cover`.
+
+      O limite é a área segura com que os arquivos foram reenquadrados: arte
+      em no máximo 60% da largura por 62% da altura. Enquanto o visível ficar
+      acima disso, o que o corte come é fundo.
+    */
+    const LIMITE = 0.62
+
+    for (const largura of [375, 768, 1440]) {
+      await page.setViewportSize({ width: largura, height: 1000 })
+      await page.goto('/marcas')
+
+      const azulejos = await page.evaluate(() =>
+        [...document.querySelectorAll('main li img')]
+          .filter(i => getComputedStyle(i).objectFit === 'cover')
+          .map(i => {
+            const r = i.getBoundingClientRect()
+            const img = i as HTMLImageElement
+            const daCaixa = r.width / r.height
+            const doArquivo = img.naturalWidth / img.naturalHeight
+            return {
+              marca: img.alt,
+              visivelL: daCaixa < doArquivo ? daCaixa / doArquivo : 1,
+              visivelA: daCaixa > doArquivo ? doArquivo / daCaixa : 1,
+            }
+          }),
+      )
+
+      expect(azulejos.length, `nenhum azulejo em ${largura}px`).toBeGreaterThan(0)
+      for (const a of azulejos) {
+        expect(
+          a.visivelL,
+          `${a.marca} em ${largura}px: só ${(a.visivelL * 100).toFixed(0)}% da largura visível`,
+        ).toBeGreaterThanOrEqual(LIMITE)
+        expect(
+          a.visivelA,
+          `${a.marca} em ${largura}px: só ${(a.visivelA * 100).toFixed(0)}% da altura visível`,
+        ).toBeGreaterThanOrEqual(LIMITE)
+      }
+    }
+  })
+
   test('não afirma o que o dado não sustenta', async ({ page }) => {
     await page.goto('/marcas')
     const texto = await page.getByRole('main').innerText()

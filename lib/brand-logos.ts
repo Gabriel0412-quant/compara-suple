@@ -60,6 +60,13 @@ export type LogoDeMarca = {
   /**
    * O arquivo é um azulejo, não uma marca recortada.
    *
+   * Azulejo é reenquadrado antes de entrar (#243): 1200x462, proporção 2,6:1,
+   * com a arte numa área central que sobrevive ao pior corte das duas
+   * superfícies. As caixas variam de 1,80 a 3,49 de proporção — a faixa da
+   * home tem cinco colunas em 1440px e cinco colunas em 768px, com larguras
+   * muito diferentes —, e nenhum arquivo cobre essa faixa inteira sem cortar
+   * alguma coisa. O que se garante é que o cortado seja só fundo.
+   *
    * Os logos antigos eram a marca sozinha em PNG transparente, exibida sobre o
    * painel da casa. Estes vêm com fundo próprio e opaco — o vermelho da
    * Integralmédica, o preto da Soldiers, o cinza da DUX — e exibi-los como os
@@ -81,20 +88,20 @@ const LOGOS: Record<string, LogoDeMarca> = {
   'max titanium': { arquivo: '/marcas/max-titanium.png', largura: 632, altura: 180 },
   'soldiers nutrition': {
     arquivo: '/marcas/soldiers-nutrition.png',
-    largura: 372,
-    altura: 160,
+    largura: 1200,
+    altura: 462,
     preenche: true,
   },
   integralmedica: {
     arquivo: '/marcas/integralmedica.png',
-    largura: 500,
-    altura: 500,
+    largura: 1200,
+    altura: 462,
     preenche: true,
   },
   'dux nutrition': {
     arquivo: '/marcas/dux-nutrition.png',
-    largura: 1000,
-    altura: 1000,
+    largura: 1200,
+    altura: 462,
     preenche: true,
   },
   /*

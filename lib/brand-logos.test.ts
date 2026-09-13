@@ -114,6 +114,31 @@ describe('manifesto de logos', () => {
     expect(azulejos).toEqual(['dux nutrition', 'integralmedica', 'soldiers nutrition'])
   })
 
+  it('todo azulejo é 2,6:1, que é o que faz a área segura funcionar', () => {
+    /*
+      Os azulejos entraram como vieram da marca — 500x500 e 1000x1000 — e a
+      arte foi cortada (#243). O `object-cover` recorta o que sobra, e as
+      caixas variam de 1,80 a 3,49 de proporção: a faixa da home tem cinco
+      colunas em 1440px e cinco em 768px, com larguras muito diferentes.
+
+      Nenhum arquivo cobre essa faixa inteira sem cortar alguma coisa. O que
+      dá para garantir é que o cortado seja só fundo, e isso depende de duas
+      coisas: proporção 2,6:1 e a arte numa área central de no máximo 60% da
+      largura por 62% da altura.
+
+      A proporção é o que este teste guarda, porque é a metade verificável a
+      partir do arquivo. Um azulejo quadrado entrando de novo cai aqui.
+    */
+    for (const [marca, logo] of entradas.filter(([, l]) => l.preenche)) {
+      const real = dimensoesDoArquivo(logo.arquivo)
+      const proporcao = real.largura / real.altura
+      expect(
+        Math.abs(proporcao - 2.6),
+        `${marca} tem proporção ${proporcao.toFixed(2)}, não 2,6 — a arte vai ser cortada`,
+      ).toBeLessThan(0.05)
+    }
+  })
+
   it('azulejo não pede painel escuro: ele traz o próprio fundo', () => {
     // As duas marcações resolvem o mesmo problema por caminhos diferentes, e
     // juntas não fazem sentido — o painel escuro ficaria escondido embaixo do

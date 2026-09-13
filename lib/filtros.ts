@@ -1,5 +1,6 @@
 import { slugDaMarca } from './brands'
 import { normalizarTexto } from './busca'
+import { compararPorEconomia } from './card'
 import {
   categoriaDoProduto,
   getCategoryBySlug,
@@ -26,7 +27,10 @@ export const ROTA_DA_BUSCA = '/produtos'
 /** Prefixo da versão indexável da mesma tela, com uma categoria fixa. */
 export const ROTA_DA_CATEGORIA = '/categoria/'
 
-export type Ordem = 'relevancia' | 'dose' | 'preco'
+/** A mesma tela com o filtro de promoção fixo no caminho. */
+export const ROTA_DAS_OFERTAS = '/ofertas'
+
+export type Ordem = 'relevancia' | 'dose' | 'preco' | 'desconto'
 
 export const ORDENS: { valor: Ordem; rotulo: string }[] = [
   { valor: 'relevancia', rotulo: 'Relevância' },
@@ -39,7 +43,33 @@ export const ORDENS: { valor: Ordem; rotulo: string }[] = [
   */
   { valor: 'dose', rotulo: 'Menor R$/dose' },
   { valor: 'preco', rotulo: 'Menor preço' },
+  /*
+    Por último, e não por acaso.
+
+    Desconto é afirmação do anúncio — sai de `original_price`, que é o vendedor
+    quem escreve —, enquanto R$/dose e preço são conta nossa sobre o valor
+    cobrado. A lista declara essa hierarquia. Em `/ofertas` ela é o padrão,
+    porque ali a promoção é o assunto da página.
+  */
+  { valor: 'desconto', rotulo: 'Maior desconto' },
 ]
+
+/**
+ * A ordem que cada rota assume quando a URL não diz nada.
+ *
+ * `/ofertas` é a tela de busca com a promoção fixa no caminho, e abrir uma
+ * página de promoções em "relevância" esconderia justamente o que ela promete
+ * mostrar. As outras rotas continuam em relevância.
+ *
+ * Um só lugar decide isso porque quem lê a URL e quem a escreve precisam
+ * concordar: se `parseFiltros` assumisse `desconto` e `serializarFiltros`
+ * omitisse `relevancia`, clicar em "Relevância" em `/ofertas` devolveria uma
+ * URL sem `ordem` — que o parse leria como `desconto` de novo, e o botão nunca
+ * pegaria.
+ */
+export function ordemPadrao(base: string): Ordem {
+  return base === ROTA_DAS_OFERTAS ? 'desconto' : 'relevancia'
+}
 
 export type Filtros = {
   termo: string
@@ -143,7 +173,7 @@ function numeroPositivo(valor: string): number | null {
  * mostra o catálogo inteiro em vez de uma página sem nada. Um link velho ou um
  * slug renomeado não deve produzir uma tela que parece um bug.
  */
-export function parseFiltros(params: Params): Filtros {
+export function parseFiltros(params: Params, padrao: Ordem = 'relevancia'): Filtros {
   const ordem = primeiro(params.ordem) as Ordem
 
   return {
@@ -172,7 +202,7 @@ export function parseFiltros(params: Params): Filtros {
     soPromocao: primeiro(params.promocao) === '1',
     precoMax: numeroPositivo(primeiro(params.preco_max)),
     dosePrecoMax: numeroPositivo(primeiro(params.dose_max)),
-    ordem: ORDENS.some(o => o.valor === ordem) ? ordem : 'relevancia',
+    ordem: ORDENS.some(o => o.valor === ordem) ? ordem : padrao,
   }
 }
 
@@ -207,10 +237,20 @@ export function serializarFiltros(filtros: Filtros, base = ROTA_DA_BUSCA): strin
   }
   if (filtros.marcas.length > 0) p.set('marca', filtros.marcas.join(SEPARADOR))
   if (filtros.sabores.length > 0) p.set('sabor', filtros.sabores.join(SEPARADOR))
-  if (filtros.soPromocao) p.set('promocao', '1')
+  /*
+    Em `/ofertas` a promoção está no caminho, como a categoria em
+    `/categoria/<slug>`. Repeti-la daria `/ofertas?promocao=1`, que é a mesma
+    página com duas URLs.
+
+    Tirar o filtro é sair da rota, e disso cuida o chip: `chipsDeFiltro`
+    serializa sobre a base padrão, então o × de "Só em promoção" leva para
+    `/produtos` sem a promoção — que é o destino certo, porque `/ofertas` sem
+    promoção não é `/ofertas`.
+  */
+  if (filtros.soPromocao && base !== ROTA_DAS_OFERTAS) p.set('promocao', '1')
   if (filtros.precoMax !== null) p.set('preco_max', String(filtros.precoMax))
   if (filtros.dosePrecoMax !== null) p.set('dose_max', String(filtros.dosePrecoMax))
-  if (filtros.ordem !== 'relevancia') p.set('ordem', filtros.ordem)
+  if (filtros.ordem !== ordemPadrao(base)) p.set('ordem', filtros.ordem)
   const query = p.toString()
   return query === '' ? base : `${base}?${query}`
 }
@@ -322,6 +362,13 @@ export function aplicarFiltros(
 
 export function ordenar(produtos: CategoryProduct[], ordem: Ordem): CategoryProduct[] {
   const lista = [...produtos]
+  /*
+    Reaproveita o comparador do cartão (#226), em vez de recalcular a economia
+    aqui. É o mesmo número que o card mostra em "Economiza R$ X", e a
+    prateleira de descontos da home ordena pelo mesmo critério — três lugares
+    com a mesma conta é um lugar para ela divergir.
+  */
+  if (ordem === 'desconto') return lista.sort(compararPorEconomia)
   if (ordem === 'preco') {
     return lista.sort((a, b) => a.featuredPrice - b.featuredPrice || a.name.localeCompare(b.name, 'pt-BR'))
   }

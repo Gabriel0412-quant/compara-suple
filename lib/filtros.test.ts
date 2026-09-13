@@ -6,7 +6,9 @@ import {
   slugDoProduto,
   aplicarFiltros,
   ROTA_DA_BUSCA,
+  ROTA_DAS_OFERTAS,
   SEM_FILTRO,
+  ordemPadrao,
   alternar,
   buscaPorMarca,
   chipsDeFiltro,
@@ -136,15 +138,20 @@ describe('leitura da URL', () => {
 })
 
 describe('as opções de ordenação', () => {
-  it('declara as três, com R$/dose antes de preço', () => {
+  it('declara as quatro, com R$/dose antes de preço e desconto por último', () => {
     /*
       A ordem da lista é a ordem que aparece no seletor, e ela declara o que o
       site acha que importa: a tese é custo por dose, não preço de etiqueta.
+
+      "Maior desconto" fecha a lista porque é afirmação do anúncio — sai de
+      `original_price`, que o vendedor escreve —, enquanto R$/dose e preço são
+      conta nossa sobre o valor cobrado.
     */
     expect(ORDENS).toEqual([
       { valor: 'relevancia', rotulo: 'Relevância' },
       { valor: 'dose', rotulo: 'Menor R$/dose' },
       { valor: 'preco', rotulo: 'Menor preço' },
+      { valor: 'desconto', rotulo: 'Maior desconto' },
     ])
   })
 })
@@ -884,5 +891,123 @@ describe('chips de filtro ativo', () => {
     // texto diz "todos os produtos" ou "N resultados". Esquecer um campo faz
     // a tela afirmar que não há filtro enquanto há.
     expect(semFiltro(f(mudanca))).toBe(false)
+  })
+})
+
+describe('a rota de ofertas fixa a promoção e a ordem', () => {
+  it('só ela troca o padrão de ordenação', () => {
+    expect(ordemPadrao(ROTA_DAS_OFERTAS)).toBe('desconto')
+    expect(ordemPadrao(ROTA_DA_BUSCA)).toBe('relevancia')
+    expect(ordemPadrao('/categoria/whey-protein')).toBe('relevancia')
+  })
+
+  it('a rota é a que a tela usa, escrita uma vez', () => {
+    // O literal importa: `serializarFiltros` compara a base com ele para saber
+    // se a promoção está no caminho. Com a constante vazia, a comparação nunca
+    // casa e a query volta a repetir `promocao=1`.
+    expect(ROTA_DAS_OFERTAS).toBe('/ofertas')
+  })
+
+  it('em /ofertas a promoção não se repete na query', () => {
+    const comPromocao = f({ soPromocao: true, ordem: 'desconto' })
+    expect(serializarFiltros(comPromocao, ROTA_DAS_OFERTAS)).toBe('/ofertas')
+  })
+
+  it('fora de /ofertas ela continua na query', () => {
+    const comPromocao = f({ soPromocao: true })
+    expect(serializarFiltros(comPromocao)).toBe('/produtos?promocao=1')
+    expect(serializarFiltros(comPromocao, '/categoria/whey-protein')).toBe(
+      '/categoria/whey-protein?promocao=1',
+    )
+  })
+
+  it('sem promoção nenhuma rota escreve o parâmetro', () => {
+    expect(serializarFiltros(f({ soPromocao: false }))).toBe('/produtos')
+    expect(serializarFiltros(f({ soPromocao: false, ordem: 'desconto' }), ROTA_DAS_OFERTAS)).toBe(
+      '/ofertas',
+    )
+  })
+
+  it('a ordem omitida é a padrão da rota, não a global', () => {
+    /*
+      O par que sustenta o botão "Relevância" em /ofertas.
+
+      Se a escrita omitisse `relevancia` por ser o padrão global, a URL sairia
+      sem `ordem` — e a leitura, com o padrão da rota, a traria de volta como
+      `desconto`. O clique nunca pegaria.
+    */
+    expect(serializarFiltros(f({ ordem: 'desconto' }), ROTA_DAS_OFERTAS)).toBe('/ofertas')
+    expect(serializarFiltros(f({ ordem: 'relevancia' }), ROTA_DAS_OFERTAS)).toBe(
+      '/ofertas?ordem=relevancia',
+    )
+    // E o inverso na busca, onde o padrão é o outro.
+    expect(serializarFiltros(f({ ordem: 'relevancia' }))).toBe('/produtos')
+    expect(serializarFiltros(f({ ordem: 'desconto' }))).toBe('/produtos?ordem=desconto')
+  })
+
+  it('a leitura respeita o padrão que a rota passa', () => {
+    expect(parseFiltros({}, 'desconto').ordem).toBe('desconto')
+    expect(parseFiltros({}).ordem).toBe('relevancia')
+    // Valor inventado cai no padrão da rota, não no global.
+    expect(parseFiltros({ ordem: 'inventada' }, 'desconto').ordem).toBe('desconto')
+    // E o que a URL diz vence o padrão.
+    expect(parseFiltros({ ordem: 'relevancia' }, 'desconto').ordem).toBe('relevancia')
+  })
+})
+
+describe('ordenação por desconto', () => {
+  it('põe quem economiza mais reais na frente, e não quem tem o maior percentual', () => {
+    /*
+      Os dois critérios discordam de propósito: 429,90 → 147,05 economiza
+      R$ 282,85 com -66%, e 239,90 → 68,90 economiza R$ 171,00 com -71%.
+      Fixture em que concordassem não provaria qual coluna foi usada.
+    */
+    const maisReais = produto({ name: 'A', featuredPrice: 147.05, featuredOriginalPrice: 429.9 })
+    const maiorPercentual = produto({ name: 'B', featuredPrice: 68.9, featuredOriginalPrice: 239.9 })
+
+    expect(ordenar([maiorPercentual, maisReais], 'desconto').map(p => p.name)).toEqual(['A', 'B'])
+  })
+
+  it('produto sem desconto vai para o fim', () => {
+    const sem = produto({ name: 'Sem', featuredOriginalPrice: null })
+    const com = produto({ name: 'Com', featuredPrice: 50, featuredOriginalPrice: 100 })
+    expect(ordenar([sem, com], 'desconto').map(p => p.name)).toEqual(['Com', 'Sem'])
+  })
+
+  it('não altera o array recebido', () => {
+    // `ordenar` devolve cópia nas outras ordens; a nova precisa fazer o mesmo,
+    // senão reordenar a tela embaralha o catálogo de quem chamou.
+    const entrada = [
+      produto({ name: 'A', featuredPrice: 90, featuredOriginalPrice: 100 }),
+      produto({ name: 'B', featuredPrice: 10, featuredOriginalPrice: 100 }),
+    ]
+    const antes = entrada.map(p => p.name)
+    ordenar(entrada, 'desconto')
+    expect(entrada.map(p => p.name)).toEqual(antes)
+  })
+
+  it('é uma ordem de verdade, e não a lista devolvida como veio', () => {
+    // Mata o mutante que troca `lista.sort(...)` por `lista`.
+    const entrada = [
+      produto({ name: 'Pouco', featuredPrice: 90, featuredOriginalPrice: 100 }),
+      produto({ name: 'Muito', featuredPrice: 10, featuredOriginalPrice: 100 }),
+    ]
+    expect(ordenar(entrada, 'desconto').map(p => p.name)).toEqual(['Muito', 'Pouco'])
+  })
+
+  it('as outras ordens não passam a ordenar por desconto', () => {
+    // Mata o mutante que troca a condição por `true`: em "preço", quem manda é
+    // o preço, mesmo que o desconto diga o contrário.
+    const caroComDescontao = produto({ name: 'Caro', featuredPrice: 300, featuredOriginalPrice: 900 })
+    const baratoSemDesconto = produto({ name: 'Barato', featuredPrice: 20, featuredOriginalPrice: null })
+
+    expect(ordenar([caroComDescontao, baratoSemDesconto], 'preco').map(p => p.name)).toEqual([
+      'Barato',
+      'Caro',
+    ])
+    expect(ordenar([baratoSemDesconto, caroComDescontao], 'relevancia').map(p => p.name)).toEqual([
+      'Barato',
+      'Caro',
+    ])
   })
 })

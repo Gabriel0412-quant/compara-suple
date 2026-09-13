@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { fundoDoLogo } from './LogoDaMarca'
+import { fundoDoLogo, logoPreencheOPainel } from './LogoDaMarca'
 import type { Marca } from '@/lib/brands'
 
 /**
@@ -43,5 +43,25 @@ describe('fundoDoLogo', () => {
 
   it('acha a polaridade pelo nome como o banco escreve, com acento e caixa', () => {
     expect(fundoDoLogo(marca('DARK LAB'))).toBe('bg-surface-dark')
+  })
+})
+
+describe('logoPreencheOPainel', () => {
+  it('as três que entregaram azulejo cobrem a caixa', () => {
+    for (const nome of ['Integralmédica', 'Dux Nutrition', 'Soldiers Nutrition']) {
+      expect(logoPreencheOPainel(marca(nome)), `${nome} deveria cobrir`).toBe(true)
+    }
+  })
+
+  it('as marcas recortadas continuam com respiro', () => {
+    for (const nome of ['Growth Supplements', 'Max Titanium', 'FTW', 'Dark Lab']) {
+      expect(logoPreencheOPainel(marca(nome)), `${nome} não deveria cobrir`).toBe(false)
+    }
+  })
+
+  it('marca sem logo nenhum não cobre coisa alguma', () => {
+    // `?? null` mal escrito devolveria `undefined`, que não é `false` — e o
+    // painel perderia o respiro sem nenhuma imagem para preenchê-lo.
+    expect(logoPreencheOPainel(marca('Marca Que Nao Existe'))).toBe(false)
   })
 })

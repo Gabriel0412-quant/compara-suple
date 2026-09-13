@@ -104,6 +104,30 @@ describe('manifesto de logos', () => {
     expect(escuras).toEqual(['dark lab'])
   })
 
+  it('as marcas que entregaram azulejo estão declaradas', () => {
+    /*
+      Lista de fora, como a `COBERTAS`. Um azulejo cobre o painel inteiro e
+      leva a cor da marca para a tela — é decisão, não detalhe de arquivo, e
+      marcar `preenche` sem querer mudaria o desenho de um cartão em silêncio.
+    */
+    const azulejos = entradas.filter(([, logo]) => logo.preenche).map(([marca]) => marca).sort()
+    expect(azulejos).toEqual(['dux nutrition', 'integralmedica', 'soldiers nutrition'])
+  })
+
+  it('azulejo não pede painel escuro: ele traz o próprio fundo', () => {
+    // As duas marcações resolvem o mesmo problema por caminhos diferentes, e
+    // juntas não fazem sentido — o painel escuro ficaria escondido embaixo do
+    // azulejo que o cobre.
+    for (const [marca, logo] of entradas) {
+      // `logo.preenche &&` devolveria `undefined` para quem não declara o
+      // campo, e `undefined` não é `false`.
+      expect(
+        logo.preenche === true && logo.painel === 'escuro',
+        `${marca} marca as duas coisas`,
+      ).toBe(false)
+    }
+  })
+
   it('nenhum arquivo serve a duas marcas', () => {
     const arquivos = entradas.map(([, logo]) => logo.arquivo)
     expect(new Set(arquivos).size).toBe(arquivos.length)

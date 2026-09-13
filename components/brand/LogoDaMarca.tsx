@@ -59,6 +59,11 @@ export function fundoDoLogo(marca: Marca): string {
   return FUNDO[logoDaMarca(marca.nome)?.painel ?? 'claro']
 }
 
+/** Se o arquivo desta marca é azulejo, e cobre o painel de borda a borda. */
+export function logoPreencheOPainel(marca: Marca): boolean {
+  return logoDaMarca(marca.nome)?.preenche === true
+}
+
 export function ConteudoDoCartao({
   marca,
   tamanho = 'faixa',
@@ -68,6 +73,27 @@ export function ConteudoDoCartao({
 }) {
   const logo = logoDaMarca(marca.nome)
   const t = TAMANHOS[tamanho]
+
+  /*
+    O azulejo cobre a caixa nos dois tamanhos.
+
+    Deixá-lo só no painel de `/marcas` fazia a Integralmédica virar um quadrado
+    vermelho de 36px na faixa da home, e a DUX um quadrado cinza com o nome
+    ilegível — o arquivo é 1:1, e contido numa caixa de 36px de altura sobra
+    36px de largura. Medido antes de mudar.
+  */
+  if (logo?.preenche) {
+    return (
+      <Image
+        src={logo.arquivo}
+        alt={marca.nome}
+        width={logo.largura}
+        height={logo.altura}
+        unoptimized
+        className="h-full w-full object-cover"
+      />
+    )
+  }
 
   if (!logo) {
     return (
@@ -99,12 +125,16 @@ export function ConteudoDoCartao({
 
         `max-h-[${...}px]` montado em tempo de execução não é gerado pelo
         Tailwind e sai sem altura nenhuma, em silêncio — a mesma armadilha que
-        `CLASSE_DO_TOM` existe para evitar. Aqui o valor é numérico e por marca,
-        então não há mapa que sirva: é `style` mesmo.
+        `CLASSE_DO_TOM` existe para evitar.
+
+        Havia aqui uma correção ótica por marca (`escala`), porque limitar todos
+        à mesma altura iguala a caixa e não o peso visual: o raio da
+        Integralmédica subia e descia muito além do nome, e na mesma caixa das
+        outras o nome dela saía quase pela metade. Ela era a única marca a usar
+        o campo, e o arquivo novo dela é azulejo — a correção perdeu o último
+        usuário e saiu junto. Volta se alguma marca precisar de novo.
       */
-      // Arredondado: `36 * 1.45` em ponto flutuante sai `52.199999999999996`,
-      // e esse número inteiro ia parar no HTML servido.
-      style={{ maxHeight: `${Math.round(t.altura * (logo.escala ?? 1))}px` }}
+      style={{ maxHeight: `${t.altura}px` }}
       /*
         Cor de origem, sempre — e não só no hover, como o #203 tinha deixado.
 

@@ -94,9 +94,22 @@ describe('conteúdo do cartão', () => {
     expect(elemento.props.children).toBe('Black Skull')
   })
 
-  it('a correção ótica da marca chega à altura exibida', () => {
-    // A Integralmédica é a única com `escala`, e é a prova de que o número do
-    // manifesto não fica parado lá: 36 × 1,45, arredondado.
+  it('a marca recortada é limitada à altura do tamanho', () => {
+    // Sem o teto, um arquivo de 180px de altura entraria com 180px na faixa e
+    // empurraria o cartão de 72px.
+    expect(ConteudoDoCartao({ marca: comLogo }).props.style.maxHeight).toBe('36px')
+    expect(ConteudoDoCartao({ marca: comLogo, tamanho: 'painel' }).props.style.maxHeight).toBe(
+      '84px',
+    )
+  })
+
+  it('o azulejo cobre a caixa, nos dois tamanhos', () => {
+    /*
+      A Integralmédica é azulejo desde o #241: arquivo 1:1, com o vermelho da
+      marca como fundo. Contido numa caixa de 36px de altura ele sairia com
+      36px de largura — um quadradinho ilegível, que foi o que a faixa da home
+      mostrou antes de o preenchimento valer para os dois tamanhos.
+    */
     const integral: Marca = {
       nome: 'Integralmédica',
       slug: 'integralmedica',
@@ -106,10 +119,12 @@ describe('conteúdo do cartão', () => {
       categorias: [],
       tom: 0,
     }
-    const semEscala = ConteudoDoCartao({ marca: comLogo }).props.style.maxHeight
-    const comEscala = ConteudoDoCartao({ marca: integral }).props.style.maxHeight
-    expect(semEscala).toBe('36px')
-    expect(comEscala).toBe('52px')
+
+    for (const tamanho of ['faixa', 'painel'] as const) {
+      const elemento = ConteudoDoCartao({ marca: integral, tamanho })
+      expect(elemento.props.className, `${tamanho} não cobre a caixa`).toContain('object-cover')
+      expect(elemento.props.style, `${tamanho} ainda limita a altura`).toBeUndefined()
+    }
   })
 })
 
@@ -155,6 +170,33 @@ describe('fundo do cartão da faixa', () => {
     // E o claro não é o escuro por prefixo: `bg-surface-dark` contém
     // `bg-surface-dark`, mas `bg-surface-muted` não pode conter nenhum dos dois.
     expect(oGrowth).not.toContain('bg-surface-dark')
+  })
+
+  it('o azulejo tira o respiro do cartão, e a marca recortada mantém', () => {
+    /*
+      O respiro é o que separa os dois estados na faixa: azulejo encosta na
+      borda, marca recortada respira. Sem este teste, apagar o `px-4` passa
+      despercebido — o cartão continua do mesmo tamanho e só as marcas
+      recortadas ficam coladas na borda.
+    */
+    const growth: Marca = { nome: 'Growth Supplements', slug: 'growth-supplements', produtos: 4, ofertas: 9, menorPreco: 100, categorias: [], tom: 0 }
+    const integral: Marca = { nome: 'Integralmédica', slug: 'integralmedica', produtos: 2, ofertas: 649, menorPreco: 36, categorias: [], tom: 0 }
+
+    const [oGrowth, aIntegral] = cartoes([growth, integral])
+
+    const classes = (c: string) => c.split(/\s+/).filter(Boolean).sort()
+
+    expect(classes(oGrowth), 'marca recortada perdeu o respiro').toContain('px-4')
+
+    /*
+      Comparado por diferença, e não por ausência.
+
+      "não contém px-4" deixa passar qualquer coisa no lugar: o Stryker troca a
+      string vazia do ramo do azulejo por lixo e o teste continua verde, porque
+      lixo também não é `px-4`. O que se afirma é que os dois cartões são a
+      mesma lista de classes, a menos do respiro.
+    */
+    expect(classes(aIntegral)).toEqual(classes(oGrowth).filter(c => c !== 'px-4'))
   })
 
   it('o cartão continua com a altura e o alvo de toque da faixa', () => {

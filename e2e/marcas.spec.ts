@@ -208,22 +208,26 @@ test.describe('a página de marcas', () => {
     }
   })
 
-  test('o painel de logo usa só tom da casa, nunca cor de terceiro', async ({ page }) => {
+  test('nós nunca pintamos o painel com cor de terceiro', async ({ page }) => {
     /*
-      O #151 recusou vestir um cartão nosso com a cor oficial da marca, e a
+      O #151 recusou vestir um cartão *nosso* com a cor oficial da marca, e a
       maquete 1a desenha exatamente isso — painéis no azul da Integralmédica,
-      no vermelho da Max Titanium. A própria maquete diz em texto que aqueles
-      painéis são placeholders do arquivo oficial, e é o arquivo que entra.
+      no vermelho da Max Titanium, escolhidos por nós.
 
-      Até o #219 o teste guardava isso exigindo um fundo só. Deixou de servir
-      quando a Dark Lab entrou: o arquivo dela é a versão negativa, e no painel
-      creme o wordmark branco some. Agora são dois fundos possíveis — e os dois
-      são tokens nossos.
+      Desde o #241 três marcas entregaram o logo como azulejo, com o fundo
+      próprio delas dentro do arquivo: o vermelho da Integralmédica, o preto da
+      Soldiers, o cinza da DUX. Esses azulejos cobrem o painel, então a tela
+      mostra cor de marca — e isso não é o que o #151 recusou. A cor vem do
+      arquivo da marca, que é uso nominativo, e não de uma escolha nossa de
+      pintura.
 
-      O que o teste passa a cobrar é o que importava desde o começo: nenhum
-      painel usa cor que não seja da casa. Os valores de referência saem do
-      próprio CSS, medidos em elementos de sonda, e não escritos aqui — senão o
-      teste guardaria uma cópia da paleta em vez da paleta.
+      A regra que sobra é a que sempre importou, e é esta que o teste guarda:
+      nenhum painel recebe cor pelo *nosso* CSS. Quem quiser pintar um painel
+      de vermelho tem que fazer no CSS, e aí este teste acusa.
+
+      Os valores de referência saem do próprio CSS, medidos em elementos de
+      sonda, e não escritos aqui — senão o teste guardaria uma cópia da paleta
+      em vez da paleta.
     */
     await page.goto('/marcas')
 
@@ -260,7 +264,46 @@ test.describe('a página de marcas', () => {
       de ser `span` e virou `div`.
     */
     expect(paineis, 'seletor de painel não encontra os cartões').toBe(cartoes)
-    expect(forasteiros, `painel com cor fora da paleta: ${forasteiros.join(', ')}`).toEqual([])
+    expect(forasteiros, `painel pintado por nós com cor de fora: ${forasteiros.join(', ')}`).toEqual(
+      [],
+    )
+  })
+
+  test('quando há cor de marca na tela, ela vem do arquivo da marca', async ({ page }) => {
+    /*
+      O outro lado da regra acima, e o que impede o teste anterior de virar
+      teatro: se alguém trouxer a cor da marca para o painel sem ser por um
+      azulejo — um gradiente, uma borda, um pseudo-elemento —, o teste de cima
+      continua verde porque o `background-color` segue sendo token.
+
+      Aqui se cobra que todo painel esteja num de dois estados declarados: ou
+      mostra a marca recortada, com respiro, ou é coberto por um `<img>` que
+      sai de `/marcas/`.
+    */
+    await page.goto('/marcas')
+
+    const estados = await page.evaluate(() =>
+      [...document.querySelectorAll('main li a > div:first-child')].map(painel => {
+        const img = painel.querySelector('img')
+        return {
+          marca: img?.getAttribute('alt') ?? painel.textContent?.trim() ?? '(vazio)',
+          cobre: !!img && getComputedStyle(img).objectFit === 'cover',
+          src: img?.getAttribute('src') ?? null,
+          respiro: getComputedStyle(painel).paddingLeft,
+        }
+      }),
+    )
+
+    for (const p of estados) {
+      if (p.cobre) {
+        expect(p.src, `${p.marca}: azulejo que não sai de /marcas/`).toMatch(/^\/marcas\//)
+        expect(p.respiro, `${p.marca}: azulejo com respiro, não cobre a borda`).toBe('0px')
+      } else {
+        expect(p.respiro, `${p.marca}: marca recortada sem respiro`).not.toBe('0px')
+      }
+    }
+    expect(estados.some(p => p.cobre), 'nenhum azulejo para exercitar a regra').toBe(true)
+    expect(estados.some(p => !p.cobre), 'nenhuma marca recortada para exercitar a regra').toBe(true)
   })
 
   test('não afirma o que o dado não sustenta', async ({ page }) => {

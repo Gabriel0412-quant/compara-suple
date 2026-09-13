@@ -316,3 +316,152 @@ test.describe('a categoria é a mesma tela, na rota indexável', () => {
     await expect(chip(page, rotulo)).toBeVisible()
   })
 })
+
+/**
+ * As três rotas que renderizam a mesma tela (#237).
+ *
+ * `/produtos` é a busca livre, `/categoria/<slug>` é ela com uma categoria
+ * fixa no caminho e `/ofertas` é ela com a promoção fixa. Antes eram três
+ * telas parecidas: a categoria tinha cabeçalho próprio, com emoji e um
+ * parágrafo de apresentação, e nenhuma das duas trazia o campo de busca; e
+ * `/ofertas` era outra página inteira, com o visual de antes do rebranding.
+ *
+ * Nada acusava isso, porque nenhum teste comparava as rotas entre si.
+ */
+
+/** O que faz uma rota ser "a tela de busca", e não uma tela parecida. */
+async function assinaturaDaTela(page: import('@playwright/test').Page) {
+  const main = page.getByRole('main')
+  return {
+    temBusca: (await main.getByRole('searchbox').count()) > 0,
+    temComoComparamos: (await main.locator('summary#como-comparamos').count()) > 0,
+    temPainel: (await painel(page).count()) > 0,
+    temOrdenacao: (await main.getByText('Ordenar por').count()) > 0,
+  }
+}
+
+test.describe('as três rotas são a mesma tela', () => {
+  for (const rota of ['/produtos', '/categoria/whey-protein', '/ofertas']) {
+    test(`${rota} tem a assinatura da tela de busca`, async ({ page }) => {
+      await page.goto(rota)
+      expect(await assinaturaDaTela(page)).toEqual({
+        temBusca: true,
+        temComoComparamos: true,
+        temPainel: true,
+        temOrdenacao: true,
+      })
+    })
+  }
+
+  test('a categoria não tem cabeçalho próprio, com emoji e apresentação', async ({ page }) => {
+    await page.goto('/categoria/whey-protein')
+
+    /*
+      Sem emoji, verificado por classe de caractere e não por lista.
+
+      Procurar "🥛" acharia só o do whey; a regra é que nenhum pictograma entre
+      no cabeçalho, e ela vale para a categoria que alguém acrescentar amanhã.
+    */
+    const cabecalho = await page
+      .getByRole('main')
+      .locator('h1')
+      .evaluate(h => h.parentElement?.textContent ?? '')
+
+    expect(cabecalho, `pictograma no cabeçalho: ${cabecalho.slice(0, 60)}`).not.toMatch(
+      /\p{Extended_Pictographic}/u,
+    )
+    // O h1 continua nomeando a categoria: é ele que diz onde a pessoa está.
+    await expect(page.getByRole('heading', { level: 1, name: 'Whey Protein' })).toBeVisible()
+  })
+
+  test('a categoria e a busca filtrada mostram os mesmos produtos', async ({ page }) => {
+    const nomes = async () =>
+      (await cards(page).locator('h2').allTextContents()).map(t => t.trim()).sort()
+
+    await page.goto('/categoria/whey-protein')
+    const pelaCategoria = await nomes()
+
+    await page.goto('/produtos?categoria=whey-protein')
+    expect(await nomes()).toEqual(pelaCategoria)
+    expect(pelaCategoria.length, 'categoria sem produto para comparar').toBeGreaterThan(0)
+  })
+})
+
+test.describe('/ofertas é a busca com a promoção fixa', () => {
+  test('abre com o filtro de promoção ligado e a ordem por desconto', async ({ page }) => {
+    await page.goto('/ofertas')
+
+    await expect(chip(page, 'Só em promoção')).toBeVisible()
+    await expect(
+      page.getByRole('main').getByRole('link', { name: 'Maior desconto' }),
+    ).toHaveAttribute('aria-current', 'true')
+  })
+
+  test('todo produto listado tem desconto que o riscado sustenta', async ({ page }) => {
+    await page.goto('/ofertas')
+    const total = await cards(page).count()
+    expect(total, 'nenhuma promoção para exercitar a rota').toBeGreaterThan(0)
+
+    for (let i = 0; i < total; i++) {
+      const card = cards(page).nth(i)
+      await expect(card.locator('.line-through'), 'card sem preço anterior').toHaveCount(1)
+      await expect(card.getByText(/^Economiza R\$/)).toBeVisible()
+    }
+  })
+
+  test('ordena por reais economizados, e não pelo percentual', async ({ page }) => {
+    /*
+      A fixture tem os dois critérios discordando de propósito (#226): o
+      produto 6 economiza R$ 50,00 com -20%, e o produto 1 economiza R$ 30,00
+      com -25%. Ordenar por percentual inverteria a lista.
+    */
+    await page.goto('/ofertas')
+    const total = await cards(page).count()
+    expect(total, 'a rota precisa de dois cards para ter ordem').toBeGreaterThan(1)
+
+    const economias: number[] = []
+    const percentuais: number[] = []
+    for (let i = 0; i < total; i++) {
+      const texto = await cards(page).nth(i).innerText()
+      economias.push(Number(texto.match(/Economiza R\$\s*([\d.,]+)/)![1].replaceAll('.', '').replace(',', '.')))
+      percentuais.push(Number(texto.match(/-(\d+)%/)![1]))
+    }
+
+    expect(economias, `fora de ordem: ${economias.join(', ')}`).toEqual(
+      [...economias].sort((a, b) => b - a),
+    )
+    expect(percentuais, 'a fixture parou de discriminar').not.toEqual(
+      [...percentuais].sort((a, b) => b - a),
+    )
+  })
+
+  test('a promoção não se repete na query, porque está no caminho', async ({ page }) => {
+    await page.goto('/ofertas')
+    const paraDose = page.getByRole('main').getByRole('link', { name: 'Menor R$/dose' })
+    // `/ofertas?promocao=1&ordem=dose` seria a mesma página com duas URLs.
+    await expect(paraDose).toHaveAttribute('href', '/ofertas?ordem=dose')
+  })
+
+  test('clicar em Relevância é obedecido, e não volta para desconto', async ({ page }) => {
+    /*
+      O caso que `ordemPadrao` existe para resolver. Se a escrita da URL
+      omitisse "relevancia" por ser o padrão global, a leitura em `/ofertas` a
+      traria de volta como "desconto" e o botão nunca pegaria.
+    */
+    await page.goto('/ofertas')
+    await page.getByRole('main').getByRole('link', { name: 'Relevância' }).click()
+
+    await expect(page).toHaveURL('/ofertas?ordem=relevancia')
+    await expect(
+      page.getByRole('main').getByRole('link', { name: 'Relevância' }),
+    ).toHaveAttribute('aria-current', 'true')
+  })
+
+  test('tirar a promoção leva para a busca, porque a rota deixa de valer', async ({ page }) => {
+    await page.goto('/ofertas')
+    await chip(page, 'Só em promoção').click()
+
+    await expect(page).toHaveURL(/^[^?]*\/produtos(\?|$)/)
+    await expect(chip(page, 'Só em promoção')).toHaveCount(0)
+  })
+})

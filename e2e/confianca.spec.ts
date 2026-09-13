@@ -33,9 +33,30 @@ test.describe('nenhuma tela pública faz claim proibido', () => {
   }
 })
 
+/*
+  O resumo, e não a página.
+
+  Em `/produto/[slug]` a comissão de afiliado é declarada duas vezes — no
+  resumo e ao lado das ofertas —, e procurar na página inteira dá violação de
+  modo estrito. Estes testes falam do resumo, então é nele que olham.
+*/
+const resumo = (page: import('@playwright/test').Page) =>
+  page.locator('details:has(> summary#como-comparamos)')
+
 test.describe('metodologia', () => {
+  /*
+    A lista saiu daqui no #239.
+
+    O resumo e o aviso de coleta defasada foram tirados de `/produtos`,
+    `/categoria/<slug>` e `/ofertas` por decisão do dono do produto: a listagem
+    é para escanear produto, e dois blocos de texto entre o campo de busca e o
+    primeiro card empurravam a grade para baixo da dobra.
+
+    A metodologia não saiu do site — continua nas duas telas onde a decisão de
+    compra acontece, que são as que sobraram nesta lista. A declaração de
+    comissão continua também no rodapé de toda página.
+  */
   for (const [nome, url] of [
-    ['lista', '/produtos'],
     ['comparador', '/comparar?ids=1,2'],
     ['produto', '/produto/whey-concentrado-growth'],
   ] as const) {
@@ -46,27 +67,57 @@ test.describe('metodologia', () => {
   }
 
   test('o resumo distingue menor preço de destaque', async ({ page }) => {
-    await page.goto('/produtos')
+    await page.goto('/produto/whey-concentrado-growth')
     await page.locator('summary#como-comparamos').click()
-    await expect(page.getByText(/nem sempre é a mais barata/i)).toBeVisible()
+    await expect(resumo(page).getByText(/nem sempre é a mais barata/i)).toBeVisible()
   })
 
   test('o resumo diz que não avalia eficácia nem segurança', async ({ page }) => {
-    await page.goto('/produtos')
+    await page.goto('/produto/whey-concentrado-growth')
     await page.locator('summary#como-comparamos').click()
-    await expect(page.getByText(/não avaliamos eficácia/i)).toBeVisible()
+    await expect(resumo(page).getByText(/não avaliamos eficácia/i)).toBeVisible()
   })
 
   test('o resumo declara a comissão de afiliado', async ({ page }) => {
-    await page.goto('/produtos')
+    await page.goto('/produto/whey-concentrado-growth')
     await page.locator('summary#como-comparamos').click()
-    await expect(page.getByText(/ganhamos comissão/i)).toBeVisible()
+    await expect(resumo(page).getByText(/ganhamos comissão/i)).toBeVisible()
   })
 
   test('com coleta recente não há aviso de desatualização', async ({ page }) => {
-    // O fixture carimba as ofertas com a data de hoje.
-    await page.goto('/produtos')
+    /*
+      Apontava para `/produtos`, que desde o #239 não tem aviso nenhum — o
+      teste continuaria verde por não haver o que procurar, em vez de por a
+      coleta estar fresca. Aponta para a tela que ainda tem o aviso.
+
+      O fixture carimba as ofertas com a data de hoje.
+    */
+    await page.goto('/produto/whey-concentrado-growth')
     await expect(page.getByText(/preços podem estar desatualizados/i)).toHaveCount(0)
+  })
+
+  test('a listagem não anuncia metodologia que não está mais lá', async ({ page }) => {
+    /*
+      O contrário do teste acima: a listagem perdeu o resumo de propósito, e
+      isso precisa estar travado. Sem esta linha, alguém o recoloca sem
+      ninguém notar — e a decisão do #239 se desfaz em silêncio.
+
+      A declaração de comissão continua no rodapé, que é o que o `banner` e o
+      `contentinfo` do `cabecalho.spec.ts` já cobram.
+    */
+    for (const rota of ['/produtos', '/categoria/whey-protein', '/ofertas']) {
+      await page.goto(rota)
+      await expect(
+        page.getByRole('main').locator('summary#como-comparamos'),
+        `${rota} voltou a mostrar o resumo`,
+      ).toHaveCount(0)
+      await expect(
+        page.getByRole('main').getByText(/preços podem estar desatualizados/i),
+        `${rota} voltou a mostrar o aviso de coleta`,
+      ).toHaveCount(0)
+    }
+    // E o rodapé continua declarando o afiliado em todas elas.
+    await expect(page.getByRole('contentinfo')).toContainText(/links são de afiliados/i)
   })
 })
 

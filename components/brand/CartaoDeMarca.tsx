@@ -1,6 +1,10 @@
 import Link from 'next/link'
 
-import { ConteudoDoCartao, fundoDoLogo } from '@/components/brand/LogoDaMarca'
+import {
+  ConteudoDoCartao,
+  fundoDoLogo,
+  logoPreencheOPainel,
+} from '@/components/brand/LogoDaMarca'
 import { type Marca } from '@/lib/brands'
 import { buscaPorMarca } from '@/lib/filtros'
 import { formatBRL } from '@/lib/products'
@@ -64,7 +68,10 @@ export function CartaoDeMarca({
           declarada no manifesto, junto do arquivo, em vez de aqui.
         */}
         <div
-          className={`flex h-[168px] shrink-0 items-center justify-center overflow-hidden px-6 ${fundoDoLogo(marca)}`}
+          className={`flex h-[168px] shrink-0 items-center justify-center overflow-hidden ${
+            // Azulejo encosta na borda; marca recortada respira.
+            logoPreencheOPainel(marca) ? '' : 'px-6'
+          } ${fundoDoLogo(marca)}`}
         >
           <ConteudoDoCartao marca={marca} tamanho="painel" />
         </div>

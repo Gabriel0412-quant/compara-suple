@@ -14,6 +14,19 @@ import { normalizarTexto } from './busca'
  * qualquer comparador faz. O que continua proibido é o entorno afirmar
  * parceria, e disso cuida `e2e/marcas.spec.ts`.
  *
+ * E por que agora tem cor de marca cobrindo o painel, se o #151 disse que não.
+ *
+ * Três marcas entregaram o logo como azulejo (#241): arquivo opaco, com o
+ * fundo próprio delas dentro — o vermelho da Integralmédica, o preto da
+ * Soldiers, o cinza da DUX. Exibidos como os outros, cada um viraria um
+ * retângulo colorido flutuando no meio do painel creme; cobrindo o painel,
+ * ficam como a marca os desenhou.
+ *
+ * A objeção do #151 continua de pé e é a mesma de sempre: a cor não pode ser
+ * escolha nossa. Aqui ela está no arquivo da marca, do mesmo jeito que o
+ * desenho e a tipografia estão — o que mudaria de figura seria alguém escrever
+ * `bg-[#FF1D16]` no painel, e disso cuida `e2e/marcas.spec.ts`.
+ *
  * O manifesto é escrito à mão, e não varrido de `public/` em tempo de
  * execução, por dois motivos: o servidor não deve ler disco para desenhar uma
  * faixa, e um arquivo solto na pasta não deve virar logo publicado sem alguém
@@ -27,19 +40,6 @@ export type LogoDeMarca = {
   /** Dimensão intrínseca do arquivo. Evita salto de layout enquanto carrega. */
   largura: number
   altura: number
-  /**
-   * Correção ótica, multiplicando a altura de exibição.
-   *
-   * Limitar todos à mesma altura iguala a caixa, não o peso visual. O raio da
-   * Integralmédica sobe e desce muito além do nome, então na mesma caixa das
-   * outras o nome dela sai quase pela metade. O número é o quanto a caixa
-   * precisa crescer para o nome empatar com os vizinhos — medido olhando, que
-   * é o único jeito, e por isso está declarado aqui em vez de escondido numa
-   * classe da tela.
-   *
-   * Ausente quer dizer 1: a marca ocupa a caixa inteira e não precisa de ajuste.
-   */
-  escala?: number
   /**
    * O painel que este logo exige, quando o claro não serve.
    *
@@ -57,6 +57,17 @@ export type LogoDeMarca = {
    * #151 continua valendo. O que muda é qual dos nossos neutros entra atrás.
    */
   painel?: 'escuro'
+  /**
+   * O arquivo é um azulejo, não uma marca recortada.
+   *
+   * Os logos antigos eram a marca sozinha em PNG transparente, exibida sobre o
+   * painel da casa. Estes vêm com fundo próprio e opaco — o vermelho da
+   * Integralmédica, o preto da Soldiers, o cinza da DUX — e exibi-los como os
+   * outros deixaria um retângulo colorido flutuando no meio do painel creme.
+   *
+   * Marcado assim, o azulejo cobre o painel inteiro.
+   */
+  preenche?: boolean
 }
 
 /**
@@ -68,17 +79,24 @@ export type LogoDeMarca = {
 const LOGOS: Record<string, LogoDeMarca> = {
   'growth supplements': { arquivo: '/marcas/growth-supplements.png', largura: 580, altura: 180 },
   'max titanium': { arquivo: '/marcas/max-titanium.png', largura: 632, altura: 180 },
-  'soldiers nutrition': { arquivo: '/marcas/soldiers-nutrition.png', largura: 652, altura: 180 },
-  integralmedica: { arquivo: '/marcas/integralmedica.png', largura: 473, altura: 180, escala: 1.45 },
-  /*
-    O DUX é o único que não chega a 180px de altura.
-
-    O arquivo de origem tem 141x58 depois de aparado, e ampliar não inventa
-    detalhe — só peso. Exibido a 36px ele cobre 1,6x, o que basta em tela comum
-    e fica levemente macio em retina. Trocar por um vetor resolve; até lá, é o
-    melhor que o arquivo dá.
-  */
-  'dux nutrition': { arquivo: '/marcas/dux-nutrition.png', largura: 141, altura: 58 },
+  'soldiers nutrition': {
+    arquivo: '/marcas/soldiers-nutrition.png',
+    largura: 372,
+    altura: 160,
+    preenche: true,
+  },
+  integralmedica: {
+    arquivo: '/marcas/integralmedica.png',
+    largura: 500,
+    altura: 500,
+    preenche: true,
+  },
+  'dux nutrition': {
+    arquivo: '/marcas/dux-nutrition.png',
+    largura: 1000,
+    altura: 1000,
+    preenche: true,
+  },
   /*
     A FTW veio com a assinatura "SPORTS NUTRITION" embaixo da marca, em branco.
 

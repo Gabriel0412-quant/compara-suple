@@ -46,8 +46,8 @@ test.describe('os números do hero vêm do banco', () => {
 test.describe('a busca do hero', () => {
   test('leva o termo para a listagem', async ({ page }) => {
     await page.goto('/')
-    await page.getByRole('searchbox').first().fill('creatina')
-    await page.getByRole('button', { name: /buscar preços/i }).first().click()
+    await page.getByRole('main').getByRole('searchbox').fill('creatina')
+    await page.getByRole('main').getByRole('button', { name: /buscar preços/i }).click()
 
     await expect(page).toHaveURL(/\/produtos\?q=creatina/)
   })
@@ -58,8 +58,8 @@ test.describe('a busca do hero', () => {
     const page = await contexto.newPage()
     await page.goto('/')
 
-    await page.getByRole('searchbox').first().fill('whey')
-    await page.getByRole('button', { name: /buscar preços/i }).first().click()
+    await page.getByRole('main').getByRole('searchbox').fill('whey')
+    await page.getByRole('main').getByRole('button', { name: /buscar preços/i }).click()
     await expect(page).toHaveURL(/\/produtos\?q=whey/)
 
     await contexto.close()
@@ -88,9 +88,9 @@ test.describe('hero em tela estreita', () => {
   test('título, busca e chips continuam utilizáveis', async ({ page }) => {
     await page.goto('/')
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
-    await expect(page.getByRole('searchbox').first()).toBeVisible()
+    await expect(page.getByRole('main').getByRole('searchbox')).toBeVisible()
 
-    const botao = page.getByRole('button', { name: /buscar preços/i }).first()
+    const botao = page.getByRole('main').getByRole('button', { name: /buscar preços/i })
     const caixa = await botao.boundingBox()
     expect(caixa!.height, 'alvo de toque menor que 44px').toBeGreaterThanOrEqual(44)
 

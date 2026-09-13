@@ -120,8 +120,8 @@ for (const [nome, viewport] of VIEWPORTS) {
 
     test('a busca da home leva à listagem, com o mesmo total da fixture', async ({ page }) => {
       await page.goto('/')
-      await page.getByRole('searchbox').first().fill('whey')
-      await page.getByRole('button', { name: /buscar preços/i }).click()
+      await page.getByRole('main').getByRole('searchbox').fill('whey')
+      await page.getByRole('main').getByRole('button', { name: /buscar preços/i }).click()
 
       await expect(page).toHaveURL(/\/produtos\?q=whey/)
       await expect(page.locator('article')).toHaveCount(WHEY_COMPRAVEIS)

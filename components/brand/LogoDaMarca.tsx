@@ -31,6 +31,34 @@ const TAMANHOS = {
 
 export type TamanhoDoLogo = keyof typeof TAMANHOS
 
+/**
+ * O fundo que o logo da marca exige.
+ *
+ * Escrito por extenso, e não interpolado: o Tailwind varre o código atrás de
+ * nomes de classe literais, e uma classe montada em tempo de execução não é
+ * gerada — o elemento sai transparente, sem erro de build nem de tipo. Mesma
+ * armadilha que `CLASSE_DO_TOM` documenta.
+ *
+ * Os dois valores são tokens da casa. Não é cor de marca: o #151 recusou
+ * vestir um cartão nosso com a identidade de terceiro, e continua valendo. O
+ * que se escolhe aqui é qual dos nossos neutros deixa o arquivo legível.
+ */
+const FUNDO = {
+  claro: 'bg-surface-muted',
+  escuro: 'bg-surface-dark',
+} as const
+
+/**
+ * A classe de fundo para o painel desta marca.
+ *
+ * Mora aqui, e não em cada tela, porque a faixa da home e o cartão de
+ * `/marcas` mostram o mesmo arquivo: se cada uma escolhesse o fundo por conta,
+ * a Dark Lab ficaria legível numa e invisível na outra.
+ */
+export function fundoDoLogo(marca: Marca): string {
+  return FUNDO[logoDaMarca(marca.nome)?.painel ?? 'claro']
+}
+
 export function ConteudoDoCartao({
   marca,
   tamanho = 'faixa',

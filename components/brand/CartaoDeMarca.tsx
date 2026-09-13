@@ -1,6 +1,6 @@
 import Link from 'next/link'
 
-import { ConteudoDoCartao } from '@/components/brand/LogoDaMarca'
+import { ConteudoDoCartao, fundoDoLogo } from '@/components/brand/LogoDaMarca'
 import { type Marca } from '@/lib/brands'
 import { buscaPorMarca } from '@/lib/filtros'
 import { formatBRL } from '@/lib/products'
@@ -58,10 +58,14 @@ export function CartaoDeMarca({
         className="group flex h-full flex-col overflow-hidden rounded-2xl border border-line bg-surface transition-colors hover:border-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
       >
         {/*
-          Painel claro, e não escuro, pelo motivo já medido no #203: três das
-          cinco logos que temos são pretas, e num painel escuro elas somem.
+          Painel claro por padrão, pelo motivo medido no #203: quase toda logo
+          que temos é escura, e num painel escuro elas somem. A Dark Lab é a
+          exceção — o arquivo dela é a versão negativa — e a polaridade vem
+          declarada no manifesto, junto do arquivo, em vez de aqui.
         */}
-        <div className="flex h-[168px] shrink-0 items-center justify-center overflow-hidden bg-surface-muted px-6">
+        <div
+          className={`flex h-[168px] shrink-0 items-center justify-center overflow-hidden px-6 ${fundoDoLogo(marca)}`}
+        >
           <ConteudoDoCartao marca={marca} tamanho="painel" />
         </div>
 

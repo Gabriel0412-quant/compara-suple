@@ -61,16 +61,24 @@ describe('conteúdo do cartão', () => {
     categorias: [],
     tom: 0,
   }
-  const semLogo: Marca = { nome: 'Dark Lab', slug: 'dark-lab', produtos: 1, ofertas: 2, menorPreco: 100, categorias: [], tom: 0 }
+  /*
+    Era a Dark Lab, até o #233 trazer o arquivo dela.
+
+    O teste falhou na hora, e estava certo: o exemplo de "marca sem logo" tinha
+    virado marca com logo, e o caminho do fallback deixou de ser exercido.
+    Black Skull é a mesma escolha da fixture de ponta a ponta — marca real, do
+    mesmo catálogo, cujo arquivo não temos.
+  */
+  const semLogo: Marca = { nome: 'Black Skull', slug: 'black-skull', produtos: 1, ofertas: 2, menorPreco: 100, categorias: [], tom: 0 }
 
   /*
     O elemento devolvido basta, como no caso do estado vazio: `type` e `props`
     dizem qual dos dois caminhos correu, sem precisar de DOM.
 
     O par não é decorativo. As duas marcas são reais e estão no mesmo catálogo:
-    a Growth tem logo no manifesto, a Dark Lab não. Se o fallback sumisse, só o
-    segundo caso acusaria — e é justamente ele que a home vai exercer sozinha
-    quando a próxima coleta mudar o ranking das cinco.
+    a Growth tem logo no manifesto, a Black Skull não. Se o fallback sumisse,
+    só o segundo caso acusaria — e é justamente ele que a home vai exercer
+    sozinha quando a próxima coleta mudar o ranking das cinco.
   */
 
   it('marca com logo vira imagem, com o nome no texto alternativo', () => {
@@ -83,7 +91,7 @@ describe('conteúdo do cartão', () => {
 
   it('marca sem logo mostra o nome escrito, e não um cartão vazio', () => {
     const elemento = ConteudoDoCartao({ marca: semLogo })
-    expect(elemento.props.children).toBe('Dark Lab')
+    expect(elemento.props.children).toBe('Black Skull')
   })
 
   it('a correção ótica da marca chega à altura exibida', () => {
@@ -102,5 +110,62 @@ describe('conteúdo do cartão', () => {
     const comEscala = ConteudoDoCartao({ marca: integral }).props.style.maxHeight
     expect(semEscala).toBe('36px')
     expect(comEscala).toBe('52px')
+  })
+})
+
+describe('fundo do cartão da faixa', () => {
+  /**
+   * Percorre a árvore devolvida e junta todo `className` que for string.
+   *
+   * Sem DOM, como o resto desta suíte: o que se quer saber é qual classe o
+   * componente montou, e isso está no elemento antes de qualquer render.
+   */
+  function classes(no: unknown, achadas: string[] = []): string[] {
+    if (Array.isArray(no)) {
+      for (const filho of no) classes(filho, achadas)
+      return achadas
+    }
+    if (!no || typeof no !== 'object') return achadas
+    const props = (no as { props?: Record<string, unknown> }).props
+    if (!props) return achadas
+    if (typeof props.className === 'string') achadas.push(props.className)
+    classes(props.children, achadas)
+    return achadas
+  }
+
+  function cartoes(marcas: Marca[]): string[] {
+    return classes(FaixaDeMarcas({ marcas })).filter(c => c.includes('h-[72px]'))
+  }
+
+  it('a marca de logo escuro recebe painel escuro, e as outras o claro', () => {
+    /*
+      As duas na mesma faixa, de propósito.
+
+      Com uma marca só, `fundoDoLogo` trocado por uma classe fixa passaria: o
+      teste veria a única classe que sobrou e concordaria. O par é o que exige
+      que o fundo venha da marca, e não do componente.
+    */
+    const growth: Marca = { nome: 'Growth Supplements', slug: 'growth-supplements', produtos: 4, ofertas: 9, menorPreco: 100, categorias: [], tom: 0 }
+    const darkLab: Marca = { nome: 'Dark Lab', slug: 'dark-lab', produtos: 1, ofertas: 3, menorPreco: 49.9, categorias: [], tom: 0 }
+
+    const [oGrowth, aDarkLab] = cartoes([growth, darkLab])
+
+    expect(oGrowth).toContain('bg-surface-muted')
+    expect(aDarkLab).toContain('bg-surface-dark')
+    // E o claro não é o escuro por prefixo: `bg-surface-dark` contém
+    // `bg-surface-dark`, mas `bg-surface-muted` não pode conter nenhum dos dois.
+    expect(oGrowth).not.toContain('bg-surface-dark')
+  })
+
+  it('o cartão continua com a altura e o alvo de toque da faixa', () => {
+    // O `className` inteiro é uma expressão montada agora que o fundo varia:
+    // apagá-la levaria junto a altura fixa e o foco visível, sem erro nenhum.
+    const [cartao] = cartoes([
+      { nome: 'Growth Supplements', slug: 'growth-supplements', produtos: 4, ofertas: 9, menorPreco: 100, categorias: [], tom: 0 },
+    ])
+
+    expect(cartao).toContain('h-[72px]')
+    expect(cartao).toContain('rounded-xl')
+    expect(cartao).toContain('focus-visible:outline-brand')
   })
 })

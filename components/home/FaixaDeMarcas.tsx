@@ -1,6 +1,6 @@
 import Link from 'next/link'
 
-import { ConteudoDoCartao } from '@/components/brand/LogoDaMarca'
+import { ConteudoDoCartao, fundoDoLogo } from '@/components/brand/LogoDaMarca'
 import { buscaPorMarca } from '@/lib/filtros'
 import { type Marca } from '@/lib/brands'
 
@@ -78,7 +78,7 @@ export default function FaixaDeMarcas({
                   com o chip da marca visível e removível.
                 */
                 href={buscaPorMarca(marca.slug)}
-                className="group flex h-[72px] items-center justify-center rounded-xl border border-line-strong bg-surface-muted px-4 transition-colors hover:border-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+                className={`group flex h-[72px] items-center justify-center rounded-xl border border-line-strong px-4 transition-colors hover:border-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${fundoDoLogo(marca)}`}
               >
                 <ConteudoDoCartao marca={marca} />
                 {/*

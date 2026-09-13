@@ -208,35 +208,59 @@ test.describe('a página de marcas', () => {
     }
   })
 
-  test('o painel de logo existe, e não é pintado com cor de terceiro', async ({ page }) => {
+  test('o painel de logo usa só tom da casa, nunca cor de terceiro', async ({ page }) => {
     /*
       O #151 recusou vestir um cartão nosso com a cor oficial da marca, e a
       maquete 1a desenha exatamente isso — painéis no azul da Integralmédica,
       no vermelho da Max Titanium. A própria maquete diz em texto que aqueles
       painéis são placeholders do arquivo oficial, e é o arquivo que entra.
 
-      O teste guarda a consequência: todos os painéis têm o mesmo fundo. Se um
-      dia alguém pintar por marca, eles passam a ser vários.
-      */
+      Até o #219 o teste guardava isso exigindo um fundo só. Deixou de servir
+      quando a Dark Lab entrou: o arquivo dela é a versão negativa, e no painel
+      creme o wordmark branco some. Agora são dois fundos possíveis — e os dois
+      são tokens nossos.
+
+      O que o teste passa a cobrar é o que importava desde o começo: nenhum
+      painel usa cor que não seja da casa. Os valores de referência saem do
+      próprio CSS, medidos em elementos de sonda, e não escritos aqui — senão o
+      teste guardaria uma cópia da paleta em vez da paleta.
+    */
     await page.goto('/marcas')
-    const { paineis, cartoes, fundos } = await page.evaluate(() => {
+
+    const { paineis, cartoes, forasteiros } = await page.evaluate(() => {
+      function corDe(classe: string): string {
+        const sonda = document.createElement('div')
+        sonda.className = classe
+        document.body.appendChild(sonda)
+        const cor = getComputedStyle(sonda).backgroundColor
+        sonda.remove()
+        return cor
+      }
+      const daCasa = new Set([corDe('bg-surface-muted'), corDe('bg-surface-dark')])
       const encontrados = [...document.querySelectorAll('main li a > div:first-child')]
+
       return {
         paineis: encontrados.length,
         cartoes: document.querySelectorAll('main li').length,
-        fundos: [...new Set(encontrados.map(p => getComputedStyle(p).backgroundColor))],
+        forasteiros: [
+          ...new Set(
+            encontrados
+              .map(p => getComputedStyle(p).backgroundColor)
+              .filter(cor => !daCasa.has(cor)),
+          ),
+        ],
       }
     })
 
     /*
       Um painel por cartão, antes de olhar a cor.
 
-      Sem esta linha o teste passa com zero painéis encontrados: um conjunto
-      vazio tem zero cores distintas, não uma — e foi o que aconteceu quando o
-      painel deixou de ser `span` e virou `div`.
+      Sem esta linha o teste passa com zero painéis encontrados: nenhum painel
+      tem zero cores forasteiras — e foi o que aconteceu quando o painel deixou
+      de ser `span` e virou `div`.
     */
     expect(paineis, 'seletor de painel não encontra os cartões').toBe(cartoes)
-    expect(fundos.length, `painéis com fundos diferentes: ${fundos.join(', ')}`).toBe(1)
+    expect(forasteiros, `painel com cor fora da paleta: ${forasteiros.join(', ')}`).toEqual([])
   })
 
   test('não afirma o que o dado não sustenta', async ({ page }) => {

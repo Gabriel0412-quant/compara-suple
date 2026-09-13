@@ -62,6 +62,8 @@ describe('manifesto de logos', () => {
     'Soldiers Nutrition',
     'Integralmédica',
     'Dux Nutrition',
+    'FTW',
+    'Dark Lab',
   ]
 
   it('cobre exatamente as marcas declaradas, pelo nome que vem do banco', () => {
@@ -89,6 +91,17 @@ describe('manifesto de logos', () => {
 
   it.each(entradas)('%s usa chave já normalizada', marca => {
     expect(marca).toBe(normalizarTexto(marca))
+  })
+
+  it('só a Dark Lab pede painel escuro', () => {
+    /*
+      A polaridade é a exceção, não a regra: quase toda logo aqui é escura
+      sobre transparente. Este teste é o que faz alguém pensar duas vezes
+      antes de marcar mais uma — se `painel` virar comum, o painel claro é que
+      está errado.
+    */
+    const escuras = entradas.filter(([, logo]) => logo.painel === 'escuro').map(([marca]) => marca)
+    expect(escuras).toEqual(['dark lab'])
   })
 
   it('nenhum arquivo serve a duas marcas', () => {

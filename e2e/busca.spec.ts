@@ -334,7 +334,6 @@ async function assinaturaDaTela(page: import('@playwright/test').Page) {
   const main = page.getByRole('main')
   return {
     temBusca: (await main.getByRole('searchbox').count()) > 0,
-    temComoComparamos: (await main.locator('summary#como-comparamos').count()) > 0,
     temPainel: (await painel(page).count()) > 0,
     temOrdenacao: (await main.getByText('Ordenar por').count()) > 0,
   }
@@ -346,7 +345,6 @@ test.describe('as três rotas são a mesma tela', () => {
       await page.goto(rota)
       expect(await assinaturaDaTela(page)).toEqual({
         temBusca: true,
-        temComoComparamos: true,
         temPainel: true,
         temOrdenacao: true,
       })

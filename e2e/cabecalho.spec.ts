@@ -91,24 +91,120 @@ test.describe('nada que finja ser interativo', () => {
   test('nenhum botão sem ação no header ou no rodapé', async ({ page }) => {
     await page.goto('/')
 
+    /*
+      Até o #235 este teste proibia botão nenhum nas duas regiões, porque não
+      havia botão legítimo para existir ali: o header antigo tinha "Entrar" sem
+      login e um campo de busca sem `form`.
+
+      A busca do header trouxe um botão de verdade, então a regra passou do
+      "não existe botão" para o que ela sempre quis dizer: botão que não leva a
+      lugar nenhum sai. Um `submit` dentro de `form` com `action` leva.
+    */
     for (const regiao of ['banner', 'contentinfo'] as const) {
       const botoes = page.getByRole(regiao).locator('button')
+
       for (let i = 0; i < (await botoes.count()); i++) {
-        const rotulo = (await botoes.nth(i).innerText()).trim()
-        throw new Error(
-          `Botão "${rotulo}" no ${regiao} sem destino. ` +
+        const botao = botoes.nth(i)
+        const rotulo = (await botao.innerText()).trim()
+        const destino = await botao.evaluate(el => {
+          const b = el as HTMLButtonElement
+          return { tipo: b.type, action: b.form?.getAttribute('action') ?? null }
+        })
+
+        expect(
+          destino.tipo === 'submit' && !!destino.action,
+          `Botão "${rotulo}" no ${regiao} sem destino (type=${destino.tipo}, form=${destino.action}). ` +
             'O header antigo tinha "Entrar" sem login e um campo de busca sem form. ' +
             'Controle que não faz nada sai — volta com o serviço que promete.',
-        )
+        ).toBe(true)
       }
     }
   })
 
-  test('não há campo de busca morto no header', async ({ page }) => {
+  test('todo campo do header vive dentro de um formulário com destino', async ({ page }) => {
     await page.goto('/')
-    // A busca de verdade é o CampoBusca da home, dentro de um <form>.
-    const camposNoHeader = page.getByRole('banner').locator('input')
-    await expect(camposNoHeader).toHaveCount(0)
+    const campos = page.getByRole('banner').locator('input')
+
+    /*
+      O que este teste guardava era "campo de busca morto no header", e o jeito
+      de garantir isso era exigir zero campos. Com a busca de verdade no header
+      (#235), a exigência passa a ser a que interessa: nenhum campo solto.
+
+      Campo sem `form` é exatamente a falha antiga — parecia busca, aceitava
+      texto, e o Enter não fazia nada.
+    */
+    for (let i = 0; i < (await campos.count()); i++) {
+      const dono = await campos.nth(i).evaluate(el => {
+        const c = el as HTMLInputElement
+        return { name: c.name, action: c.form?.getAttribute('action') ?? null }
+      })
+      expect(dono.action, `campo "${dono.name}" no header sem formulário`).toBeTruthy()
+    }
+  })
+})
+
+test.describe('a busca do header', () => {
+  /*
+    A busca só existia na home, dentro do hero. Nas outras seis rotas não havia
+    como buscar sem voltar ao começo — e é isso que o #235 resolve, então o
+    teste percorre as rotas em vez de olhar só uma.
+  */
+  const ROTAS = ['/', '/produtos', '/ofertas', '/comparar', '/marcas', '/categoria/whey-protein']
+
+  for (const rota of ROTAS) {
+    test(`existe em ${rota}, com destino e nome próprios`, async ({ page }) => {
+      await page.goto(rota)
+      const busca = page.getByRole('banner').getByRole('search')
+
+      await expect(busca).toHaveAttribute('action', '/produtos')
+      await expect(busca).toHaveAttribute('method', 'get')
+      await expect(busca.getByRole('searchbox')).toHaveAttribute('name', 'q')
+    })
+  }
+
+  test('leva o termo para a listagem', async ({ page }) => {
+    await page.goto('/ofertas')
+    const busca = page.getByRole('banner').getByRole('search')
+
+    await busca.getByRole('searchbox').fill('creatina')
+    await busca.getByRole('button', { name: /^buscar$/i }).click()
+
+    await expect(page).toHaveURL(/\/produtos\?q=creatina/)
+  })
+
+  test('funciona sem JavaScript, como o resto da busca', async ({ browser }) => {
+    const contexto = await browser.newContext({ javaScriptEnabled: false })
+    const page = await contexto.newPage()
+    await page.goto('/marcas')
+
+    const busca = page.getByRole('banner').getByRole('search')
+    await busca.getByRole('searchbox').fill('whey')
+    await busca.getByRole('button', { name: /^buscar$/i }).click()
+
+    await expect(page).toHaveURL(/\/produtos\?q=whey/)
+    await contexto.close()
+  })
+
+  test('na home convive com a busca do hero sem se confundir com ela', async ({ page }) => {
+    /*
+      Duas buscas na mesma página é o caso que o #235 cria, e ele tem duas
+      armadilhas: `id` repetido quebra o `<label for>` — clicar no rótulo de
+      uma foca a outra — e dois marcos `role="search"` com o mesmo nome deixam
+      quem navega por landmark escolhendo no escuro.
+    */
+    await page.goto('/')
+
+    await expect(page.getByRole('search')).toHaveCount(2)
+
+    const ids = await page.locator('input[type="search"]').evaluateAll(cs =>
+      cs.map(c => (c as HTMLInputElement).id),
+    )
+    expect(new Set(ids).size, `campos de busca com id repetido: ${ids.join(', ')}`).toBe(ids.length)
+
+    const nomes = await page
+      .getByRole('search')
+      .evaluateAll(fs => fs.map(f => f.getAttribute('aria-label')))
+    expect(new Set(nomes).size, `marcos de busca com o mesmo nome: ${nomes.join(', ')}`).toBe(2)
   })
 })
 

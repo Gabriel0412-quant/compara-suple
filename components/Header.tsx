@@ -1,5 +1,6 @@
 import Link from 'next/link'
 
+import CampoBusca from '@/components/CampoBusca'
 import { Logo } from '@/components/brand/Logo'
 import { listCategories } from '@/lib/categories'
 
@@ -11,10 +12,14 @@ import { listCategories } from '@/lib/categories'
  * - **"Entrar"** — não existe conta, login nem área logada. Era um botão que
  *   não fazia nada.
  * - **O campo de busca** — era um `<input>` solto, sem `form`, sem `action` e
- *   sem handler: parecia busca e não buscava. A busca de verdade é o
- *   `CampoBusca` da home, que faz GET para `/produtos?q=` e funciona sem
- *   JavaScript. A maquete 1b também não tem busca no header, justamente
- *   porque a busca é o hero.
+ *   sem handler: parecia busca e não buscava.
+ *
+ *   Voltou no #235, e a objeção não foi revogada: o que voltou é o mesmo
+ *   `CampoBusca` das outras telas, um `<form method="get">` para `/produtos`
+ *   que funciona sem JavaScript. O que o header recusava era busca de
+ *   mentira, não busca. A maquete 1b não desenha uma porque ali a busca é o
+ *   hero — e o hero só existe na home; nas outras seis rotas não havia
+ *   nenhuma forma de buscar sem voltar para o começo.
  * - **"Criar alerta"**, que a maquete pede — o alerta de preço é o EP18, que
  *   não começou. Botão apontando para o nada é a mesma falha do "Entrar".
  *   Volta no #129, junto com o serviço que ele promete.
@@ -59,8 +64,32 @@ function ListaDeCategorias({ className = '' }: { className?: string }) {
 export default function Header() {
   return (
     <header className="bg-surface-dark text-ink-on-dark">
-      <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3 md:px-10 md:py-4">
-        <Logo tom="escuro" tamanho="header" />
+      {/*
+        Duas linhas em tela estreita, uma só em tela larga.
+
+        A busca precisa de largura para ser usável: em 375px, logo e menu já
+        comem quase tudo, e o campo sairia com uns 130px — cabe o cursor e não
+        cabe a palavra. Então o logo ocupa a linha inteira e a busca desce, com
+        o menu ao lado dela.
+
+        O menu desce junto, e isso não é detalhe de estética. A primeira
+        tentativa foi deixar o menu em cima e mandar só a busca para baixo com
+        `order-last` — o que descola a ordem do DOM da ordem de leitura: a
+        tabulação ia do logo para a busca, na segunda linha, e voltava para o
+        menu, na primeira. `responsivo-home.spec.ts` pegou na hora, e estava
+        certo. Com o menu na mesma linha da busca, as duas ordens coincidem nas
+        três larguras.
+
+        É uma instância só do componente, posicionada por CSS: duas instâncias
+        significariam dois `id`, dois marcos de busca e dois campos a manter em
+        sincronia.
+      */}
+      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-3 gap-y-3 px-4 py-3 md:gap-x-4 md:px-10 md:py-4">
+        <div className="w-full md:w-auto">
+          <Logo tom="escuro" tamanho="header" />
+        </div>
+
+        <CampoBusca tamanho="header" className="min-w-0 flex-1 md:ml-2 md:min-w-64 md:max-w-md" />
 
         {/* Navegação larga. Some abaixo de `md` e vira o menu adiante. */}
         <nav aria-label="Navegação principal" className="ml-auto hidden items-center gap-1 md:flex">
@@ -95,7 +124,7 @@ export default function Header() {
         </nav>
 
         {/* Menu estreito, um só `<details>` com tudo dentro. */}
-        <details className="group relative ml-auto md:hidden">
+        <details className="group relative shrink-0 md:hidden">
           <summary
             className={`flex cursor-pointer list-none items-center gap-2 px-2 py-2 text-sm font-medium text-ink-on-dark marker:content-none ${foco}`}
           >

@@ -138,11 +138,20 @@ describe('saídas de compra nas superfícies públicas', () => {
     const card = readFileSync(resolve(process.cwd(), 'components/category/ProductGridCard.tsx'), 'utf8')
     const comparador = readFileSync(resolve(process.cwd(), 'app/comparar/page.tsx'), 'utf8')
     const ofertas = readFileSync(resolve(process.cwd(), 'components/product/OffersSection.tsx'), 'utf8')
+    const produto = readFileSync(resolve(process.cwd(), 'components/produto/PaginaDoProduto.tsx'), 'utf8')
 
-    expect(prateleira).toContain('superficie="home"')
+    /*
+      A prateleira deixou de cravar "home" no card quando a página de produto
+      passou a usar a mesma fileira para os relacionados (#163). O valor virou
+      prop com padrão, e são duas coisas a guardar: que o padrão continua sendo
+      a home, e que ele desce até o card em vez de ficar parado no meio.
+    */
+    expect(prateleira).toContain("superficie = 'home'")
+    expect(prateleira).toContain('<ProductGridCard product={produto} superficie={superficie} />')
+    expect(produto).toContain('superficie="produto"')
     expect(card).toContain('href={`/go/${product.featuredOfferId}?de=${superficie}&por=destaque`}')
     expect(card).toContain('href={`/go/${product.lowestOfferId}?de=${superficie}&por=menor_preco`}')
     expect(comparador).toContain('superficie="comparador"')
-    expect(ofertas).toContain('href={`/go/${loja.offerId}?de=${superficie}&por=${isCheapest ? \'menor_preco\' : \'destaque\'}`}')
+    expect(ofertas).toContain('`/go/${linha.offerId}?de=${superficie}&por=')
   })
 })

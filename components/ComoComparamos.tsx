@@ -23,20 +23,20 @@ export function ComoComparamos({
   const aviso = avisoDeRecencia(recencia)
 
   return (
-    <section className={`text-xs text-gray-600 ${className}`} aria-labelledby="como-comparamos">
+    <section className={`text-sm text-ink-3 ${className}`} aria-labelledby="como-comparamos">
       {aviso && (
         <p
           aria-live="polite"
-          className="mb-3 text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5"
+          className="mb-3 rounded-xl border border-brand bg-surface-warm px-4 py-2.5 text-brand-ink"
         >
           {aviso}
         </p>
       )}
 
-      <details className="bg-white border border-gray-100 rounded-xl px-4 py-3">
+      <details className="rounded-xl border border-line bg-surface px-4 py-3">
         <summary
           id="como-comparamos"
-          className="font-semibold text-gray-800 cursor-pointer marker:text-gray-400"
+          className="cursor-pointer font-semibold text-ink marker:text-ink-4"
         >
           Como comparamos
         </summary>
@@ -51,20 +51,20 @@ export function ComoComparamos({
 
           <dl className="space-y-1.5">
             <div>
-              <dt className="inline font-semibold text-gray-800">Menor preço: </dt>
+              <dt className="inline font-semibold text-ink">Menor preço: </dt>
               <dd className="inline">
                 o menor valor entre as ofertas disponíveis na última coleta.
               </dd>
             </div>
             <div>
-              <dt className="inline font-semibold text-gray-800">Destaque: </dt>
+              <dt className="inline font-semibold text-ink">Destaque: </dt>
               <dd className="inline">
                 a oferta que o próprio Mercado Livre promove para o produto. Nem
                 sempre é a mais barata, e por isso aparece separada do menor preço.
               </dd>
             </div>
             <div>
-              <dt className="inline font-semibold text-gray-800">R$/dose e R$/kg: </dt>
+              <dt className="inline font-semibold text-ink">R$/dose e R$/kg: </dt>
               <dd className="inline">
                 preço dividido pelas porções ou pelo peso informados no anúncio.
                 Quando o anúncio não informa, dizemos que não sabemos, em vez de
@@ -72,7 +72,7 @@ export function ComoComparamos({
               </dd>
             </div>
             <div>
-              <dt className="inline font-semibold text-gray-800">Número de ofertas: </dt>
+              <dt className="inline font-semibold text-ink">Número de ofertas: </dt>
               <dd className="inline">
                 quantos anúncios do mesmo produto estavam ativos na última coleta.
               </dd>
@@ -90,7 +90,7 @@ export function ComoComparamos({
             critério nomeado — menor preço, menor R$/dose, menor R$/kg.
           </p>
 
-          <p className="text-gray-500">
+          <p className="text-ink-4">
             Comparamos preço. Não avaliamos eficácia, segurança nem adequação
             nutricional, e nada aqui substitui orientação de um profissional de
             saúde.

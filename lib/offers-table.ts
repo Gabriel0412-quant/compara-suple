@@ -1,3 +1,4 @@
+import { formatCount } from './stats'
 import type { Offer } from './products'
 
 /**
@@ -11,10 +12,27 @@ import type { Offer } from './products'
 
 export type SortBy = 'featured' | 'preco' | 'discount'
 
+/**
+ * Quantas ofertas a tabela mostra antes do "ver mais".
+ *
+ * A maquete 1c desenha três linhas e um "Ver mais 1 loja", pressupondo um
+ * punhado de lojas. O catálogo real não é assim: a mediana é 9 ofertas por
+ * produto, mas a creatina 300 g da Integralmédica tem 544 e o whey da DUX tem
+ * 131. Sem teto, a página do DUX media 19.160px de altura e a tabela era 96%
+ * dela — a caixa de preço fixa, que é a razão de ser da 1c, acompanhava a
+ * rolagem de um documento que ninguém ia rolar.
+ *
+ * Dez porque é o que cabe numa tela e cobre a mediana: 8 dos 15 produtos com
+ * oferta ativa mostram tudo sem botão nenhum. Os outros 7 ganham uma linha
+ * dizendo quantas faltam — o número continua visível, o que muda é ter que
+ * pedir para vê-las.
+ */
+export const OFERTAS_VISIVEIS = 10
+
 export type OfferRow = {
   offerId: number
+  /** Duas letras para o quadrado da linha. Não é logo: não temos os logos. */
   avatar: string
-  avatarColor: string
   nome: string
   isOfficial: boolean
   freeShipping: boolean
@@ -33,14 +51,14 @@ export type OfferFilters = {
   onlyFull: boolean
 }
 
-const AVATAR_COLORS = [
-  'bg-gray-500',
-  'bg-orange-500',
-  'bg-purple-600',
-  'bg-blue-600',
-  'bg-pink-600',
-  'bg-cyan-600',
-]
+/*
+  A cor do avatar saiu no #163.
+
+  Era um círculo pintado com uma das seis cores da paleta padrão do Tailwind,
+  sorteada por `seller_id % 6`. Parecia identidade visual de um vendedor sem
+  ser a de nenhum, e é exatamente o que o #151 proibiu: cartão nosso não se
+  veste com cor que não é nossa. O quadrado agora é neutro, com as iniciais.
+*/
 
 function derivaEntrega(logisticType: string | undefined): string {
   if (logisticType === 'fulfillment')   return '1–2 dias (Full)'
@@ -59,7 +77,6 @@ export function offerToRow(offer: Offer): OfferRow {
   return {
     offerId: offer.id,
     avatar: isOfficial ? 'OF' : (city?.slice(0, 2).toUpperCase() ?? 'V'),
-    avatarColor: isOfficial ? 'bg-green-600' : AVATAR_COLORS[sellerId % AVATAR_COLORS.length],
     nome: isOfficial ? 'Loja Oficial' : (city ? `Vendedor em ${city}` : `Vendedor #${sellerId}`),
     isOfficial,
     freeShipping,
@@ -104,6 +121,46 @@ export function ordenarRows(rows: readonly OfferRow[], sortBy: SortBy): OfferRow
 export function menorPrecoRow(rows: readonly OfferRow[]): OfferRow | null {
   if (rows.length === 0) return null
   return rows.reduce((menor, r) => (r.preco < menor.preco ? r : menor))
+}
+
+/**
+ * Quais linhas a tabela mostra fechada — as primeiras, MAIS a mais barata.
+ *
+ * O teto sozinho tem um efeito que só apareceu no teste: a ordem padrão é a do
+ * Mercado Livre, e nela a oferta mais barata pode estar em qualquer posição.
+ * Cortando nas dez primeiras, a página exibia "menor preço R$ 1,00" na caixa
+ * fixa e nenhuma das linhas visíveis tinha esse preço — o selo "MENOR PREÇO"
+ * ficava numa linha que só existia depois de clicar em "ver mais".
+ *
+ * Então ela entra, mesmo cortada, como décima primeira linha. Fora de ordem de
+ * propósito: a ordem é a do ML e alterá-la mentiria sobre o que o ML destaca;
+ * o que a lista passa a dizer é "as dez que o ML põe na frente, e a mais
+ * barata". Quem ordena por preço não vê diferença nenhuma — ali ela já é a
+ * primeira.
+ */
+export function linhasVisiveis(rows: readonly OfferRow[], teto: number): OfferRow[] {
+  const primeiras = rows.slice(0, teto)
+  const barata = menorPrecoRow(rows)
+  if (!barata || primeiras.some(r => r.offerId === barata.offerId)) return primeiras
+  return [...primeiras, barata]
+}
+
+/** Quantas linhas ficam atrás do "ver mais". Zero quando cabem todas. */
+export function ofertasOcultas(rows: readonly OfferRow[], teto: number): number {
+  return rows.length - linhasVisiveis(rows, teto).length
+}
+
+/**
+ * O que o botão de abrir a lista diz.
+ *
+ * Mora aqui, e não no JSX, porque o rótulo fechado é a informação: 121 ofertas
+ * escondidas e 2 escondidas são decisões diferentes para quem está comparando,
+ * e "ver mais" não distingue as duas. Fora do componente, as três frases têm
+ * teste — dentro dele, a de "Mostrar menos" só existiria depois de um clique.
+ */
+export function rotuloDeMaisOfertas(ocultas: number, aberto: boolean): string {
+  if (aberto) return 'Mostrar menos'
+  return ocultas === 1 ? 'Ver mais 1 oferta' : `Ver as outras ${formatCount(ocultas)} ofertas`
 }
 
 /**

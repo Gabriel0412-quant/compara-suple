@@ -20,12 +20,21 @@ const homeRanges = changedRanges('app/page.tsx')
 const comparadorRanges = changedRanges('app/comparar/page.tsx')
 const offersSectionRanges = changedRanges('components/product/OffersSection.tsx')
 const faixaMarcasRanges = changedRanges('components/home/FaixaDeMarcas.tsx')
+/*
+  `lib/offers-table.ts` entra por intervalo, e não inteiro.
+
+  O arquivo é de antes da linha de mutação e carrega código que nunca foi
+  exercitado — `derivaEntrega` sozinho tem 20 mutantes sem teste. Cobri-lo
+  inteiro é trabalho legítimo, mas é de outra issue: aqui o que precisa estar
+  travado é o teto de linhas que o #163 acrescentou.
+*/
+const offersTableRanges = changedRanges('lib/offers-table.ts')
 
 const config = {
   testRunner: 'vitest',
   plugins: ['@stryker-mutator/vitest-runner'],
   vitest: { configFile: 'vitest.config.ts' },
-  mutate: ['lib/brands.ts', 'lib/brand-logos.ts', 'lib/filtros.ts', 'lib/sabores.ts', 'lib/card.ts', 'lib/comparador-home.ts', 'lib/shelves.ts', 'lib/affiliate.ts', 'lib/ml/offer-url.ts', 'lib/ml/affiliate-links.ts', 'lib/ml/affiliate-links-cli.ts', 'scripts/ml-affiliate-links.ts', ...ingestRanges, ...routeRanges, ...eventosRanges, ...homeRanges, ...comparadorRanges, ...offersSectionRanges, ...faixaMarcasRanges],
+  mutate: ['lib/brands.ts', 'lib/brand-logos.ts', 'lib/filtros.ts', 'lib/sabores.ts', 'lib/card.ts', 'lib/produto.ts', 'lib/comparador-home.ts', 'lib/shelves.ts', 'lib/affiliate.ts', 'lib/ml/offer-url.ts', 'lib/ml/affiliate-links.ts', 'lib/ml/affiliate-links-cli.ts', 'scripts/ml-affiliate-links.ts', ...ingestRanges, ...routeRanges, ...eventosRanges, ...homeRanges, ...comparadorRanges, ...offersSectionRanges, ...faixaMarcasRanges, ...offersTableRanges],
   concurrency: 2,
   reporters: ['clear-text', 'json', 'html'],
   jsonReporter: { fileName: 'coverage/mutation/mutation.json' },

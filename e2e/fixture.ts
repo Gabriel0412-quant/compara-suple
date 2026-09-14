@@ -93,12 +93,41 @@ export const PRODUTOS = [
     ], { flavor: 'Baunilha' })],
   },
   {
+    /*
+      O produto com muitas ofertas, e é o caso que existe em produção.
+
+      Medido em 13/09/2026: a mediana é 9 ofertas por produto, mas a creatina
+      300 g da Integralmédica tem 544 e o whey da DUX tem 131. Sem um produto
+      assim na fixture, o teto de linhas da tabela (#163) não tinha o que
+      cortar e a interação de "ver mais" não podia ser exercitada.
+
+      Treze ofertas, e a mais barata é a de PIOR posição no ML — a 213, a
+      R$ 89,90, com `ml_rank` 13. É o arranjo que faz a regra aparecer: com o
+      teto em 10 ela ficaria escondida, e a caixa de preço anunciaria um valor
+      que nenhuma linha visível mostra. Por isso ela entra como décima
+      primeira linha, fora de ordem.
+    */
     id: 2,
     slug: 'creatina-integralmedica',
     name: 'Creatina Monohidratada 300g Integralmédica',
     created_at: '2026-01-02T00:00:00+00:00',
     brand: { name: 'Integralmédica', slug: 'integralmedica' },
-    variant: [variante(21, [oferta(201, 129.9)], { size_grams: 300, servings: 100 })],
+    variant: [
+      variante(
+        21,
+        [
+          oferta(201, 129.9, true, { ml_rank: 1, raw: { official_store_id: 1234 } }),
+          ...Array.from({ length: 11 }, (_, i) =>
+            oferta(202 + i, 130 + i, true, {
+              ml_rank: 2 + i,
+              raw: i === 0 ? { shipping: { free_shipping: true } } : {},
+            }),
+          ),
+          oferta(213, 89.9, true, { ml_rank: 13 }),
+        ],
+        { size_grams: 300, servings: 100 },
+      ),
+    ],
   },
   {
     id: 3,

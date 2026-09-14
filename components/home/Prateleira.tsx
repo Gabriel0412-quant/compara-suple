@@ -26,6 +26,7 @@ export function Prateleira({
   legenda,
   link,
   produtos,
+  superficie = 'home',
 }: {
   /** Alvo das setas. Precisa ser único na página. */
   id: string
@@ -36,6 +37,14 @@ export function Prateleira({
   legenda?: string
   link: { href: string; rotulo: string }
   produtos: CategoryProduct[]
+  /**
+   * De onde a prateleira está sendo exibida — vai para a rota de saída.
+   *
+   * Nasceu na home e o valor era fixo. A página de produto usa a mesma
+   * prateleira para os relacionados, e sem isto todo clique de lá seria
+   * contado como vindo da home.
+   */
+  superficie?: 'home' | 'produto'
 }) {
   const tituloId = `${id}-titulo`
 
@@ -99,7 +108,7 @@ export function Prateleira({
               key={produto.id}
               className="w-[248px] shrink-0 snap-start sm:w-[268px] xl:w-[calc((100%_-_3.5rem)/5)]"
             >
-              <ProductGridCard product={produto} superficie="home" />
+              <ProductGridCard product={produto} superficie={superficie} />
             </li>
           ))}
         </ul>

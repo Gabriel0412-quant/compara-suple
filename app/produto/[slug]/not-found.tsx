@@ -2,27 +2,27 @@ import Link from 'next/link'
 
 export default function NotFound() {
   return (
-    <div className="min-h-screen bg-gray-50">
-      <main className="max-w-3xl mx-auto px-4 py-20 text-center">
-        <p className="text-sm font-semibold text-green-600 mb-2">404</p>
-        <h1 className="text-3xl font-bold text-gray-800 mb-3">
+    <div className="min-h-screen bg-surface">
+      <main className="mx-auto max-w-3xl px-4 py-20 text-center">
+        <p className="font-mono text-sm uppercase tracking-[0.12em] text-brand-ink">404</p>
+        <h1 className="mt-3 text-3xl font-bold tracking-[-0.03em] text-ink md:text-4xl">
           Produto não encontrado
         </h1>
-        <p className="text-gray-500 mb-8">
+        <p className="mt-3 text-ink-2">
           O link pode estar quebrado ou o produto saiu do nosso catálogo.
         </p>
-        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+        <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
           <Link
             href="/produtos"
-            className="px-5 py-3 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition-colors"
+            className="flex min-h-11 items-center justify-center rounded-xl bg-brand px-5 text-sm font-semibold text-white transition-colors hover:bg-brand-strong"
           >
-            Ver todos os produtos
+            Buscar no catálogo
           </Link>
           <Link
             href="/"
-            className="px-5 py-3 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-100 transition-colors"
+            className="flex min-h-11 items-center justify-center rounded-xl border border-line-strong px-5 text-sm font-semibold text-ink-2 transition-colors hover:border-brand hover:text-brand-strong"
           >
-            Voltar pra home
+            Voltar para a home
           </Link>
         </div>
       </main>

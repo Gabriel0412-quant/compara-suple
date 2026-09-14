@@ -2,10 +2,14 @@ import { describe, expect, it } from 'vitest'
 import type { Offer } from './products'
 import {
   filtrarRows,
+  linhasVisiveis,
   menorPrecoRow,
+  ofertasOcultas,
   offerToRow,
   ordenarRows,
+  rotuloDeMaisOfertas,
   rotuloFrete,
+  OFERTAS_VISIVEIS,
 } from './offers-table'
 
 function offer(over: Partial<Offer> & { id: number; price: number }): Offer {
@@ -123,5 +127,80 @@ describe('a linha de oferta não afirma o que não sabe', () => {
     expect(
       offerToRow(offer({ id: 2, price: 100, raw: { official_store_id: 7 } })).isOfficial,
     ).toBe(true)
+  })
+
+  it('não carrega cor de avatar', () => {
+    // Era uma das seis cores da paleta padrão do Tailwind, sorteada por
+    // `seller_id % 6`: identidade visual de vendedor nenhum, no cartão que é
+    // nosso. Saiu no #163 junto com o redesenho da página.
+    const row = offerToRow(offer({ id: 1, price: 100 })) as Record<string, unknown>
+    expect(row).not.toHaveProperty('avatarColor')
+  })
+})
+
+describe('o teto de linhas da tabela', () => {
+  /*
+    Fila em ordem do Mercado Livre, com a mais barata FORA das dez primeiras.
+    É o caso que importa: uma fixture em que a mais barata já é a primeira não
+    distingue `linhasVisiveis` de um `slice` simples.
+  */
+  const fila = (n: number, posicaoDaBarata = n - 1) =>
+    Array.from({ length: n }, (_, i) =>
+      offerToRow(offer({ id: 100 + i, price: i === posicaoDaBarata ? 1 : 50 + i })),
+    )
+
+  it('mostra o teto, mais a mais barata quando ela ficaria de fora', () => {
+    const visiveis = linhasVisiveis(fila(13), 10)
+    expect(visiveis).toHaveLength(11)
+    expect(visiveis.at(-1)!.preco).toBe(1)
+  })
+
+  it('não duplica a mais barata quando ela já está nas primeiras', () => {
+    const visiveis = linhasVisiveis(fila(13, 0), 10)
+    expect(visiveis).toHaveLength(10)
+    expect(visiveis.filter(r => r.preco === 1)).toHaveLength(1)
+  })
+
+  it('cabendo todas, o teto não corta nada', () => {
+    expect(linhasVisiveis(fila(10), 10)).toHaveLength(10)
+    expect(linhasVisiveis(fila(2), 10)).toHaveLength(2)
+  })
+
+  it('lista vazia não estoura', () => {
+    expect(linhasVisiveis([], 10)).toEqual([])
+    expect(ofertasOcultas([], 10)).toBe(0)
+  })
+
+  it('o número escondido desconta a linha extra da mais barata', () => {
+    // 13 linhas, 11 na tela: sobram 2, não 3. Dizer 3 seria contar duas vezes
+    // a oferta que já está visível.
+    expect(ofertasOcultas(fila(13), 10)).toBe(2)
+    expect(ofertasOcultas(fila(13, 0), 10)).toBe(3)
+  })
+
+  it('nada escondido quando cabem todas', () => {
+    expect(ofertasOcultas(fila(10), 10)).toBe(0)
+    expect(ofertasOcultas(fila(2), 10)).toBe(0)
+  })
+
+  it('o rótulo do botão diz quantas faltam, e no plural certo', () => {
+    expect(rotuloDeMaisOfertas(121, false)).toBe('Ver as outras 121 ofertas')
+    expect(rotuloDeMaisOfertas(1, false)).toBe('Ver mais 1 oferta')
+  })
+
+  it('aberto, o botão passa a fechar', () => {
+    expect(rotuloDeMaisOfertas(121, true)).toBe('Mostrar menos')
+    expect(rotuloDeMaisOfertas(1, true)).toBe('Mostrar menos')
+  })
+
+  it('o número grande vem separado por milhar', () => {
+    // 534 ofertas escondidas é o caso real da creatina da Integralmédica.
+    expect(rotuloDeMaisOfertas(1534, false)).toBe('Ver as outras 1.534 ofertas')
+  })
+
+  it('o teto é dez, que é o que cobre a mediana do catálogo', () => {
+    // Medido em 13/09/2026: 8 dos 15 produtos com oferta ativa têm 10 ou
+    // menos. Mexer aqui muda quantos produtos ganham botão.
+    expect(OFERTAS_VISIVEIS).toBe(10)
   })
 })

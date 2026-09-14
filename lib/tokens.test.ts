@@ -43,15 +43,7 @@ const CLASSE_DA_PALETA_PADRAO =
  * Não é lista de conveniência: uma entrada aqui é dívida, e quem a adiciona
  * precisa dizer qual issue a remove.
  */
-const EXCECOES: { arquivo: string; valores: string[]; porque: string }[] = [
-  {
-    arquivo: 'app/produto/[slug]/page.tsx',
-    valores: ['#16a34a'],
-    porque:
-      'Gráfico de histórico ainda em mock e desabilitado na tela, verde fora da paleta. ' +
-      'Sai quando o #114 (EP10) ligar o histórico real, ou quando o #133 redesenhar a página — o que vier antes.',
-  },
-]
+const EXCECOES: { arquivo: string; valores: string[]; porque: string }[] = []
 
 /**
  * Telas que ainda não foram redesenhadas, com a issue que as migra.
@@ -61,13 +53,8 @@ const EXCECOES: { arquivo: string; valores: string[]; porque: string }[] = [
  * acrescentada — arquivo novo já nasce nos tokens.
  */
 const AGUARDANDO_REDESENHO: { arquivo: string; issue: string }[] = [
-  { arquivo: 'app/produto/[slug]/page.tsx', issue: '#163' },
-  { arquivo: 'app/produto/[slug]/loading.tsx', issue: '#163' },
-  { arquivo: 'app/produto/[slug]/not-found.tsx', issue: '#163' },
-  { arquivo: 'components/product/OffersSection.tsx', issue: '#163' },
   { arquivo: 'app/comparar/page.tsx', issue: '#165' },
   { arquivo: 'app/categoria/[slug]/not-found.tsx', issue: '#167' },
-  { arquivo: 'components/ComoComparamos.tsx', issue: '#163' },
 ]
 
 function arquivosDeUi(): string[] {

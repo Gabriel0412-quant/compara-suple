@@ -102,8 +102,19 @@ test.describe('do produto para a comparação', () => {
   })
 
   test('o produto leva à sua categoria', async ({ page }) => {
+    /*
+      Escopado à navegação de comparação, e não à página inteira.
+
+      Desde o #163 há dois caminhos para a categoria nesta tela: este botão e o
+      "Ver todos de …" no cabeçalho da fileira de relacionados. Os dois levam
+      ao mesmo lugar, e é bom que levem — o que não dá é procurar pelo rótulo
+      solto, que passa a casar com dois elementos.
+    */
     await page.goto('/produto/whey-concentrado-growth')
-    await page.getByRole('link', { name: /ver todos de/i }).click()
+    await page
+      .getByRole('navigation', { name: 'Comparar este produto' })
+      .getByRole('link', { name: /ver todos de/i })
+      .click()
     await expect(page).toHaveURL(/\/categoria\//)
   })
 })
